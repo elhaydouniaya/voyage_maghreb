@@ -1,0 +1,349 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ==========================================
+// 1. Authentification & Utilisateurs
+// ==========================================
+
+model Account {
+  id                 String  @id @default(cuid())
+  userId             String
+  type               String
+  provider           String
+  providerAccountId  String
+  refresh_token      String? @db.Text
+  access_token       String? @db.Text
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String? @db.Text
+  session_state      String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  passwordHash  String?
+  role          Role      @default(CLIENT)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts      Account[]
+  sessions      Session[]
+  requests      TravelRequest[]
+  bookings      Booking[]
+  agency        Agency?
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+enum Role {
+  CLIENT
+  AGENCY
+  ADMIN
+}
+
+// ==========================================
+// 2. Acteurs : Agences
+// ==========================================
+
+model Agency {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  name            String
+  managerName     String
+  email           String   @unique
+  phoneNumber     String
+  country         String
+  city            String
+  description     String   @db.Text
+  coverage        String[] // Zones géographiques
+  specialties     String[] // Types de voyages
+  siret           String   @unique // N° immatriculation / licence
+  
+  verificationStatus AgencyStatus @default(PENDING)
+  verificationNote   String?      @db.Text
+  verifiedAt         DateTime?
+  verifiedByUserId   String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  trips           GroupTrip[]
+  bookings        Booking[]
+  payments        Payment[]
+}
+
+enum AgencyStatus {
+  PENDING
+  UNDER_REVIEW
+  VERIFIED
+  REJECTED
+  SUSPENDED
+}
+
+// ==========================================
+// 3. Demandes IA (TravelRequest)
+// ==========================================
+
+model TravelRequest {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  
+  // Données collectées
+  destination     String
+  isDateFlexible  Boolean  @default(false)
+  startDate       DateTime?
+  endDate         DateTime?
+  durationDays    Int?
+  numberOfTravelers Int
+  adults          Int      @default(1)
+  children        Int      @default(0)
+  budgetMax       Float
+  tripType        String[]
+  tripStyle       String[]
+  accommodation   String?
+  transportIncluded Boolean @default(false)
+  activities      String[]
+  constraints     String?  @db.Text
+  language        String   @default("FR")
+  
+  // Info contact (doublon pour accès rapide sans compte si besoin)
+  clientName      String
+  clientEmail     String
+  clientPhone     String?
+  
+  // Données structurées par l'IA
+  aiSummary       String?  @db.Text
+  aiTags          String[]
+  aiComplexity    Int      @default(1)
+  destinationNormalized String?
+  budgetLevel     String?  // 'low'|'medium'|'high'|'premium'
+  dominantTripType String?
+
+  status          RequestStatus @default(SUBMITTED)
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  bookings        Booking[]
+}
+
+enum RequestStatus {
+  SUBMITTED
+  AI_PROCESSED
+  MATCH_SUGGESTED
+  CLIENT_CONFIRMED
+  PAYMENT_PENDING
+  PAID
+  CLOSED
+  CANCELLED
+}
+
+// ==========================================
+// 4. Voyages de groupe (GroupTrip)
+// ==========================================
+
+model GroupTrip {
+  id              String   @id @default(cuid())
+  agencyId        String
+  agency          Agency   @relation(fields: [agencyId], references: [id])
+  
+  title           String
+  slug            String   @unique
+  destination     String
+  description     String   @db.Text
+  coverImage      String
+  images          String[]
+  
+  startDate       DateTime
+  endDate         DateTime
+  durationDays    Int
+  
+  totalPrice      Decimal  @db.Decimal(10, 2)
+  depositAmount   Decimal  @db.Decimal(10, 2)
+  currency        String   @default("EUR")
+  
+  totalSpots      Int
+  bookedSpots     Int      @default(0)
+  
+  tripType        TripType
+  inclusions      String[]
+  exclusions      String[]
+  meetingPoint    String?
+  programDays     String?  @db.Text
+  guideLanguages  String[]
+  physicalLevel   PhysicalLevel?
+  
+  aiTags          String[]
+  status          TripStatus @default(DRAFT)
+  isPublic        Boolean    @default(true)
+  
+  cancelledAt     DateTime?
+  cancelReason    String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  bookings        Booking[]
+  payments        Payment[]
+}
+
+enum TripType {
+  DESERT
+  CULTURE
+  AVENTURE
+  FAMILLE
+  LUXE
+  NATURE
+  RELIGIEUX
+  HISTORIQUE
+}
+
+enum TripStatus {
+  DRAFT
+  PUBLISHED
+  FULL
+  CLOSED
+  CANCELLED
+}
+
+enum PhysicalLevel {
+  EASY
+  MEDIUM
+  SPORT
+  EXPERT
+}
+
+// ==========================================
+// 5. Réservations (Booking)
+// ==========================================
+
+model Booking {
+  id              String   @id @default(cuid())
+  
+  groupTripId     String
+  groupTrip       GroupTrip @relation(fields: [groupTripId], references: [id])
+  
+  agencyId        String
+  agency          Agency    @relation(fields: [agencyId], references: [id])
+  
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
+  
+  travelRequestId String?
+  travelRequest   TravelRequest? @relation(fields: [travelRequestId], references: [id])
+  
+  clientName      String
+  clientEmail     String
+  clientPhone     String?
+  clientCountry   String?
+  
+  numberOfSeats   Int      @default(1)
+  depositPaid     Decimal  @db.Decimal(10, 2)
+  totalAmount     Decimal  @db.Decimal(10, 2)
+  
+  confirmationCode String  @unique
+  cancellationToken String @unique @default(uuid())
+  
+  status          BookingStatus @default(PENDING_PAYMENT)
+  cancellationReason String?
+  cancelledAt     DateTime?
+  
+  payment         Payment?
+  
+  notes           String?  @db.Text
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+enum BookingStatus {
+  PENDING_PAYMENT
+  CONFIRMED
+  CANCELLED
+  REFUNDED
+  NO_SHOW
+}
+
+// ==========================================
+// 6. Paiements (Payment)
+// ==========================================
+
+model Payment {
+  id              String   @id @default(cuid())
+  
+  bookingId       String   @unique
+  booking         Booking  @relation(fields: [bookingId], references: [id])
+  
+  groupTripId     String
+  groupTrip       GroupTrip @relation(fields: [groupTripId], references: [id])
+  
+  agencyId        String
+  agency          Agency    @relation(fields: [agencyId], references: [id])
+  
+  stripeSessionId String   @unique
+  stripePaymentIntentId String?
+  stripeCustomerEmail String
+  
+  amount          Decimal  @db.Decimal(10, 2)
+  currency        String   @default("EUR")
+  paymentType     String   @default("deposit") // 'deposit' | 'service_fee'
+  
+  status          PaymentStatus @default(PENDING)
+  paidAt          DateTime?
+  
+  rawProviderResponse Json?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+  REFUNDED
+}
+
+// ==========================================
+// 7. Administration & Logs
+// ==========================================
+
+model AuditLog {
+  id              String   @id @default(cuid())
+  action          String
+  userId          String?
+  details         String   @db.Text
+  createdAt       DateTime @default(now())
+}
