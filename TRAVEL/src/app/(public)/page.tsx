@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import HeroAnimatedWidget from "@/components/public/HeroAnimatedWidget";
 import { 
   ArrowRight, 
   MapPin, 
@@ -72,10 +73,7 @@ export default function Home() {
           </div>
 
           <div className="lg:col-span-2 relative">
-            <div className="relative aspect-[4/5] rounded-[3rem] overflow-hidden shadow-2xl border-8 border-white">
-              <Image src="/hero.png" alt="Maghreb Travel" fill sizes="(max-width: 1024px) 100vw, 40vw" className="object-cover" priority />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
-            </div>
+            <HeroAnimatedWidget />
           </div>
         </div>
       </section>
