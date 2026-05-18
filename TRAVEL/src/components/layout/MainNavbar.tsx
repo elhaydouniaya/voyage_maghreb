@@ -14,6 +14,7 @@ export default function MainNavbar() {
     { label: "Accueil", href: "/" },
     { label: "Voyages", href: "/voyages" },
     { label: "Destinations", href: "/destinations" },
+    { label: "Avis", href: "/reviews" },
     { label: "À propos", href: "/about" },
   ];
 

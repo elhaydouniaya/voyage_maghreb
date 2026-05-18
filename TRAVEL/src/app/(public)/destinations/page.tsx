@@ -22,16 +22,23 @@ const destinations = [
   {
     name: "Tunisie",
     description: "Entre farniente à Djerba, ruines de Carthage et l'hospitalité légendaire du Sud tunisien.",
-    image: "https://images.unsplash.com/photo-1549877452-9c387954fbc2?q=80&w=1200&auto=format&fit=crop",
+    image: "https://images.unsplash.com/photo-1533105079780-92b9be482077?q=80&w=1200&auto=format&fit=crop",
     count: "6 voyages disponibles",
     regions: ["Djerba", "Sidi Bou Saïd", "Tozeur", "Tunis"]
   },
   {
-    name: "Sahara",
-    description: "Une expérience spirituelle au cœur des dunes les plus hautes du monde. L'immensité à perte de vue.",
-    image: "https://images.unsplash.com/photo-1473580044384-7ba9967e16a0?q=80&w=1200&auto=format&fit=crop",
-    count: "15 voyages disponibles",
-    regions: ["Grand Erg Occidental", "Tassili n'Ajjer", "Merzouga"]
+    name: "Libye",
+    description: "Des vestiges romains spectaculaires de Leptis Magna aux oasis ancestrales de Ghadamès, la perle du désert.",
+    image: "/libye.png",
+    count: "4 voyages disponibles",
+    regions: ["Leptis Magna", "Ghadamès", "Tripoli", "Akakus"]
+  },
+  {
+    name: "Mauritanie",
+    description: "Entre les dunes majestueuses de l'Adrar et le littoral sauvage du Banc d'Arguin, découvrez les anciennes cités caravanières.",
+    image: "/mauritanie.png",
+    count: "5 voyages disponibles",
+    regions: ["Chinguetti", "Nouakchott", "Banc d'Arguin", "Adrar"]
   }
 ];
 

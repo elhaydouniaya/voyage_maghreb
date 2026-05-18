@@ -226,7 +226,7 @@ export default function MultiStepSearch() {
                      title="Destination"
                      value={formData.destination}
                      onChange={handleChange}
-                     placeholder="Ex: Sahara, Marrakech, Djerba..." 
+                     placeholder="Ex: Libye, Mauritanie, Marrakech, Djerba..." 
                      className="w-full bg-[#F8FAFC] border border-gray-100 rounded-2xl pl-14 pr-6 py-5 focus:ring-4 focus:ring-orange-500/10 outline-none font-bold text-[#0F172A] transition-all"
                      required
                    />

@@ -3,10 +3,18 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Globe, ArrowLeft, Check, Shield, FileText } from "lucide-react";
+import { Globe, ArrowLeft, Check, Shield, FileText, X } from "lucide-react";
 
 export default function AgencyRegisterPage() {
   const router = useRouter();
+
+  const handleBackdropClick = (e: React.MouseEvent) => {
+    // Only close if clicking on the backdrop container, not on the modal
+    const target = e.target as HTMLElement;
+    if (target.id === "backdrop-container") {
+      router.push("/");
+    }
+  };
   const [formData, setFormData] = useState({
     agencyName: "",
     managerName: "",
@@ -52,8 +60,45 @@ export default function AgencyRegisterPage() {
 
   if (success) {
     return (
-      <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-6 font-outfit">
-        <div className="bg-white rounded-[3.5rem] shadow-2xl w-full max-w-xl border border-gray-100 p-16 text-center">
+      <div
+        id="backdrop-container"
+        className="fixed inset-0 bg-white flex items-center justify-center p-6 font-outfit overflow-y-auto z-50"
+        onClick={handleBackdropClick}
+      >
+        {/* Animated Blurred Background */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          {/* Gradient Overlay */}
+          <div className="absolute inset-0 bg-gradient-to-br from-white via-orange-50/40 to-white" />
+
+          {/* Animated Blur Shapes */}
+          <div className="absolute top-20 -left-40 w-96 h-96 bg-orange-200/20 rounded-full blur-3xl animate-pulse" />
+          <div className="absolute top-1/3 -right-32 w-80 h-80 bg-blue-100/20 rounded-full blur-3xl animate-pulse delay-1000" />
+          <div className="absolute -bottom-32 left-1/2 w-96 h-96 bg-orange-100/20 rounded-full blur-3xl animate-pulse delay-500" />
+
+          {/* Animated Lines */}
+          <svg className="absolute inset-0 w-full h-full opacity-10" preserveAspectRatio="none">
+            <defs>
+              <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                <path d="M 40 0 L 0 0 0 40" fill="none" stroke="currentColor" strokeWidth="0.5" />
+              </pattern>
+            </defs>
+            <rect width="100%" height="100%" fill="url(#grid)" />
+          </svg>
+        </div>
+
+        <div 
+          className="bg-white rounded-[3.5rem] shadow-2xl w-full max-w-xl border border-gray-100 p-16 text-center relative z-10 animate-in fade-in zoom-in-95 duration-300"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Close Button */}
+          <button
+            onClick={() => router.push("/")}
+            className="absolute top-6 right-6 z-20 p-2 hover:bg-gray-100 rounded-full transition-colors"
+            title="Fermer"
+            type="button"
+          >
+            <X size={24} className="text-gray-400 hover:text-gray-600" />
+          </button>
           <div className="w-24 h-24 bg-green-50 rounded-3xl flex items-center justify-center text-green-500 mx-auto mb-8 shadow-sm">
              <Check size={48} strokeWidth={3} />
           </div>
@@ -80,8 +125,45 @@ export default function AgencyRegisterPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center py-12 px-6 font-outfit">
-      <div className="bg-white rounded-[3.5rem] shadow-2xl w-full max-w-3xl border border-gray-100 overflow-hidden flex flex-col md:flex-row">
+    <div
+      id="backdrop-container"
+      className="fixed inset-0 bg-white flex items-center justify-center py-12 px-6 font-outfit overflow-y-auto z-50"
+      onClick={handleBackdropClick}
+    >
+      {/* Animated Blurred Background */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        {/* Gradient Overlay */}
+        <div className="absolute inset-0 bg-gradient-to-br from-white via-orange-50/40 to-white" />
+
+        {/* Animated Blur Shapes */}
+        <div className="absolute top-20 -left-40 w-96 h-96 bg-orange-200/20 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute top-1/3 -right-32 w-80 h-80 bg-blue-100/20 rounded-full blur-3xl animate-pulse delay-1000" />
+        <div className="absolute -bottom-32 left-1/2 w-96 h-96 bg-orange-100/20 rounded-full blur-3xl animate-pulse delay-500" />
+
+        {/* Animated Lines */}
+        <svg className="absolute inset-0 w-full h-full opacity-10" preserveAspectRatio="none">
+          <defs>
+            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="currentColor" strokeWidth="0.5" />
+            </pattern>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#grid)" />
+        </svg>
+      </div>
+
+      <div 
+        className="bg-white rounded-[3.5rem] shadow-2xl w-full max-w-3xl border border-gray-100 overflow-hidden flex flex-col md:flex-row relative z-10 animate-in fade-in zoom-in-95 duration-300 my-8"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Close Button */}
+        <button
+          onClick={() => router.push("/")}
+          className="absolute top-6 right-6 z-20 p-2 hover:bg-gray-100 rounded-full transition-colors"
+          title="Fermer"
+          type="button"
+        >
+          <X size={24} className="text-gray-400 hover:text-gray-600" />
+        </button>
         
         {/* Sidebar Info */}
         <div className="md:w-1/3 bg-[#0F172A] p-12 text-white relative overflow-hidden flex flex-col">

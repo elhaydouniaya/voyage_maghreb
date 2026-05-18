@@ -18,14 +18,20 @@ const destinations = [
   {
     name: "Tunisie",
     count: "6 voyages",
-    image: "https://images.unsplash.com/photo-1549877452-9c387954fbc2?q=80&w=800&auto=format&fit=crop",
+    image: "https://images.unsplash.com/photo-1533105079780-92b9be482077?q=80&w=800&auto=format&fit=crop",
     slug: "tunisie"
   },
   {
-    name: "Sahara",
-    count: "15 voyages",
-    image: "https://images.unsplash.com/photo-1473580044384-7ba9967e16a0?q=80&w=800&auto=format&fit=crop",
-    slug: "sahara"
+    name: "Libye",
+    count: "4 voyages",
+    image: "/libye.png",
+    slug: "libye"
+  },
+  {
+    name: "Mauritanie",
+    count: "5 voyages",
+    image: "/mauritanie.png",
+    slug: "mauritanie"
   }
 ];
 

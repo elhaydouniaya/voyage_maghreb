@@ -122,9 +122,11 @@ export default function GuideTouristiqueIA() {
     // Personalized Recap for "Memory" feel with City Highlights
     const cityHighlights = formData.destination.toLowerCase().includes("marrakech") 
       ? "les souks vibrants et le jardin Majorelle" 
-      : formData.destination.toLowerCase().includes("sahara") 
+      : formData.destination.toLowerCase().includes("sahara") || formData.destination.toLowerCase().includes("mauritanie")
         ? "les dunes dorées et les nuits étoilées" 
-        : "les trésors cachés de la région";
+        : formData.destination.toLowerCase().includes("libye")
+          ? "les magnifiques cités antiques au bord de la mer"
+          : "les trésors cachés de la région";
         
     const recap = `C'est noté ! Un voyage ${formData.tripType[0]?.toLowerCase()} à ${formData.destination} pour ${formData.numberOfTravelers} personnes. J'adore cette destination, surtout pour ${cityHighlights}. Laissez-moi analyser nos 52 voyages pour vous...`;
     
@@ -179,7 +181,7 @@ export default function GuideTouristiqueIA() {
     });
     setResults([]);
     setStep(1);
-    addBotMessage("C'est reparti ! 🚀 Quelle nouvelle destination vous tente ? (Ex: Sahara, Marrakech, Djerba...)");
+    addBotMessage("C'est reparti ! 🚀 Quelle nouvelle destination vous tente ? (Ex: Libye, Mauritanie, Marrakech, Djerba...)");
   };
 
   const performMatch = async (budget: number) => {
