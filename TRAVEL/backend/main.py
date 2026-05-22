@@ -1,9 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from backend.routers.trips import router as trips_router
-from backend.routers.agencies import router as agencies_router
-from backend.routers.bookings import router as bookings_router
-from backend.routers.admin import router as admin_router
+from routers.trips import router as trips_router
+from routers.agencies import router as agencies_router
+from routers.bookings import router as bookings_router
+from routers.admin import router as admin_router
 
 app = FastAPI(
     title="Maghreb Travel API",

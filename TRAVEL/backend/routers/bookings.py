@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
-from backend.database import get_db
-from backend.models.booking import Booking
-from backend.schemas.booking import BookingOut
+from database import get_db
+from models.booking import Booking
+from schemas.booking import BookingOut
 
 router = APIRouter(prefix="/bookings", tags=["Réservations"])
 

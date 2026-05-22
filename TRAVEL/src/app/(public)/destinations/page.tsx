@@ -4,39 +4,43 @@ import { NavbarAuth } from "@/components/auth/NavbarAuth";
 import AIChatWidget from "@/components/ai/AIChatWidget";
 import MainNavbar from "@/components/layout/MainNavbar";
 
+import DestinationCarousel from "@/components/public/DestinationCarousel";
+
 const destinations = [
   {
     name: "Maroc",
     description: "Des sommets de l'Atlas aux vagues de l'Atlantique, en passant par les médinas millénaires.",
-    image: "https://images.unsplash.com/photo-1539020140153-e479b8c22e70?q=80&w=1200&auto=format&fit=crop",
+    images: ["/rabat.jpg", "/tetouan.jpg", "/marrakesh.jpg", "/sahara.jpg", "/casa.jpg"],
     count: "12 voyages disponibles",
     regions: ["Marrakech", "Fès", "Chefchaouen", "Essaouira"]
   },
   {
     name: "Algérie",
     description: "Le plus grand pays d'Afrique vous offre des paysages sahariens époustouflants et une côte méditerranéenne riche d'histoire.",
-    image: "https://images.unsplash.com/photo-1509316785289-025f5b846b35?q=80&w=1200&auto=format&fit=crop",
+    images: ["/martyr.jpg", "/algercap.jpg", "/oran.jpg", "/constantine.jpg", "/bejaia.jpg"],
     count: "8 voyages disponibles",
     regions: ["Taghit", "Alger", "Oran", "Constantine"]
   },
   {
     name: "Tunisie",
     description: "Entre farniente à Djerba, ruines de Carthage et l'hospitalité légendaire du Sud tunisien.",
-    image: "https://images.unsplash.com/photo-1533105079780-92b9be482077?q=80&w=1200&auto=format&fit=crop",
+    images: ["/caption.jpg", "/hammamet.jpg", "dougga.jpg", "/monastir.jpg", "/sidibousaid.jpg"],
     count: "6 voyages disponibles",
     regions: ["Djerba", "Sidi Bou Saïd", "Tozeur", "Tunis"]
   },
   {
     name: "Libye",
     description: "Des vestiges romains spectaculaires de Leptis Magna aux oasis ancestrales de Ghadamès, la perle du désert.",
-    image: "/libye.png",
+    images: ["photo2jpg.jpg",
+"plage_libye.jpg","elkhums.jpg","leptis-magna.jpg","tripoli.jpg"],
     count: "4 voyages disponibles",
     regions: ["Leptis Magna", "Ghadamès", "Tripoli", "Akakus"]
   },
   {
     name: "Mauritanie",
     description: "Entre les dunes majestueuses de l'Adrar et le littoral sauvage du Banc d'Arguin, découvrez les anciennes cités caravanières.",
-    image: "/mauritanie.png",
+    images: ["port-de-peche.jpg",
+"caption (1).jpg","mauritanietourne.jpg","aoulata.jpg","chenguitti).jpg"],
     count: "5 voyages disponibles",
     regions: ["Chinguetti", "Nouakchott", "Banc d'Arguin", "Adrar"]
   }
@@ -67,12 +71,8 @@ export default function DestinationsPage() {
           {destinations.map((dest, i) => (
             <div key={i} className={`flex flex-col ${i % 2 === 0 ? 'lg:flex-row' : 'lg:flex-row-reverse'} gap-12 items-center`}>
               <div className="w-full lg:w-1/2 aspect-[16/10] rounded-[3rem] overflow-hidden shadow-2xl relative group">
-                <img 
-                  src={dest.image} 
-                  alt={dest.name} 
-                  className="w-full h-full object-cover transition-transform duration-[2000ms] group-hover:scale-110"
-                />
-                <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors" />
+                <DestinationCarousel images={dest.images} alt={dest.name} />
+                <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors pointer-events-none" />
               </div>
               
               <div className="w-full lg:w-1/2 space-y-8">

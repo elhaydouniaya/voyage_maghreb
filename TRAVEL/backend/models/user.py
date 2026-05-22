@@ -1,4 +1,4 @@
-from backend.database import Base
+from database import Base
 from sqlalchemy import Column, String, DateTime, Boolean, Enum as SAEnum, Text, ARRAY
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func

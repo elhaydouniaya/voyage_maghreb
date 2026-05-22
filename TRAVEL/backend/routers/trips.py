@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List, Optional
-from backend.database import get_db
-from backend.models.trip import GroupTrip, TripStatus
-from backend.schemas.trip import TripOut
+from database import get_db
+from models.trip import GroupTrip, TripStatus
+from schemas.trip import TripOut
 
 router = APIRouter(prefix="/trips", tags=["Voyages"])
 

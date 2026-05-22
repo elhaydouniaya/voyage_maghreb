@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import HeroAnimatedWidget from "@/components/public/HeroAnimatedWidget";
+import MaghrebCarousel from "@/components/public/MaghrebCarousel";
 import { 
   ArrowRight, 
   MapPin, 
@@ -37,8 +38,8 @@ export default function Home() {
       <MainNavbar />
 
       {/* Hero Section */}
-      <section className="relative pt-32 pb-20 md:pt-40 md:pb-40 px-6">
-        <div className="max-w-7xl mx-auto grid lg:grid-cols-5 gap-12 items-center">
+      <section className="relative pt-32 pb-20 md:pt-40 md:pb-40 px-6 min-h-[800px] flex items-center">
+        <div className="max-w-7xl mx-auto grid lg:grid-cols-5 gap-12 items-center w-full">
           <div className="lg:col-span-3 text-center lg:text-left z-10">
             <h1 className="text-6xl md:text-8xl font-black tracking-tight text-[#0F172A] mb-8 leading-[1.1]">
               Votre prochain <br />
@@ -64,16 +65,16 @@ export default function Home() {
             </div>
             <div className="flex flex-col sm:flex-row gap-6 mt-12 justify-center lg:justify-start">
                <div className="flex items-center gap-6 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">
-                  <span>Populaire :</span>
-                  <Link href="/voyages?destination=Taghit" className="hover:text-orange-500 transition-colors">Taghit</Link>
-                  <Link href="/voyages?destination=Marrakech" className="hover:text-orange-500 transition-colors">Marrakech</Link>
-                  <Link href="/voyages?destination=Djerba" className="hover:text-orange-500 transition-colors">Djerba</Link>
+                  <span>Explorez :</span>
+                  <Link href="/voyages?destination=Maroc" className="hover:text-orange-500 transition-colors">Maroc</Link>
+                  <Link href="/voyages?destination=Algérie" className="hover:text-orange-500 transition-colors">Algérie</Link>
+                  <Link href="/voyages?destination=Tunisie" className="hover:text-orange-500 transition-colors">Tunisie</Link>
                </div>
             </div>
           </div>
 
-          <div className="lg:col-span-2 relative">
-            <HeroAnimatedWidget />
+          <div className="lg:col-span-2 relative h-[500px] md:h-[600px]">
+            <MaghrebCarousel autoPlay={true} interval={5000} />
           </div>
         </div>
       </section>

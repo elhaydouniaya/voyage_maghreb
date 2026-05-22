@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
-from backend.database import get_db
-from backend.models.agency import Agency, AgencyStatus
-from backend.schemas.agency import AgencyOut, AgencyVerifyRequest
+from database import get_db
+from models.agency import Agency, AgencyStatus
+from schemas.agency import AgencyOut, AgencyVerifyRequest
 
 router = APIRouter(prefix="/agencies", tags=["Agences"])
 

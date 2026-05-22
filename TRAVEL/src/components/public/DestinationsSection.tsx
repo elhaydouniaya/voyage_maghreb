@@ -5,8 +5,8 @@ import { MapPin, ArrowRight } from "lucide-react";
 const destinations = [
   {
     name: "Maroc",
-    count: "12 voyages",
-    image: "https://images.unsplash.com/photo-1539020140153-e479b8c22e70?q=80&w=800&auto=format&fit=crop",
+    count: "10 voyages",
+    image: "maroc.jpg",
     slug: "maroc"
   },
   {
