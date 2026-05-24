@@ -1,25 +1,26 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { Globe, X } from "lucide-react";
-import { signIn } from "next-auth/react";
+import { loginWithFreshSession } from "@/lib/login-client";
+import { DemoAccountsBox } from "@/components/auth/DemoAccountsBox";
 
 export default function AgencyLoginPage() {
   const router = useRouter();
+  const { data: session, status } = useSession();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleBackdropClick = (e: React.MouseEvent) => {
-    // Only close if clicking on the backdrop container, not on the modal
-    const target = e.target as HTMLElement;
-    if (target.id === "backdrop-container") {
-      router.push("/");
+  useEffect(() => {
+    if (status === "authenticated" && session?.user?.role === "AGENCY") {
+      window.location.href = "/agency/dashboard";
     }
-  };
+  }, [status, session]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -27,28 +28,11 @@ export default function AgencyLoginPage() {
     setError("");
 
     try {
-      const result = await signIn("credentials", {
-        email,
-        password,
-        redirect: false,
+      const outcome = await loginWithFreshSession(email, password, {
+        requiredRole: "AGENCY",
       });
-
-      if (result?.error) {
-        setError("Identifiants agence incorrects.");
-      } else {
-        // Role-based redirect — read session after sign-in
-        // agency@test.com logs in as AGENCY, others are rejected
-        if (email === "agency@test.com") {
-          router.push("/agency/dashboard");
-        } else if (email === "admin@maghrebvoyage.com") {
-          router.push("/admin/dashboard");
-        } else if (email === "client@test.com") {
-          setError("Ce compte n'est pas un compte agence. Utilisez l'espace voyageur.");
-          setIsLoading(false);
-          return;
-        } else {
-          router.push("/agency/dashboard");
-        }
+      if (!outcome.ok) {
+        setError(outcome.error);
       }
     } catch (err) {
       setError("Une erreur est survenue.");
@@ -58,11 +42,7 @@ export default function AgencyLoginPage() {
   }
 
   return (
-    <div
-      id="backdrop-container"
-      className="fixed inset-0 bg-white flex items-center justify-center p-6 font-outfit overflow-y-auto z-50"
-      onClick={handleBackdropClick}
-    >
+    <div className="fixed inset-0 bg-white flex items-center justify-center p-6 font-outfit overflow-y-auto z-50">
       {/* Animated Blurred Background */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         {/* Gradient Overlay */}
@@ -111,8 +91,21 @@ export default function AgencyLoginPage() {
 
         <div className="p-10">
           {error && (
-            <div className="bg-red-50 border border-red-100 text-red-600 rounded-2xl p-4 mb-8 text-xs font-bold flex items-center gap-2">
-              <span className="w-5 h-5 bg-red-100 rounded-full flex items-center justify-center">✕</span> {error}
+            <div className="bg-red-50 border border-red-100 text-red-600 rounded-2xl p-4 mb-8 text-xs font-bold">
+              <p className="flex items-center gap-2">
+                <span className="w-5 h-5 bg-red-100 rounded-full flex items-center justify-center shrink-0">
+                  ✕
+                </span>
+                {error}
+              </p>
+              {error.includes("voyageur") && (
+                <Link
+                  href="/agency/register"
+                  className="mt-3 inline-block text-orange-600 underline underline-offset-2"
+                >
+                  Devenir partenaire →
+                </Link>
+              )}
             </div>
           )}
 
@@ -156,10 +149,7 @@ export default function AgencyLoginPage() {
               </Link>
             </p>
 
-            <div className="bg-[#0F172A] text-white p-6 rounded-3xl text-center shadow-xl shadow-gray-100">
-              <p className="text-[10px] font-black text-orange-500 uppercase tracking-widest mb-1">Accès Démo Agence</p>
-              <p className="text-xs font-bold">agency@test.com / agency123</p>
-            </div>
+            <DemoAccountsBox portal="agency" />
 
             <Link href="/login" className="text-[10px] font-black text-gray-300 uppercase tracking-widest hover:text-[#0F172A] transition-colors block pt-2">
               ← Retour au portail Voyageur

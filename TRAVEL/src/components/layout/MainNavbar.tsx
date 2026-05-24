@@ -11,6 +11,7 @@ export default function MainNavbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const navLinks = [
+    { label: "Recherche IA", href: "/recherche" },
     { label: "Accueil", href: "/" },
     { label: "Voyages", href: "/voyages" },
     { label: "Destinations", href: "/destinations" },

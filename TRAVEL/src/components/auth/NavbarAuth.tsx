@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useSession, signOut } from "next-auth/react";
-import { User, LogOut, ChevronDown, LayoutDashboard, Bell } from "lucide-react";
+import { useSession } from "next-auth/react";
+import { User, LogOut, ChevronDown, LayoutDashboard } from "lucide-react";
+import { signOutToHome } from "@/lib/auth-client";
 import { useState, useRef, useEffect } from "react";
 
 export function NavbarAuth() {
@@ -30,15 +31,6 @@ export function NavbarAuth() {
 
     return (
       <div className="flex items-center gap-4 relative" ref={ref}>
-        {/* Notification Bell */}
-        <button 
-          title="Notifications"
-          className="relative w-10 h-10 flex items-center justify-center text-gray-400 hover:text-[#0F172A] hover:bg-gray-50 rounded-full transition-all group"
-        >
-           <Bell size={20} className="group-hover:scale-110 transition-transform" />
-           <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-red-500 border-2 border-white rounded-full" />
-        </button>
-
         <button
           onClick={() => setOpen(!open)}
           title="Menu utilisateur"
@@ -66,7 +58,7 @@ export function NavbarAuth() {
                 className="flex items-center gap-3 px-6 py-3.5 text-xs font-black uppercase tracking-widest text-[#0F172A] hover:bg-[#F8FAFC] transition-colors"
               >
                 <LayoutDashboard size={14} className="text-orange-600" />
-                {role === "AGENCY" ? "Tableau de bord" : role === "ADMIN" ? "Panel Admin" : "Mon profil"}
+                {role === "AGENCY" ? "Tableau de bord" : role === "ADMIN" ? "Administration" : "Mon profil"}
               </Link>
               {role === "AGENCY" && (
                 <Link
@@ -79,7 +71,7 @@ export function NavbarAuth() {
                 </Link>
               )}
               <button
-                onClick={() => signOut({ callbackUrl: "/" })}
+                onClick={() => signOutToHome()}
                 className="w-full flex items-center gap-3 px-6 py-3.5 text-xs font-black uppercase tracking-widest text-red-500 hover:bg-red-50 transition-colors"
               >
                 <LogOut size={14} />

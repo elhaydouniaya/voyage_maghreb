@@ -1,38 +1,38 @@
-import Link from "next/image";
 import LinkNext from "next/link";
 import { MapPin, ArrowRight } from "lucide-react";
+import { COUNTRY_IMAGES } from "@/lib/images";
 
 const destinations = [
   {
     name: "Maroc",
     count: "10 voyages",
-    image: "maroc.jpg",
-    slug: "maroc"
+    image: COUNTRY_IMAGES.MAROC[0],
+    slug: "maroc",
   },
   {
     name: "Algérie",
     count: "8 voyages",
-    image: "https://images.unsplash.com/photo-1509316785289-025f5b846b35?q=80&w=800&auto=format&fit=crop",
-    slug: "algerie"
+    image: COUNTRY_IMAGES.ALGERIE[0],
+    slug: "algerie",
   },
   {
     name: "Tunisie",
     count: "6 voyages",
-    image: "https://images.unsplash.com/photo-1533105079780-92b9be482077?q=80&w=800&auto=format&fit=crop",
-    slug: "tunisie"
+    image: COUNTRY_IMAGES.TUNISIE[0],
+    slug: "tunisie",
   },
   {
     name: "Libye",
     count: "4 voyages",
-    image: "/libye.png",
-    slug: "libye"
+    image: COUNTRY_IMAGES.LIBYE[0],
+    slug: "libye",
   },
   {
     name: "Mauritanie",
     count: "5 voyages",
-    image: "/mauritanie.png",
-    slug: "mauritanie"
-  }
+    image: COUNTRY_IMAGES.MAURITANIE[0],
+    slug: "mauritanie",
+  },
 ];
 
 export default function DestinationsSection() {
@@ -45,7 +45,7 @@ export default function DestinationsSection() {
               Explorez les plus belles <span className="text-orange-500">destinations</span> du Maghreb.
             </h2>
             <p className="text-gray-500 font-medium text-lg leading-relaxed">
-              Des cités impériales aux oasis secrètes, découvrez des lieux d'exception sélectionnés par nos experts locaux.
+              Des cités impériales aux oasis secrètes, découvrez des lieux d&apos;exception sélectionnés par nos experts locaux.
             </p>
           </div>
           <LinkNext href="/destinations" className="group flex items-center gap-3 text-xs font-black uppercase tracking-widest text-[#0F172A] hover:text-orange-600 transition-colors">
@@ -56,9 +56,9 @@ export default function DestinationsSection() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
           {destinations.map((dest, i) => (
             <LinkNext key={i} href={`/voyages?destination=${dest.name}`} className="group relative aspect-[4/5] rounded-[3rem] overflow-hidden shadow-xl hover:shadow-2xl transition-all duration-700">
-              <img 
-                src={dest.image} 
-                alt={dest.name} 
+              <img
+                src={dest.image}
+                alt={dest.name}
                 className="absolute inset-0 w-full h-full object-cover transition-transform duration-[2000ms] group-hover:scale-110"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />

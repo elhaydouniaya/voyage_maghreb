@@ -1,59 +1,53 @@
 import Link from "next/link";
-import { Globe, ArrowRight, MapPin, Search } from "lucide-react";
-import { NavbarAuth } from "@/components/auth/NavbarAuth";
-import AIChatWidget from "@/components/ai/AIChatWidget";
-import MainNavbar from "@/components/layout/MainNavbar";
+import { ArrowRight, MapPin, Search } from "lucide-react";
 
 import DestinationCarousel from "@/components/public/DestinationCarousel";
+
+import { COUNTRY_IMAGES } from "@/lib/images";
 
 const destinations = [
   {
     name: "Maroc",
     description: "Des sommets de l'Atlas aux vagues de l'Atlantique, en passant par les médinas millénaires.",
-    images: ["/rabat.jpg", "/tetouan.jpg", "/marrakesh.jpg", "/sahara.jpg", "/casa.jpg"],
+    images: COUNTRY_IMAGES.MAROC,
     count: "12 voyages disponibles",
-    regions: ["Marrakech", "Fès", "Chefchaouen", "Essaouira"]
+    regions: ["Marrakech", "Fès", "Chefchaouen", "Essaouira"],
   },
   {
     name: "Algérie",
     description: "Le plus grand pays d'Afrique vous offre des paysages sahariens époustouflants et une côte méditerranéenne riche d'histoire.",
-    images: ["/martyr.jpg", "/algercap.jpg", "/oran.jpg", "/constantine.jpg", "/bejaia.jpg"],
+    images: COUNTRY_IMAGES.ALGERIE,
     count: "8 voyages disponibles",
-    regions: ["Taghit", "Alger", "Oran", "Constantine"]
+    regions: ["Taghit", "Alger", "Oran", "Constantine"],
   },
   {
     name: "Tunisie",
     description: "Entre farniente à Djerba, ruines de Carthage et l'hospitalité légendaire du Sud tunisien.",
-    images: ["/caption.jpg", "/hammamet.jpg", "dougga.jpg", "/monastir.jpg", "/sidibousaid.jpg"],
+    images: COUNTRY_IMAGES.TUNISIE,
     count: "6 voyages disponibles",
-    regions: ["Djerba", "Sidi Bou Saïd", "Tozeur", "Tunis"]
+    regions: ["Djerba", "Sidi Bou Saïd", "Tozeur", "Tunis"],
   },
   {
     name: "Libye",
-    description: "Des vestiges romains spectaculaires de Leptis Magna aux oasis ancestrales de Ghadamès, la perle du désert.",
-    images: ["photo2jpg.jpg",
-"plage_libye.jpg","elkhums.jpg","leptis-magna.jpg","tripoli.jpg"],
+    description: "Des vestiges romains spectaculaires de Leptis Magna aux oasis ancestrales de Ghadamès.",
+    images: COUNTRY_IMAGES.LIBYE,
     count: "4 voyages disponibles",
-    regions: ["Leptis Magna", "Ghadamès", "Tripoli", "Akakus"]
+    regions: ["Leptis Magna", "Ghadamès", "Tripoli", "Akakus"],
   },
   {
     name: "Mauritanie",
-    description: "Entre les dunes majestueuses de l'Adrar et le littoral sauvage du Banc d'Arguin, découvrez les anciennes cités caravanières.",
-    images: ["port-de-peche.jpg",
-"caption (1).jpg","mauritanietourne.jpg","aoulata.jpg","chenguitti).jpg"],
+    description: "Entre les dunes majestueuses de l'Adrar et le littoral sauvage du Banc d'Arguin.",
+    images: COUNTRY_IMAGES.MAURITANIE,
     count: "5 voyages disponibles",
-    regions: ["Chinguetti", "Nouakchott", "Banc d'Arguin", "Adrar"]
-  }
+    regions: ["Chinguetti", "Nouakchott", "Banc d'Arguin", "Adrar"],
+  },
 ];
 
 export default function DestinationsPage() {
   return (
-    <div className="min-h-screen bg-[#F8FAFC] font-outfit">
-      {/* Navbar */}
-      <MainNavbar />
-
+    <div className="bg-[#F8FAFC]">
       {/* Hero */}
-      <section className="pt-40 pb-20 px-6 bg-white">
+      <section className="py-16 pb-20 px-6 bg-white">
         <div className="max-w-7xl mx-auto">
           <h1 className="text-6xl md:text-8xl font-black text-[#0F172A] mb-8 tracking-tight">
             Explorez le <br />
@@ -122,27 +116,6 @@ export default function DestinationsPage() {
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="bg-white py-20 px-6 border-t border-gray-50">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-10">
-          <div className="flex items-center gap-3">
-             <div className="w-10 h-10 bg-orange-500 rounded-xl flex items-center justify-center text-white">
-                <Globe size={24} />
-             </div>
-             <span className="text-2xl font-black tracking-tight text-[#0F172A]">MaghrebVoyage</span>
-          </div>
-          <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">
-            © 2026 MaghrebVoyage — Fièrement construit pour l'aventure
-          </p>
-          <div className="flex flex-wrap justify-center gap-8 text-[10px] font-black uppercase tracking-widest text-gray-400">
-             <Link href="/legal/mentions" className="hover:text-orange-600 transition-colors">Mentions Légales</Link>
-             <Link href="/legal/cgu" className="hover:text-orange-600 transition-colors">CGV</Link>
-             <Link href="/legal/confidentialite" className="hover:text-orange-600 transition-colors">Confidentialité</Link>
-             <Link href="/about" className="hover:text-orange-600 transition-colors">Contact</Link>
-          </div>
-        </div>
-      </footer>
-      <AIChatWidget />
     </div>
   );
 }

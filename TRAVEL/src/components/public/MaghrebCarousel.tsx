@@ -227,7 +227,7 @@ export default function MaghrebCarousel({ autoPlay = true, interval = 5000 }: Ma
         window.speechSynthesis.removeEventListener('voiceschanged', handleVoicesChanged);
       };
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, []);
 
   return (
@@ -264,7 +264,7 @@ export default function MaghrebCarousel({ autoPlay = true, interval = 5000 }: Ma
         ))}
       </div>
 
-      {/* Dynamic Overlays from HeroAnimatedWidget */}
+      {/* Gradient overlay */}
       <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20 z-0 pointer-events-none" />
 
       {/* Audio Visualization (Bottom Right) */}

@@ -45,9 +45,9 @@ export default function LegalLayout({ children }: { children: React.ReactNode })
         </main>
       </div>
 
-      <footer className="py-12 text-center opacity-30">
-         <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">
-            © 2026 MaghrebVoyage — Toutes les pages légales obligatoires sont actives.
+      <footer className="py-12 text-center border-t border-gray-100 mt-12">
+         <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
+            © {new Date().getFullYear()} MaghrebVoyage — Informations légales et protection des données
          </p>
       </footer>
     </div>

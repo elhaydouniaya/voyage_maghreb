@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { 
+import { saveAiMatchResults } from "@/lib/ai-match-storage";
+import { formatPriceShort, formatBudgetMad } from "@/lib/currency";
+import {
   Sparkles, 
   MapPin, 
   Users, 
@@ -47,9 +49,20 @@ export default function GuideTouristiqueIA() {
     startDate: "",
   });
   const [results, setResults] = useState<any[]>([]);
+  const [budgetDraft, setBudgetDraft] = useState(1500);
   const scrollRef = useRef<HTMLDivElement>(null);
   const initializedRef = useRef(false);
   const { toast, showToast, hideToast } = useToast();
+
+  const BUDGET_MIN = 200;
+  const BUDGET_MAX = 5000;
+  const BUDGET_PRESETS = [500, 1000, 1500, 2000, 3000, 5000];
+
+  const formatBudget = (value: number) =>
+    new Intl.NumberFormat("fr-FR").format(value);
+
+  const budgetPercent =
+    ((budgetDraft - BUDGET_MIN) / (BUDGET_MAX - BUDGET_MIN)) * 100;
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -109,6 +122,7 @@ export default function GuideTouristiqueIA() {
 
   const selectTripType = (type: string) => {
     setFormData(prev => ({ ...prev, tripType: [type] }));
+    setBudgetDraft(1500);
     addUserMessage(TRIP_TYPES.find(t => t.id === type)?.label || type);
     addBotMessage("Excellent choix. Enfin, quel serait votre budget maximum par personne ?");
     setStep(4);
@@ -117,7 +131,7 @@ export default function GuideTouristiqueIA() {
   const handleBudgetSubmit = (budget: string) => {
     const b = parseInt(budget) || 1500;
     setFormData(prev => ({ ...prev, budgetMax: b }));
-    addUserMessage(`${b}€ par personne`);
+    addUserMessage(`${formatBudgetMad(b)} par personne`);
     
     // Personalized Recap for "Memory" feel with City Highlights
     const cityHighlights = formData.destination.toLowerCase().includes("marrakech") 
@@ -197,6 +211,7 @@ export default function GuideTouristiqueIA() {
       if (data.success) {
         setTimeout(() => {
           setResults(data.results);
+          saveAiMatchResults(data.results, data.summary || "");
           if (data.results && data.results.length > 0) {
             addBotMessage("J'ai trouvé des correspondances exceptionnelles pour vous ! Voici mes recommandations personnalisées :", "results");
             saveToHistory(data.results, data.summary);
@@ -312,7 +327,7 @@ export default function GuideTouristiqueIA() {
                            <div className="flex justify-between items-center">
                               <div className="flex flex-col">
                                  <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">À partir de</span>
-                                 <span className="text-xl font-black text-[#0F172A]">{trip.totalPrice || trip.price || 0}€</span>
+                                 <span className="text-xl font-black text-[#0F172A]">{formatPriceShort(trip.totalPrice || trip.price || 0)}</span>
                               </div>
                               <Link href={`/trip/${trip.slug}`} className="bg-[#0F172A] text-white text-[9px] font-black px-6 py-3 rounded-full hover:bg-orange-600 transition-all uppercase tracking-widest shadow-lg shadow-black/5">
                                  Découvrir
@@ -372,30 +387,93 @@ export default function GuideTouristiqueIA() {
       <div className="p-6 md:p-8 bg-white border-t border-gray-100">
         <div className="max-w-3xl mx-auto relative">
           {step === 4 ? (
-            <div className="flex flex-col gap-4 animate-in slide-in-from-bottom-4">
-               <input 
-                 type="range" 
-                 min="200" 
-                 max="5000" 
-                 step="100" 
-                 defaultValue="1500"
-                 id="budget-range-input"
-                 title="Budget range"
-                 className="w-full h-2 bg-gray-100 rounded-lg appearance-none cursor-pointer accent-orange-600"
-               />
-               <div className="flex justify-between items-center px-2">
-                  <span className="text-xs font-bold text-gray-400">200€</span>
-                  <button 
-                    onClick={() => {
-                      const val = (document.getElementById("budget-range-input") as HTMLInputElement).value;
-                      handleBudgetSubmit(val);
-                    }}
-                    className="bg-orange-600 text-white px-8 py-3 rounded-full text-xs font-black uppercase tracking-widest hover:bg-[#0F172A] transition-all"
+            <div className="space-y-6 animate-in slide-in-from-bottom-4 p-6 md:p-8 bg-[#F8FAFC] rounded-[2rem] border border-gray-100">
+              <p className="text-center text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">
+                Budget maximum · par personne
+              </p>
+
+              <div className="text-center py-2">
+                <div className="inline-flex items-baseline gap-1">
+                  <span className="text-4xl md:text-5xl font-black text-[#0F172A] tracking-tight tabular-nums">
+                    {formatBudgetMad(budgetDraft)}
+                  </span>
+                </div>
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-2">
+                  pour {formData.numberOfTravelers} voyageur
+                  {formData.numberOfTravelers > 1 ? "s" : ""} · total ≈{" "}
+                  <span className="text-orange-600">
+                    {formatBudgetMad(budgetDraft * formData.numberOfTravelers)}
+                  </span>
+                  <span className="text-gray-400 normal-case"> (~{formatBudget(budgetDraft * formData.numberOfTravelers)} €)</span>
+                </p>
+              </div>
+
+              <div className="space-y-3 px-1">
+                <input
+                  type="range"
+                  min={BUDGET_MIN}
+                  max={BUDGET_MAX}
+                  step={50}
+                  value={budgetDraft}
+                  onChange={(e) => setBudgetDraft(Number(e.target.value))}
+                  title="Ajuster le budget"
+                  className="w-full h-3 rounded-full appearance-none cursor-pointer accent-orange-600"
+                  style={{
+                    background: `linear-gradient(to right, #ea580c 0%, #ea580c ${budgetPercent}%, #e5e7eb ${budgetPercent}%, #e5e7eb 100%)`,
+                  }}
+                />
+                <div className="flex justify-between text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                  <span>{formatBudgetMad(BUDGET_MIN)}</span>
+                  <span>{formatBudgetMad(BUDGET_MAX)} +</span>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap justify-center gap-2">
+                {BUDGET_PRESETS.map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setBudgetDraft(preset)}
+                    className={`px-4 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${
+                      budgetDraft === preset
+                        ? "bg-orange-600 text-white shadow-lg shadow-orange-600/25 scale-105"
+                        : "bg-white text-gray-500 border border-gray-100 hover:border-orange-300 hover:text-orange-600"
+                    }`}
                   >
-                    Confirmer le budget
+                    {preset >= BUDGET_MAX ? "5 000+" : formatBudgetMad(preset)}
                   </button>
-                  <span className="text-xs font-bold text-gray-400">5000€+</span>
-               </div>
+                ))}
+              </div>
+
+              <div className="flex items-center justify-center gap-3">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest shrink-0">
+                  Montant exact
+                </label>
+                <input
+                  type="number"
+                  min={BUDGET_MIN}
+                  max={BUDGET_MAX}
+                  step={50}
+                  value={budgetDraft}
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    if (!Number.isNaN(v)) {
+                      setBudgetDraft(Math.min(BUDGET_MAX, Math.max(BUDGET_MIN, v)));
+                    }
+                  }}
+                  className="w-28 bg-white border-2 border-gray-100 rounded-xl px-3 py-2 text-center text-lg font-black text-[#0F172A] tabular-nums focus:border-orange-500 focus:outline-none"
+                  title="Saisir un montant en euros"
+                />
+                <span className="text-sm font-black text-orange-600">€</span>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => handleBudgetSubmit(String(budgetDraft))}
+                className="w-full bg-orange-600 text-white py-4 rounded-full text-xs font-black uppercase tracking-widest hover:bg-[#0F172A] transition-all shadow-xl shadow-orange-600/20"
+              >
+                Confirmer · {formatBudgetMad(budgetDraft)} / personne
+              </button>
             </div>
           ) : step === 5 ? (
             <div className="text-center py-4">

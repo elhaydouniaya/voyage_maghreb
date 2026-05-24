@@ -1,0 +1,249 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { Settings, Lock, Bell, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
+
+type Integrations = {
+  email: { configured: boolean; from: string; mode: string };
+  stripe: { configured: boolean; mode: string };
+  cron: { secretSet: boolean; secureInProduction: boolean };
+  openai: { configured: boolean; disabled: boolean };
+};
+
+function IntegrationsStatusPanel() {
+  const [data, setData] = useState<{
+    integrations: Integrations;
+    adminNotifyEmail: string | null;
+  } | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/admin/system-status", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => setData(d))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-3 text-gray-400">
+        <Loader2 className="animate-spin" size={20} />
+        <span className="text-xs font-bold uppercase tracking-widest">Chargement...</span>
+      </div>
+    );
+  }
+
+  const i = data?.integrations;
+  if (!i) {
+    return <p className="text-sm text-red-600 font-bold">Impossible de charger le statut.</p>;
+  }
+
+  const rows = [
+    {
+      label: "Emails (Resend)",
+      ok: i.email.configured,
+      detail: i.email.configured
+        ? `Actif · ${i.email.from}`
+        : "Mode console — ajoutez RESEND_API_KEY dans .env",
+    },
+    {
+      label: "Paiements (Stripe)",
+      ok: i.stripe.configured,
+      detail: i.stripe.configured ? "Clés configurées" : "Mode démo (sans Stripe)",
+    },
+    {
+      label: "Cron J-7",
+      ok: i.cron.secureInProduction,
+      detail: i.cron.secretSet
+        ? "CRON_SECRET défini"
+        : "CRON_SECRET manquant (obligatoire en production)",
+    },
+    {
+      label: "OpenAI",
+      ok: i.openai.configured && !i.openai.disabled,
+      detail:
+        i.openai.disabled
+          ? "Désactivé (OPENAI_DISABLE=true)"
+          : i.openai.configured
+            ? "Clé API active"
+            : "Fallback local sans OpenAI",
+    },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <p className="text-sm text-gray-600 font-medium">
+        Emails automatiques : inscription, réservation, annulation, remboursement, rappel J-7,
+        validation agence.
+      </p>
+      {data?.adminNotifyEmail && (
+        <p className="text-xs font-bold text-gray-500">
+          Alertes admin agences → {data.adminNotifyEmail}
+        </p>
+      )}
+      <ul className="space-y-3">
+        {rows.map((row) => (
+          <li
+            key={row.label}
+            className="flex items-start gap-3 p-4 rounded-2xl bg-[#F8FAFC] border border-gray-100"
+          >
+            {row.ok ? (
+              <CheckCircle2 className="text-green-500 shrink-0 mt-0.5" size={18} />
+            ) : (
+              <AlertCircle className="text-amber-500 shrink-0 mt-0.5" size={18} />
+            )}
+            <div>
+              <p className="text-xs font-black uppercase tracking-widest text-[#0F172A]">
+                {row.label}
+              </p>
+              <p className="text-[11px] text-gray-500 font-bold mt-1">{row.detail}</p>
+            </div>
+          </li>
+        ))}
+      </ul>
+      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
+        Obtenez une clé sur{" "}
+        <a href="https://resend.com" className="text-orange-600 hover:underline" target="_blank" rel="noreferrer">
+          resend.com
+        </a>
+        {" "}puis ajoutez RESEND_API_KEY et RESEND_FROM dans .env
+      </p>
+    </div>
+  );
+}
+
+export default function AdminSettingsPage() {
+  const [activeTab, setActiveTab] = useState("general");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  const [form, setForm] = useState({ name: "", email: "" });
+
+  useEffect(() => {
+    fetch("/api/user/me")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.user) {
+          setForm({ name: data.user.name || "", email: data.user.email || "" });
+        }
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  const tabs = [
+    { id: "general", label: "Général", icon: <Settings size={20} /> },
+    { id: "security", label: "Sécurité", icon: <Lock size={20} /> },
+    { id: "notifications", label: "Notifications", icon: <Bell size={20} /> },
+  ];
+
+  async function handleSave() {
+    setSaving(true);
+    setMessage("");
+    try {
+      const res = await fetch("/api/user/me", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: form.name }),
+      });
+      const data = await res.json();
+      setMessage(res.ok ? "Profil administrateur mis à jour." : data.error || "Erreur.");
+    } catch {
+      setMessage("Erreur réseau.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="max-w-4xl space-y-8">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div className="md:col-span-1 space-y-2">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={`w-full p-6 rounded-[2.5rem] border transition-all flex items-center gap-4 ${
+                activeTab === tab.id
+                  ? "bg-white border-orange-500/10 shadow-sm text-orange-600"
+                  : "bg-transparent border-transparent text-gray-400 hover:bg-white hover:border-gray-100"
+              }`}
+            >
+              {tab.icon}
+              <span className="text-xs font-black uppercase tracking-widest">{tab.label}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="md:col-span-2 bg-white rounded-[3rem] border border-gray-100 shadow-sm p-10">
+          {activeTab === "general" && (
+            <div className="space-y-6">
+              {loading ? (
+                <div className="flex items-center gap-3 text-gray-400">
+                  <Loader2 className="animate-spin" size={20} />
+                  <span className="text-xs font-bold uppercase tracking-widest">
+                    Chargement...
+                  </span>
+                </div>
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">
+                      Nom affiché
+                    </label>
+                    <input
+                      type="text"
+                      value={form.name}
+                      onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
+                      className="w-full bg-[#F8FAFC] border border-gray-100 rounded-2xl px-6 py-4 font-bold text-[#0F172A]"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">
+                      Email (lecture seule)
+                    </label>
+                    <input
+                      type="email"
+                      value={form.email}
+                      disabled
+                      className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-6 py-4 font-bold text-gray-400"
+                    />
+                  </div>
+                  {message && (
+                    <p className="text-sm font-bold text-green-600">{message}</p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="bg-orange-600 text-white px-10 py-4 rounded-full text-[10px] font-black uppercase tracking-widest disabled:opacity-50"
+                  >
+                    {saving ? "Enregistrement..." : "Enregistrer"}
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+
+          {activeTab === "security" && (
+            <div className="space-y-6">
+              <p className="text-sm text-gray-600 font-medium">
+                Pour changer votre mot de passe administrateur, utilisez la réinitialisation
+                par email.
+              </p>
+              <Link
+                href="/forgot-password"
+                className="inline-block bg-[#0F172A] text-white px-8 py-4 rounded-full text-[10px] font-black uppercase tracking-widest"
+              >
+                Réinitialiser le mot de passe
+              </Link>
+            </div>
+          )}
+
+          {activeTab === "notifications" && <IntegrationsStatusPanel />}
+        </div>
+      </div>
+    </div>
+  );
+}

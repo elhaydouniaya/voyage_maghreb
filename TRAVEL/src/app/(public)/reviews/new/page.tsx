@@ -1,6 +1,5 @@
 "use client";
 
-import MainNavbar from "@/components/layout/MainNavbar";
 import ReviewForm from "@/components/reviews/ReviewForm";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
@@ -8,9 +7,7 @@ import Link from "next/link";
 export default function NewReviewPage() {
   return (
     <>
-      <MainNavbar />
-
-      <main className="min-h-screen bg-gradient-to-b from-gray-50 to-white pt-32 pb-16">
+      <main className="min-h-screen bg-gradient-to-b from-gray-50 to-white py-12 pb-16">
         {/* Header */}
         <div className="max-w-2xl mx-auto px-4 md:px-8 mb-12">
           <Link

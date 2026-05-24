@@ -34,3 +34,13 @@ export function getFallbackImage(destination: string = ""): string {
   // Default fallback
   return "https://images.unsplash.com/photo-1505051508008-923feaf90180?q=80&w=2070&auto=format&fit=crop";
 }
+
+const BROKEN_IMAGE_FRAGMENTS = ["photo-1539650116574"];
+
+export function sanitizeImageUrl(url: string | undefined, destination = ""): string {
+  if (!url) return getFallbackImage(destination);
+  if (BROKEN_IMAGE_FRAGMENTS.some((f) => url.includes(f))) {
+    return getFallbackImage(destination);
+  }
+  return url;
+}

@@ -1,13 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { Suspense, useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { XCircle, ArrowLeft, AlertTriangle, CheckCircle2 } from "lucide-react";
 
-export default function BookingCancelPage() {
+function BookingCancelContent() {
   const searchParams = useSearchParams();
-  const router = useRouter();
   const token = searchParams.get("token");
   const [isConfirming, setIsConfirming] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
@@ -20,12 +19,24 @@ export default function BookingCancelPage() {
   }, [token]);
 
   const handleCancel = async () => {
+    if (!token) return;
     setIsLoading(true);
-    // Simulate API call to /api/bookings/cancel?token=...
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      const res = await fetch(`/api/bookings/cancel?token=${encodeURIComponent(token)}`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "Annulation impossible.");
+        setIsLoading(false);
+        return;
+      }
       setIsSuccess(true);
-    }, 2000);
+    } catch {
+      alert("Erreur serveur.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   if (isSuccess) {
@@ -63,7 +74,7 @@ export default function BookingCancelPage() {
             </p>
           </div>
           <div className="space-y-4 pt-6">
-            <button 
+            <button
               onClick={handleCancel}
               disabled={isLoading}
               className="w-full bg-red-600 text-white py-5 rounded-full font-black shadow-xl shadow-red-100 hover:bg-red-700 transition-all active:scale-95 disabled:opacity-50 text-xs uppercase tracking-widest"
@@ -96,5 +107,19 @@ export default function BookingCancelPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function BookingCancelPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center">
+          <p className="text-gray-500 font-bold">Chargement...</p>
+        </div>
+      }
+    >
+      <BookingCancelContent />
+    </Suspense>
   );
 }

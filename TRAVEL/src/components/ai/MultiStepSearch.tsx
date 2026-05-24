@@ -1,7 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { 
+import Link from "next/link";
+import { saveAiMatchResults } from "@/lib/ai-match-storage";
+import { formatPriceShort, formatBudgetMad } from "@/lib/currency";
+import {
   ChevronRight, 
   ChevronLeft, 
   Sparkles, 
@@ -16,7 +19,6 @@ import {
   CheckCircle2
 } from "lucide-react";
 import Image from "next/image";
-import Link from "next/link";
 
 const TRIP_TYPES = [
   { id: "DESERT", label: "Désert", icon: "🌵" },
@@ -112,6 +114,7 @@ export default function MultiStepSearch() {
       if (data.success) {
         setResults(data.results);
         setSummary(data.summary);
+        saveAiMatchResults(data.results, data.summary);
       }
     } catch (err) {
       console.error("Match error", err);
@@ -170,7 +173,7 @@ export default function MultiStepSearch() {
                           </div>
                        </div>
                        <div className="flex justify-between items-center pt-6 border-t border-gray-200/50">
-                          <div className="text-2xl font-black text-[#0F172A]">{trip.totalPrice}€</div>
+                          <div className="text-2xl font-black text-[#0F172A]">{formatPriceShort(trip.totalPrice)}</div>
                           <Link href={`/trip/${trip.slug}`} className="bg-[#0F172A] text-white text-[10px] font-black px-6 py-3 rounded-full hover:bg-orange-600 transition-all">VOIR L'OFFRE</Link>
                        </div>
                     </div>
@@ -182,8 +185,14 @@ export default function MultiStepSearch() {
                )}
             </div>
             
-            <div className="pt-8">
-               <button onClick={() => setStep(1)} className="text-xs font-black text-gray-400 uppercase tracking-widest hover:text-orange-600 transition-colors">
+            <div className="pt-8 flex flex-col sm:flex-row gap-4 justify-center items-center">
+               <Link
+                 href="/voyages?matched=true"
+                 className="bg-orange-600 text-white px-10 py-4 rounded-full text-xs font-black uppercase tracking-widest hover:bg-orange-700 transition-all"
+               >
+                 Voir sur la page Voyages →
+               </Link>
+               <button type="button" onClick={() => setStep(1)} className="text-xs font-black text-gray-400 uppercase tracking-widest hover:text-orange-600 transition-colors">
                   ← Refaire une recherche
                </button>
             </div>
@@ -300,24 +309,51 @@ export default function MultiStepSearch() {
                   </div>
                </div>
 
-               <div className="space-y-6">
-                  <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1 flex justify-between">
-                     Budget maximum / pers. <span className="text-orange-600">{formData.budgetMax}€</span>
-                  </label>
+               <div className="space-y-6 p-8 bg-[#F8FAFC] rounded-[2.5rem] border border-gray-100">
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">
+                     Budget maximum · par personne
+                  </p>
+                  <div className="text-center">
+                     <span className="text-4xl font-black text-[#0F172A] tabular-nums">
+                       {formatBudgetMad(formData.budgetMax)}
+                     </span>
+                     <p className="text-[10px] text-gray-400 font-bold mt-1">(~{formData.budgetMax.toLocaleString("fr-FR")} € / pers.)</p>
+                  </div>
                   <input 
                     type="range" 
                     name="budgetMax" 
                     min="200" 
                     max="5000" 
-                    step="100"
+                    step="50"
                     title="Budget maximum par personne"
                     value={formData.budgetMax}
                     onChange={handleChange}
-                    className="w-full h-2 bg-gray-100 rounded-lg appearance-none cursor-pointer accent-orange-600" 
+                    className="w-full h-3 rounded-full appearance-none cursor-pointer accent-orange-600"
+                    style={{
+                      background: `linear-gradient(to right, #ea580c 0%, #ea580c ${((formData.budgetMax - 200) / 4800) * 100}%, #e5e7eb ${((formData.budgetMax - 200) / 4800) * 100}%, #e5e7eb 100%)`,
+                    }}
                   />
-                  <div className="flex justify-between text-[9px] font-black text-gray-300 uppercase tracking-widest">
-                     <span>Eco (200€)</span>
-                     <span>Premium (5000€)</span>
+                  <div className="flex justify-between text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                     <span>{formatBudgetMad(200)}</span>
+                     <span>{formatBudgetMad(5000)} +</span>
+                  </div>
+                  <div className="flex flex-wrap justify-center gap-2">
+                     {[500, 1000, 1500, 2000, 3000, 5000].map((preset) => (
+                       <button
+                         key={preset}
+                         type="button"
+                         onClick={() =>
+                           setFormData((prev) => ({ ...prev, budgetMax: preset }))
+                         }
+                         className={`px-3 py-2 rounded-full text-[9px] font-black uppercase tracking-widest transition-all ${
+                           formData.budgetMax === preset
+                             ? "bg-orange-600 text-white"
+                             : "bg-white border border-gray-100 text-gray-500 hover:border-orange-300"
+                         }`}
+                       >
+                         {preset >= 5000 ? "5 000+" : formatBudgetMad(preset)}
+                       </button>
+                     ))}
                   </div>
                </div>
             </div>

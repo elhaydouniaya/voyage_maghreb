@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Globe, ArrowLeft, Check, Shield, FileText, X } from "lucide-react";
+import { loginWithFreshSession } from "@/lib/login-client";
 
 export default function AgencyRegisterPage() {
   const router = useRouter();
@@ -51,11 +52,73 @@ export default function AgencyRegisterPage() {
       return;
     }
 
-    // MOCK REGISTER
-    setTimeout(() => {
-      setSuccess(true);
+    if (formData.agencyName.trim().length < 3) {
+      setError("Le nom de l'agence doit contenir au moins 3 caractères.");
       setIsLoading(false);
-    }, 1500);
+      return;
+    }
+
+    if (formData.description.trim().length < 100) {
+      setError("La description doit contenir au moins 100 caractères.");
+      setIsLoading(false);
+      return;
+    }
+
+    if (formData.coverage.length < 1) {
+      setError("Sélectionnez au moins une zone géographique.");
+      setIsLoading(false);
+      return;
+    }
+
+    if (formData.specialties.length < 1) {
+      setError("Sélectionnez au moins un type de voyage.");
+      setIsLoading(false);
+      return;
+    }
+
+    if (
+      formData.password.length < 8 ||
+      !/[A-Z]/.test(formData.password) ||
+      !/[0-9]/.test(formData.password)
+    ) {
+      setError(
+        "Le mot de passe doit contenir au moins 8 caractères, une majuscule et un chiffre."
+      );
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/auth/register/agency", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || "Inscription impossible.");
+        setIsLoading(false);
+        return;
+      }
+
+      const loginOutcome = await loginWithFreshSession(
+        formData.email.trim(),
+        formData.password,
+        { requiredRole: "AGENCY" }
+      );
+
+      if (!loginOutcome.ok) {
+        setError(loginOutcome.error);
+        setSuccess(true);
+      }
+      /* succès : redirection automatique vers /agency/dashboard */
+    } catch {
+      setError("Impossible de contacter le serveur. Réessayez.");
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   if (success) {
@@ -102,9 +165,12 @@ export default function AgencyRegisterPage() {
           <div className="w-24 h-24 bg-green-50 rounded-3xl flex items-center justify-center text-green-500 mx-auto mb-8 shadow-sm">
              <Check size={48} strokeWidth={3} />
           </div>
-          <h2 className="text-4xl font-black tracking-tight mb-6 text-[#0F172A]">Dossier reçu !</h2>
+          <h2 className="text-4xl font-black tracking-tight mb-6 text-[#0F172A]">Compte agence créé !</h2>
           <p className="text-gray-500 mb-10 font-medium leading-relaxed">
-            Votre demande d'inscription est en cours de revue par notre équipe. 
+            Votre compte est actif. Vous pouvez vous connecter à tout moment.
+            La validation de votre dossier est en cours de revue par notre équipe.
+            Envoyez votre justificatif officiel (registre de commerce ou licence) à{" "}
+            <strong>contact@maghrebvoyage.com</strong> avec votre email en objet.
             Vous recevrez un email de confirmation dès que votre compte sera validé.
           </p>
           <div className="bg-[#F8FAFC] rounded-[2rem] p-8 mb-10 border border-gray-100 text-left">
@@ -114,11 +180,22 @@ export default function AgencyRegisterPage() {
                 Une fois validé, vous pourrez publier vos premiers voyages.
              </p>
           </div>
-          <Link href="/agency/login">
-            <button className="bg-[#0F172A] text-white font-black py-5 px-12 rounded-full shadow-xl hover:bg-black transition-all text-xs uppercase tracking-widest">
-              Retour à la connexion
-            </button>
-          </Link>
+          <button
+            type="button"
+            onClick={async () => {
+              const outcome = await loginWithFreshSession(
+                formData.email.trim(),
+                formData.password,
+                { requiredRole: "AGENCY" }
+              );
+              if (!outcome.ok) {
+                router.push("/agency/login");
+              }
+            }}
+            className="bg-[#0F172A] text-white font-black py-5 px-12 rounded-full shadow-xl hover:bg-black transition-all text-xs uppercase tracking-widest"
+          >
+            Accéder à mon espace agence
+          </button>
         </div>
       </div>
     );

@@ -1,121 +1,80 @@
 "use client";
 
-import { useState } from "react";
-import { Star, Filter } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Star } from "lucide-react";
 import ReviewCard from "./ReviewCard";
 
-// Sample reviews data
-const sampleReviews = [
-  {
-    id: "1",
-    author: "Fatima Ben",
-    avatar: undefined,
-    rating: 5,
-    title: "Une expérience magique à Marrakech!",
-    content:
-      "C'était absolument incroyable! Le guide était très professionnel, les hôtels choisis étaient luxueux et les paysages désertiques sont unforgettable. Je recommande vivement cette agence pour tous ceux qui veulent découvrir le Maroc authentique.",
-    destination: "Marrakech",
-    tripDate: "Avril 2026",
-    date: "Il y a 2 semaines",
-    helpful: 24,
-  },
-  {
-    id: "2",
-    author: "Ahmed Slimani",
-    avatar: undefined,
-    rating: 4,
-    title: "Très bon rapport qualité-prix",
-    content:
-      "Excellent choix pour un voyage en famille. Les activités étaient variées et adaptées à tous les âges. Le seul petit point négatif était le timing un peu serré sur le premier jour, mais globalement merveilleux.",
-    destination: "Agadir",
-    tripDate: "Mars 2026",
-    date: "Il y a 1 mois",
-    helpful: 18,
-  },
-  {
-    id: "3",
-    author: "Leila Mansouri",
-    avatar: undefined,
-    rating: 5,
-    title: "Du Sahara à l'Atlantique, un voyage de rêve",
-    content:
-      "J'ai découvert des endroits que je n'aurais jamais trouvés seule. L'organisation était impeccable, l'accueil chaleureux, et les découvertes culinaires délicieuses. Ce voyage m'a transformée. Merci!",
-    destination: "Tour complet Maroc",
-    tripDate: "Février 2026",
-    date: "Il y a 3 mois",
-    helpful: 42,
-  },
-  {
-    id: "4",
-    author: "Mohammed Karim",
-    avatar: undefined,
-    rating: 4,
-    title: "Belle découverte de Tanger et Tétouan",
-    content:
-      "Les villes du nord sont magnifiques et souvent oubliées par les touristes. Cette agence m'a fait découvrir une autre facette du Maroc. Guide accompagnateur très culture et attachant.",
-    destination: "Tanger, Tétouan",
-    tripDate: "Janvier 2026",
-    date: "Il y a 4 mois",
-    helpful: 15,
-  },
-  {
-    id: "5",
-    author: "Sara Daoudi",
-    avatar: undefined,
-    rating: 5,
-    title: "Le séjour balnéaire parfait",
-    content:
-      "Destinations balnéaires sélectionnées avec goût, hôtels confortables face à la mer, et une équipe disponible 24/7. De plus, ils proposent des excursions intéressantes pour ne pas rester que sur la plage.",
-    destination: "Casablanca & Plages",
-    tripDate: "Décembre 2025",
-    date: "Il y a 5 mois",
-    helpful: 31,
-  },
-  {
-    id: "6",
-    author: "Youssef El Idrissi",
-    avatar: undefined,
-    rating: 4,
-    title: "Authenticité garantie",
-    content:
-      "C'est vraiment une agence qui met l'accent sur l'authenticité et la rencontre avec la population locale. Les repas chez l'habitant étaient un point fort. Merci pour cette belle expérience d'immersion culturelle.",
-    destination: "Anti-Atlas",
-    tripDate: "Novembre 2025",
-    date: "Il y a 6 mois",
-    helpful: 22,
-  },
-];
+type ReviewItem = {
+  id: string;
+  author: string;
+  rating: number;
+  title: string;
+  content: string;
+  destination: string;
+  tripDate: string;
+  date: string;
+  createdAt?: string;
+  helpful?: number;
+};
 
 export default function ReviewsList() {
+  const [reviews, setReviews] = useState<ReviewItem[]>([]);
+  const [stats, setStats] = useState({ count: 0, average: 0 });
+  const [loading, setLoading] = useState(true);
   const [selectedRating, setSelectedRating] = useState<number | null>(null);
   const [sortBy, setSortBy] = useState("recent");
 
+  useEffect(() => {
+    async function load() {
+      try {
+        const res = await fetch("/api/reviews");
+        if (res.ok) {
+          const data = await res.json();
+          setReviews(data.reviews || []);
+          setStats(data.stats || { count: 0, average: 0 });
+        }
+      } catch {
+        /* ignore */
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, []);
+
   const filteredReviews = selectedRating
-    ? sampleReviews.filter((review) => review.rating === selectedRating)
-    : sampleReviews;
+    ? reviews.filter((review) => review.rating === selectedRating)
+    : reviews;
 
   const sortedReviews = [...filteredReviews].sort((a, b) => {
     if (sortBy === "rating-high") return b.rating - a.rating;
     if (sortBy === "rating-low") return a.rating - b.rating;
     if (sortBy === "helpful") return (b.helpful || 0) - (a.helpful || 0);
-    return 0;
+    const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    return dateB - dateA;
   });
 
-  const avgRating =
-    (sampleReviews.reduce((sum, r) => sum + r.rating, 0) /
-      sampleReviews.length).toFixed(1);
+  const avgRating = stats.average.toFixed(1);
+
+  if (loading) {
+    return (
+      <div className="max-w-6xl mx-auto px-4 py-20 text-center text-gray-400 font-bold">
+        Chargement des avis...
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-6xl mx-auto px-4 md:px-8">
-      {/* Stats Header */}
       <div className="mb-8 bg-gradient-to-r from-orange-50 to-orange-100/50 rounded-xl p-6 md:p-8 border border-orange-200">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">
-              {sampleReviews.length} avis clients
+              {stats.count} avis clients
             </h2>
             <p className="text-gray-600 flex items-center gap-2">
-              <div className="flex gap-1">
+              <span className="flex gap-1">
                 {[...Array(5)].map((_, i) => (
                   <Star
                     key={i}
@@ -127,16 +86,14 @@ export default function ReviewsList() {
                     }`}
                   />
                 ))}
-              </div>
+              </span>
               <span className="font-bold">{avgRating}/5</span> sur la base en ligne
             </p>
           </div>
         </div>
       </div>
 
-      {/* Filters */}
       <div className="flex flex-col md:flex-row gap-4 mb-8">
-        {/* Rating Filter */}
         <div className="flex flex-wrap gap-2">
           <button
             onClick={() => setSelectedRating(null)}
@@ -163,7 +120,6 @@ export default function ReviewsList() {
           ))}
         </div>
 
-        {/* Sort Dropdown */}
         <div className="md:ml-auto">
           <select
             value={sortBy}
@@ -178,19 +134,17 @@ export default function ReviewsList() {
         </div>
       </div>
 
-      {/* Reviews Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
-        {sortedReviews.map((review) => (
-          <ReviewCard key={review.id} {...review} />
-        ))}
-      </div>
-
-      {/* Load More */}
-      <div className="flex justify-center gap-4">
-        <button className="px-8 py-3 bg-orange-500 text-white font-bold rounded-lg hover:bg-orange-600 transition-colors">
-          Charger plus d'avis
-        </button>
-      </div>
+      {sortedReviews.length === 0 ? (
+        <p className="text-center text-gray-500 font-medium py-12">
+          Aucun avis pour le moment. Soyez le premier à partager votre expérience !
+        </p>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
+          {sortedReviews.map((review) => (
+            <ReviewCard key={review.id} {...review} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

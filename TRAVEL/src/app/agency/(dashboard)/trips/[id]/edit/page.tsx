@@ -5,91 +5,6 @@ import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Save, Sparkles, Map, CreditCard, Settings } from "lucide-react";
 
-// Mock data to pre-fill the form (simulating fetching by ID)
-const MOCK_TRIPS = [
-  {
-    id: "1",
-    title: "Réveillon à Taghit 2025",
-    destination: "Taghit, Algérie",
-    tripType: "AVENTURE",
-    startDate: "2024-12-27",
-    endDate: "2025-01-02",
-    totalSpots: 12,
-    totalPrice: 1250,
-    depositAmount: 300,
-    description: "Plongez au cœur du Sahara pour une expérience hors du temps dans le parc national du Tassili N'Ajjer.",
-    meetingPoint: "Aéroport de Taghit",
-    coverImage: "https://images.unsplash.com/photo-1505051508008-923feaf90180?q=80&w=2070&auto=format&fit=crop",
-    inclusionsText: "Guide local, Pension complète, Transferts",
-    exclusionsText: "Vol international, Assurance",
-  },
-  {
-    id: "2",
-    title: "Trek dans le Tassili",
-    destination: "Djanet, Algérie",
-    tripType: "AVENTURE",
-    startDate: "2025-03-12",
-    endDate: "2025-03-19",
-    totalSpots: 12,
-    totalPrice: 1350,
-    depositAmount: 350,
-    description: "Une aventure authentique dans le Tassili N'Ajjer.",
-    meetingPoint: "Aéroport de Djanet",
-    coverImage: "https://images.unsplash.com/photo-1547113110-32753238640c?q=80&w=2070&auto=format&fit=crop",
-    inclusionsText: "Guide local, Pension complète",
-    exclusionsText: "Vols",
-  },
-  {
-    id: "3",
-    title: "Découverte de Marrakech",
-    destination: "Marrakech, Maroc",
-    tripType: "CULTURE",
-    startDate: "2025-04-05",
-    endDate: "2025-04-12",
-    totalSpots: 15,
-    totalPrice: 890,
-    depositAmount: 200,
-    description: "L'effervescence de la ville ocre.",
-    meetingPoint: "Aéroport de Marrakech",
-    coverImage: "https://images.unsplash.com/photo-1539020140153-e479b8c22e70?q=80&w=2070&auto=format&fit=crop",
-    inclusionsText: "Hôtel 4*, Petit-déjeuner",
-    exclusionsText: "Vols, Dîners",
-  },
-  {
-    id: "4",
-    title: "Circuit des Kasbahs",
-    destination: "Ouarzazate, Maroc",
-    tripType: "CULTURE",
-    startDate: "2025-04-18",
-    endDate: "2025-04-25",
-    totalSpots: 14,
-    totalPrice: 950,
-    depositAmount: 250,
-    description: "La route des mille Kasbahs.",
-    meetingPoint: "Aéroport de Ouarzazate",
-    coverImage: "https://images.unsplash.com/photo-1548013146-72479768bbaa?q=80&w=1973&auto=format&fit=crop",
-    inclusionsText: "Transport 4x4, Guide certifié",
-    exclusionsText: "Assurance personnelle",
-  },
-  {
-    id: "5",
-    title: "Dunes et Oasis",
-    destination: "Timimoun, Algérie",
-    tripType: "AVENTURE",
-    startDate: "2025-05-01",
-    endDate: "2025-05-08",
-    totalSpots: 10,
-    totalPrice: 1100,
-    depositAmount: 300,
-    description: "L'oasis rouge et les dunes à perte de vue.",
-    meetingPoint: "Aéroport de Timimoun",
-    coverImage: "https://images.unsplash.com/photo-1501436513145-30f24e19fcc8?q=80&w=1976&auto=format&fit=crop",
-    inclusionsText: "Bivouac, Cuisinier touareg",
-    exclusionsText: "Vol Alger-Timimoun",
-  }
-];
-
-
 export default function EditTripPage() {
   const router = useRouter();
   const params = useParams();
@@ -113,25 +28,36 @@ export default function EditTripPage() {
   });
 
   useEffect(() => {
-    // Simulate fetching trip data
-    const tripId = params.id as string;
-    let trip = MOCK_TRIPS.find(t => t.id === tripId);
-    
-    // Check localStorage for the demo
-    if (!trip) {
-      const localTrips = JSON.parse(localStorage.getItem("agency_trips") || "[]");
-      trip = localTrips.find((t: any) => t.id === tripId);
+    async function load() {
+      const tripId = params.id as string;
+      try {
+        const res = await fetch(`/api/agency/trips/${tripId}`);
+        const data = await res.json();
+        if (!res.ok || !data.trip) {
+          setError(data.error || "Voyage non trouvé.");
+          return;
+        }
+        const trip = data.trip;
+        setFormData({
+          title: trip.title,
+          destination: trip.destination,
+          tripType: trip.tripType,
+          startDate: trip.startDate,
+          endDate: trip.endDate,
+          totalSpots: trip.totalSpots,
+          totalPrice: trip.totalPrice,
+          depositAmount: trip.depositAmount,
+          description: trip.description,
+          coverImage: trip.coverImage,
+          inclusionsText: (trip.inclusions || []).join(", "),
+          exclusionsText: (trip.exclusions || []).join(", "),
+          meetingPoint: trip.meetingPoint || "",
+        });
+      } catch {
+        setError("Impossible de charger le voyage.");
+      }
     }
-
-    if (trip) {
-      setFormData({
-        ...trip,
-        // Ensure values are strings or numbers as expected
-        tripType: (trip as any).tripType,
-      });
-    } else {
-      setError("Voyage non trouvé.");
-    }
+    load();
   }, [params.id]);
 
 
@@ -151,31 +77,21 @@ export default function EditTripPage() {
     setError("");
 
     try {
-      // MOCK UPDATE
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
       const tripId = params.id as string;
-      const localTrips = JSON.parse(localStorage.getItem("agency_trips") || "[]");
-      const index = localTrips.findIndex((t: any) => t.id === tripId);
-      
-      const updatedTrip = {
-        ...formData,
-        inclusions: formData.inclusionsText ? formData.inclusionsText.split(',').map((s: string) => s.trim()) : [],
-        exclusions: formData.exclusionsText ? formData.exclusionsText.split(',').map((s: string) => s.trim()) : []
-      };
+      const res = await fetch(`/api/agency/trips/${tripId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
+      const data = await res.json();
 
-      if (index !== -1) {
-        // Update existing local trip
-        localTrips[index] = { ...localTrips[index], ...updatedTrip };
-        localStorage.setItem("agency_trips", JSON.stringify(localTrips));
-      } else {
-        // If it was a mock trip, we can "copy" it to local storage as an override
-        localStorage.setItem("agency_trips", JSON.stringify([...localTrips, { ...updatedTrip, id: tripId }]));
+      if (!res.ok) {
+        setError(data.error || "Une erreur est survenue lors de la modification.");
+        return;
       }
 
-
       router.push("/agency/trips");
-    } catch (err: any) {
+    } catch {
       setError("Une erreur est survenue lors de la modification.");
     } finally {
       setIsLoading(false);
@@ -262,7 +178,7 @@ export default function EditTripPage() {
             </div>
             <div className="space-y-3">
               <label htmlFor="depositAmount" className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Acompte Stripe (€) *</label>
-              <input id="depositAmount" type="number" name="depositAmount" value={formData.depositAmount} onChange={handleChange} required min="1" max={formData.totalPrice} placeholder="300" className="w-full bg-[#F8FAFC] border border-gray-100 rounded-2xl px-5 py-4 focus:ring-4 focus:ring-primary/10 outline-none font-bold text-[#2563EB] transition-all" />
+              <input id="depositAmount" type="number" name="depositAmount" value={formData.depositAmount} onChange={handleChange} required min="1" max={formData.totalPrice} placeholder="300" className="w-full bg-[#F8FAFC] border border-gray-100 rounded-2xl px-5 py-4 focus:ring-4 focus:ring-primary/10 outline-none font-bold text-orange-600 transition-all" />
             </div>
             <div className="space-y-3">
               <label htmlFor="totalSpots" className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Nombre de places *</label>
@@ -345,7 +261,7 @@ export default function EditTripPage() {
         </div>
 
         <div className="flex justify-end gap-6 pt-4">
-          <button type="submit" disabled={isLoading} className="bg-[#2563EB] hover:bg-[#2563EB]/90 text-white px-10 py-4 rounded-full font-black shadow-xl shadow-[#2563EB]/30 flex items-center gap-3 active:scale-95 disabled:opacity-50 transition-all">
+          <button type="submit" disabled={isLoading} className="bg-orange-600 hover:bg-orange-600/90 text-white px-10 py-4 rounded-full font-black shadow-xl shadow-orange-600/30 flex items-center gap-3 active:scale-95 disabled:opacity-50 transition-all">
             <Save size={20} />
             {isLoading ? "ENREGISTREMENT..." : "SAUVEGARDER LES MODIFICATIONS"}
           </button>

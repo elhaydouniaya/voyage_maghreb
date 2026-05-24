@@ -4,47 +4,56 @@ import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { AlertCircle, Globe, Sparkles, ChevronRight, User } from "lucide-react";
+import { saveAiMatchResults, loadAiMatchResults } from "@/lib/ai-match-storage";
+import { AlertCircle, Sparkles, ChevronRight, Loader2 } from "lucide-react";
 import TripCard from "@/components/trips/TripCard";
 import TripFilters from "@/components/trips/TripFilters";
-import { NavbarAuth } from "@/components/auth/NavbarAuth";
-import AIChatWidget from "../../../components/ai/AIChatWidget";
-import { getMergedTrips } from "@/lib/trips";
-import MainNavbar from "@/components/layout/MainNavbar";
 
 // Inner component that uses useSearchParams — must be inside Suspense
 function MarketplaceContent() {
   const { data: session } = useSession();
   const searchParams = useSearchParams();
   const [filteredTrips, setFilteredTrips] = useState<any[]>([]);
+  const [catalogueTrips, setCatalogueTrips] = useState<any[]>([]);
   const [sortOrder, setSortOrder] = useState("");
+  const [loading, setLoading] = useState(true);
 
   const [isMatchedMode, setIsMatchedMode] = useState(false);
   const [aiSummary, setAiSummary] = useState("");
 
   useEffect(() => {
-    const loadData = () => {
+    const loadData = async () => {
+      setLoading(true);
       const isMatched = searchParams.get("matched") === "true";
-      setIsMatchedMode(isMatched);
+      const stored = loadAiMatchResults();
+      const hasStored = stored.results.length > 0;
 
-      if (isMatched) {
-        const results = JSON.parse(sessionStorage.getItem("ai_match_results") || "[]");
-        const summary = sessionStorage.getItem("ai_match_summary") || "";
-        setFilteredTrips(results);
-        setAiSummary(summary);
-      } else {
-        const allTrips = getMergedTrips();
-        const publishedOnly = allTrips.filter(t => t.status === "PUBLISHED");
+      setIsMatchedMode(isMatched || hasStored);
 
-        const dest = searchParams.get("destination");
-        if (dest) {
-          const result = publishedOnly.filter(trip => {
-            return dest === "Toutes les destinations" || trip.destination.includes(dest);
-          });
-          setFilteredTrips(result);
-        } else {
-          setFilteredTrips(publishedOnly);
+      if (isMatched || hasStored) {
+        setFilteredTrips(stored.results as any[]);
+        setAiSummary(stored.summary);
+        setLoading(false);
+        return;
+      }
+
+      const dest = searchParams.get("destination");
+
+      try {
+        const res = await fetch("/api/trips");
+        const data = await res.json();
+        let list = data.trips?.length > 0 ? data.trips : [];
+
+        if (dest && dest !== "Toutes les destinations") {
+          list = list.filter((trip: any) => trip.destination.includes(dest));
         }
+        setCatalogueTrips(list);
+        setFilteredTrips(list);
+      } catch {
+        setCatalogueTrips([]);
+        setFilteredTrips([]);
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -62,9 +71,7 @@ function MarketplaceContent() {
   };
 
   const handleFilter = (filters: any) => {
-    const allTrips = getMergedTrips();
-
-    let result = allTrips.filter(trip => {
+    let result = catalogueTrips.filter((trip) => {
       const isPublished = trip.status === "PUBLISHED";
       const matchDest = filters.destination === "Toutes les destinations" || trip.destination.includes(filters.destination);
       const matchType = filters.type === "TOUS" || trip.tripType === filters.type;
@@ -86,8 +93,8 @@ function MarketplaceContent() {
     setFilteredTrips(result);
   };
 
-  const upcomingFallback = getMergedTrips()
-    .filter(t => t.status === "PUBLISHED" && new Date(t.startDate) > new Date())
+  const upcomingFallback = catalogueTrips
+    .filter((t) => new Date(t.startDate) > new Date())
     .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())
     .slice(0, 3);
 
@@ -125,7 +132,14 @@ function MarketplaceContent() {
       )}
 
       <div className="mt-16">
-        {filteredTrips.length > 0 ? (
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-24 gap-4">
+            <Loader2 className="animate-spin text-orange-600" size={32} />
+            <p className="text-xs font-black text-gray-400 uppercase tracking-widest">
+              Chargement des voyages...
+            </p>
+          </div>
+        ) : filteredTrips.length > 0 ? (
           <div className="grid grid-cols-1 gap-12">
             {filteredTrips.map((trip, i) => (
               <div
@@ -163,24 +177,12 @@ function MarketplaceContent() {
 
 export default function MarketplacePage() {
   return (
-    <div className="min-h-screen bg-[#F8FAFC] font-outfit">
-      {/* Navbar */}
-      <MainNavbar />
-
-      <Suspense fallback={
+    <Suspense fallback={
         <div className="max-w-7xl mx-auto px-6 py-16 text-center">
           <p className="text-gray-300 font-black tracking-widest uppercase">Chargement des voyages...</p>
         </div>
       }>
         <MarketplaceContent />
       </Suspense>
-
-      <footer className="bg-[#0F172A] py-12 px-6 text-center">
-        <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">
-          © 2026 MaghrebVoyage — L'aventure vous attend
-        </p>
-      </footer>
-      <AIChatWidget />
-    </div>
   );
 }

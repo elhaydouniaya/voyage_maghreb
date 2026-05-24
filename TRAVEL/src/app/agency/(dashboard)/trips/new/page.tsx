@@ -87,29 +87,25 @@ export default function NewTripPage() {
     setError("");
 
     try {
-      // MOCK SUBMISSION for Frontend Demonstration
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      const newTrip = {
-        ...formData,
-        id: Math.random().toString(36).substring(2, 9),
-        slug: formData.title.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, '-').slice(0, 60),
-        bookedSpots: 0,
-        status: "PUBLISHED",
-        inclusions: formData.inclusionsText ? formData.inclusionsText.split(',').map((s: string) => s.trim()) : [],
-        exclusions: formData.exclusionsText ? formData.exclusionsText.split(',').map((s: string) => s.trim()) : [],
-      };
-      
-      const existingTrips = JSON.parse(localStorage.getItem("agency_trips") || "[]");
-      localStorage.setItem("agency_trips", JSON.stringify([...existingTrips, newTrip]));
-      
+      const res = await fetch("/api/agency/trips", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...formData, publish: true }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || "Une erreur est survenue lors de la création.");
+        setIsLoading(false);
+        return;
+      }
+
       setIsSuccess(true);
       setTimeout(() => {
         router.push("/agency/trips");
       }, 2000);
-
-    } catch (err: any) {
-      setError("Une erreur est survenue lors de la création.");
+    } catch {
+      setError("Impossible de contacter le serveur.");
     } finally {
       setIsLoading(false);
     }
@@ -314,6 +310,12 @@ export default function NewTripPage() {
            ))}
         </div>
       </div>
+
+      {error && (
+        <div className="bg-red-50 border border-red-100 text-red-600 p-6 rounded-[2rem] text-sm font-bold">
+          {error}
+        </div>
+      )}
 
       {isSuccess && (
         <div className="bg-[#10B981] text-white p-6 rounded-[2rem] shadow-xl shadow-[#10B981]/20 text-sm font-black uppercase tracking-widest flex items-center gap-4">

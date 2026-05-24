@@ -1,11 +1,50 @@
 "use client";
 
-import { useState } from "react";
-import { Settings, Lock, Bell, CreditCard, Mail, Shield, Check } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Settings, Lock, Bell, CreditCard, Shield, Check, Loader2 } from "lucide-react";
+
+const VERIFICATION_LABELS: Record<string, { label: string; className: string }> = {
+  VERIFIED: { label: "Compte vérifié", className: "bg-green-50 text-green-700 border-green-100" },
+  PENDING: { label: "En attente de validation", className: "bg-orange-50 text-orange-700 border-orange-100" },
+  UNDER_REVIEW: { label: "Dossier en revue", className: "bg-blue-50 text-blue-700 border-blue-100" },
+  REJECTED: { label: "Dossier refusé", className: "bg-red-50 text-red-700 border-red-100" },
+  SUSPENDED: { label: "Compte suspendu", className: "bg-gray-800 text-white border-gray-800" },
+};
 
 export default function AgencySettingsPage() {
   const [activeTab, setActiveTab] = useState("general");
   const [isSaved, setIsSaved] = useState(false);
+  const [agency, setAgency] = useState<{
+    name: string;
+    siret: string;
+    email: string;
+    managerName: string;
+    city: string;
+    country: string;
+    verificationStatus: string;
+    verificationNote: string | null;
+  } | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/agency/me", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.agency) {
+          setAgency({
+            name: data.agency.name,
+            siret: data.agency.siret ?? "",
+            email: data.agency.email,
+            managerName: data.agency.managerName,
+            city: data.agency.city,
+            country: data.agency.country,
+            verificationStatus: data.agency.verificationStatus,
+            verificationNote: data.agency.verificationNote,
+          });
+        }
+      })
+      .finally(() => setLoading(false));
+  }, []);
 
   const handleSave = () => {
     setIsSaved(true);
@@ -49,19 +88,112 @@ export default function AgencySettingsPage() {
          <div className="md:col-span-2 bg-white rounded-[3rem] border border-gray-100 shadow-sm p-10">
             {activeTab === "general" && (
               <div className="space-y-8 animate-in fade-in duration-500">
-                <div className="space-y-6">
-                  <h3 className="text-lg font-black text-[#0F172A]">Informations de l'agence</h3>
-                  <div className="grid grid-cols-1 gap-6">
-                    <div className="space-y-2">
-                      <label htmlFor="legalName" className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Nom légal</label>
-                      <input id="legalName" type="text" defaultValue="Sahara Explorer SARL" className="w-full bg-[#F8FAFC] border border-gray-100 rounded-2xl px-5 py-4 focus:ring-4 focus:ring-orange-500/10 outline-none font-bold text-[#0F172A]" placeholder="Nom de l'agence" />
-                    </div>
-                    <div className="space-y-2">
-                      <label htmlFor="license" className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Numéro SIRET / Licence</label>
-                      <input id="license" type="text" defaultValue="823 456 789 00012" className="w-full bg-[#F8FAFC] border border-gray-100 rounded-2xl px-5 py-4 focus:ring-4 focus:ring-orange-500/10 outline-none font-bold text-[#0F172A]" placeholder="Numéro SIRET" />
+                {loading ? (
+                  <div className="flex items-center gap-3 text-gray-400 py-8">
+                    <Loader2 className="animate-spin" size={20} />
+                    <span className="text-xs font-bold uppercase tracking-widest">
+                      Chargement...
+                    </span>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {agency && (
+                      <div
+                        className={`p-6 rounded-3xl border flex items-start gap-4 ${
+                          VERIFICATION_LABELS[agency.verificationStatus]?.className ??
+                          "bg-gray-50 border-gray-100"
+                        }`}
+                      >
+                        <Shield className="shrink-0" size={24} />
+                        <div>
+                          <p className="text-sm font-black">
+                            {VERIFICATION_LABELS[agency.verificationStatus]?.label ??
+                              agency.verificationStatus}
+                          </p>
+                          {agency.verificationNote && (
+                            <p className="text-xs font-medium mt-1 opacity-80">
+                              {agency.verificationNote}
+                            </p>
+                          )}
+                          {agency.verificationStatus === "PENDING" && (
+                            <p className="text-xs font-medium mt-2 opacity-80">
+                              Envoyez vos justificatifs à contact@maghrebvoyage.com.
+                              Un administrateur validera votre dossier sous 48h.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    <h3 className="text-lg font-black text-[#0F172A]">
+                      Informations de l&apos;agence
+                    </h3>
+                    <div className="grid grid-cols-1 gap-6">
+                      <div className="space-y-2">
+                        <label
+                          htmlFor="legalName"
+                          className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1"
+                        >
+                          Nom de l&apos;agence
+                        </label>
+                        <input
+                          id="legalName"
+                          type="text"
+                          readOnly
+                          value={agency?.name ?? ""}
+                          className="w-full bg-[#F8FAFC] border border-gray-100 rounded-2xl px-5 py-4 outline-none font-bold text-[#0F172A]"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label
+                          htmlFor="manager"
+                          className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1"
+                        >
+                          Gérant
+                        </label>
+                        <input
+                          id="manager"
+                          type="text"
+                          readOnly
+                          value={agency?.managerName ?? ""}
+                          className="w-full bg-[#F8FAFC] border border-gray-100 rounded-2xl px-5 py-4 outline-none font-bold text-[#0F172A]"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label
+                          htmlFor="email"
+                          className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1"
+                        >
+                          Email professionnel
+                        </label>
+                        <input
+                          id="email"
+                          type="email"
+                          readOnly
+                          value={agency?.email ?? ""}
+                          className="w-full bg-[#F8FAFC] border border-gray-100 rounded-2xl px-5 py-4 outline-none font-bold text-[#0F172A]"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label
+                          htmlFor="license"
+                          className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1"
+                        >
+                          Numéro SIRET / Licence
+                        </label>
+                        <input
+                          id="license"
+                          type="text"
+                          readOnly
+                          value={agency?.siret ?? ""}
+                          className="w-full bg-[#F8FAFC] border border-gray-100 rounded-2xl px-5 py-4 outline-none font-bold text-[#0F172A]"
+                        />
+                      </div>
+                      <p className="text-[10px] text-gray-400 font-bold">
+                        {agency?.city}, {agency?.country}
+                      </p>
                     </div>
                   </div>
-                </div>
+                )}
               </div>
             )}
 

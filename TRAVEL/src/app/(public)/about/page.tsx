@@ -1,15 +1,9 @@
 import Link from "next/link";
-import { Globe, Heart, Shield, Users, ArrowLeft, Mail, Phone, MapPin } from "lucide-react";
-import { NavbarAuth } from "@/components/auth/NavbarAuth";
-import MainNavbar from "@/components/layout/MainNavbar";
+import { Heart, Shield, Users, ArrowLeft, Mail, Phone, MapPin } from "lucide-react";
 
 export default function AboutPage() {
   return (
-    <div className="min-h-screen bg-white font-outfit">
-      {/* Navbar */}
-      <MainNavbar />
-
-      <main className="pt-32 pb-20 px-6 max-w-5xl mx-auto">
+    <div className="py-12 pb-20 px-6 max-w-5xl mx-auto">
         <Link href="/" className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest text-gray-400 hover:text-orange-600 mb-12">
            <ArrowLeft size={14} /> Retour à l'accueil
         </Link>
@@ -81,13 +75,6 @@ export default function AboutPage() {
              </div>
           </div>
         </section>
-      </main>
-
-      <footer className="bg-[#0F172A] py-12 px-6 text-center mt-20">
-         <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">
-            © 2026 MaghrebVoyage — Fièrement construit pour l'aventure
-         </p>
-      </footer>
     </div>
   );
 }

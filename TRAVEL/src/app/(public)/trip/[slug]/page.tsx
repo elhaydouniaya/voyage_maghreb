@@ -24,174 +24,89 @@ import {
 } from "lucide-react";
 import TripGallery from "@/components/trips/TripGallery";
 import BookingForm from "@/components/booking/BookingForm";
-import { NavbarAuth } from "@/components/auth/NavbarAuth";
 import Breadcrumbs from "@/components/ui/Breadcrumbs";
-import AIChatWidget from "@/components/ai/AIChatWidget";
-import MainNavbar from "@/components/layout/MainNavbar";
-
-// Mock data for multiple trips
-const MOCK_TRIPS = [
-  {
-    id: "1",
-    title: "Réveillon à Taghit 2025",
-    slug: "reveillon-taghit-2025",
-    destination: "Taghit, Algérie",
-    startDate: "2024-12-27",
-    endDate: "2025-01-02",
-    duration: "7 Jours",
-    totalPrice: 1250,
-    depositAmount: 300,
-    totalSpots: 12,
-    bookedSpots: 8,
-    tripType: "AVENTURE",
-    meetingPoint: "Aéroport de Taghit (TAG)",
-    agency: { name: "Sahara Tours Expert", rating: 4.9, reviews: 124 },
-    // Algerian Sahara golden dunes — Taghit
-    coverImage: "https://images.unsplash.com/photo-1509316785289-025f5b846b35?q=80&w=2076&auto=format&fit=crop",
-    images: [
-      "https://images.unsplash.com/photo-1509316785289-025f5b846b35?q=80&w=2076&auto=format&fit=crop",
-      "https://images.unsplash.com/photo-1504233529578-6d46baba6d34?q=80&w=2070&auto=format&fit=crop",
-      "https://images.unsplash.com/photo-1548695607-9454b5b8b32f?q=80&w=2070&auto=format&fit=crop",
-    ],
-    description: "Célébrez le passage à la nouvelle année dans l'oasis enchanteresse de Taghit. Une immersion totale entre dunes de sable doré et hospitalité saharienne. Nuits sous les étoiles, randonnée à dos de dromadaire, sandboard et moments de partage garantis.",
-    inclusions: ["Guide local", "Pension complète", "Transferts", "Hébergement en maison d'hôte"],
-    exclusions: ["Vols", "Assurance voyage", "Dépenses personnelles"]
-  },
-  {
-    id: "2",
-    title: "Trek dans le Tassili",
-    slug: "trek-aventure-tassili",
-    destination: "Djanet, Algérie",
-    startDate: "2025-03-12",
-    endDate: "2025-03-19",
-    duration: "8 Jours",
-    totalPrice: 1350,
-    depositAmount: 350,
-    totalSpots: 12,
-    bookedSpots: 5,
-    tripType: "AVENTURE",
-    meetingPoint: "Aéroport de Djanet (DJA)",
-    agency: { name: "Algeria Adventure", rating: 4.8, reviews: 85 },
-    // Saharan rock formations / eroded desert
-    coverImage: "https://images.unsplash.com/photo-1504233529578-6d46baba6d34?q=80&w=2070&auto=format&fit=crop",
-    images: [
-      "https://images.unsplash.com/photo-1504233529578-6d46baba6d34?q=80&w=2070&auto=format&fit=crop",
-      "https://images.unsplash.com/photo-1509316785289-025f5b846b35?q=80&w=2076&auto=format&fit=crop",
-      "https://images.unsplash.com/photo-1548695607-9454b5b8b32f?q=80&w=2070&auto=format&fit=crop",
-    ],
-    description: "Une aventure authentique dans le Tassili N'Ajjer, musée à ciel ouvert de peintures rupestres et de formations rocheuses spectaculaires. Vivez une expérience inoubliable dans l'un des sites du patrimoine mondial de l'UNESCO.",
-    inclusions: ["Guide local", "Pension complète", "Matériel de bivouac", "Cuisinier"],
-    exclusions: ["Vols", "Pourboires"]
-  },
-  {
-    id: "3",
-    title: "Découverte de Marrakech",
-    slug: "escapade-culturelle-marrakech",
-    destination: "Marrakech, Maroc",
-    startDate: "2025-04-05",
-    endDate: "2025-04-12",
-    duration: "7 Jours",
-    totalPrice: 890,
-    depositAmount: 200,
-    totalSpots: 15,
-    bookedSpots: 14,
-    tripType: "CULTURE",
-    meetingPoint: "Aéroport de Marrakech (RAK)",
-    agency: { name: "Maroc Experience", rating: 4.7, reviews: 210 },
-    // Marrakech medina / Jemaa el-Fna
-    coverImage: "https://images.unsplash.com/photo-1539020140153-e479b8c22e70?q=80&w=2070&auto=format&fit=crop",
-    images: [
-      "https://images.unsplash.com/photo-1539020140153-e479b8c22e70?q=80&w=2070&auto=format&fit=crop",
-      "https://images.unsplash.com/photo-1489749798305-4fea3ae63d43?q=80&w=2067&auto=format&fit=crop",
-      "https://images.unsplash.com/photo-1548013146-72479768bbaa?q=80&w=1973&auto=format&fit=crop",
-    ],
-    description: "L'effervescence de la ville ocre, ses souks colorés et ses palais majestueux. Découvrez la place Jemaa el-Fna, le jardin Majorelle, les riads traditionnels et la cuisine marocaine dans une ambiance unique au monde.",
-    inclusions: ["Hôtel 4*", "Petit-déjeuner", "Transferts", "Visites guidées"],
-    exclusions: ["Vols", "Dîners", "Assurance"]
-  },
-  {
-    id: "4",
-    title: "Circuit des Kasbahs",
-    slug: "circuit-kasbahs",
-    destination: "Ouarzazate, Maroc",
-    startDate: "18 Avril 2025",
-    endDate: "25 Avril 2025",
-    duration: "8 Jours",
-    totalPrice: 950,
-    depositAmount: 250,
-    totalSpots: 14,
-    bookedSpots: 0,
-    tripType: "CULTURE",
-    meetingPoint: "Aéroport de Ouarzazate (OZZ)",
-    agency: { name: "Kasbah Tours", rating: 4.6, reviews: 45 },
-    // Aït Benhaddou kasbah UNESCO — Ouarzazate
-    coverImage: "https://images.unsplash.com/photo-1489749798305-4fea3ae63d43?q=80&w=2067&auto=format&fit=crop",
-    images: [
-      "https://images.unsplash.com/photo-1489749798305-4fea3ae63d43?q=80&w=2067&auto=format&fit=crop",
-      "https://images.unsplash.com/photo-1539020140153-e479b8c22e70?q=80&w=2070&auto=format&fit=crop",
-      "https://images.unsplash.com/photo-1548013146-72479768bbaa?q=80&w=1973&auto=format&fit=crop",
-    ],
-    description: "Explorez la route des mille Kasbahs et les paysages arides du sud marocain. Traversez les gorges du Dadès, visitez Aït Benhaddou classé à l'UNESCO et découvrez la vie berbère authentique.",
-    inclusions: ["Transport 4x4", "Guide certifié", "Hébergement traditionnel"],
-    exclusions: ["Vols", "Déjeuners"]
-  },
-  {
-    id: "5",
-    title: "Dunes et Oasis",
-    slug: "dunes-oasis",
-    destination: "Timimoun, Algérie",
-    startDate: "01 Mai 2025",
-    endDate: "08 Mai 2025",
-    duration: "8 Jours",
-    totalPrice: 1100,
-    depositAmount: 300,
-    totalSpots: 10,
-    bookedSpots: 4,
-    tripType: "AVENTURE",
-    meetingPoint: "Aéroport de Timimoun (TMX)",
-    agency: { name: "Sahara Oasis", rating: 4.8, reviews: 32 },
-    // Sahara orange dunes oasis
-    coverImage: "https://images.unsplash.com/photo-1548695607-9454b5b8b32f?q=80&w=2070&auto=format&fit=crop",
-    images: [
-      "https://images.unsplash.com/photo-1548695607-9454b5b8b32f?q=80&w=2070&auto=format&fit=crop",
-      "https://images.unsplash.com/photo-1509316785289-025f5b846b35?q=80&w=2076&auto=format&fit=crop",
-      "https://images.unsplash.com/photo-1504233529578-6d46baba6d34?q=80&w=2070&auto=format&fit=crop",
-    ],
-    description: "Découvrez l'oasis rouge de Timimoun et les dunes du Grand Erg Occidental. Un voyage au cœur du Sahara algérien, entre architecture de pisé, marchés traditionnels et couchers de soleil inoubliables.",
-    inclusions: ["Hébergement en Ksar", "Cuisinier", "Bivouac"],
-    exclusions: ["Vol Alger-Timimoun"]
-  }
-];
-
-import { getMergedTrips } from "@/lib/trips";
-
+import SafeImage from "@/components/ui/SafeImage";
+import { formatPriceShort } from "@/lib/currency";
 export default function TripDetailPage({ params }: { params: { slug: string } }) {
   const [trip, setTrip] = useState<any>(null);
+  const [relatedTrips, setRelatedTrips] = useState<any[]>([]);
+  const [notFound, setNotFound] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   useEffect(() => {
-    const allTrips = getMergedTrips();
-    const found = allTrips.find((t: any) => t.slug === params.slug || t.id === params.slug);
-    if (found) {
-      setTrip({
-        ...found,
-        duration: (found as any).duration || "7 Jours",
-        agency: (found as any).agency || { name: "MaghrebVoyage Partner", rating: 5.0, reviews: 1 },
-        images: (found as any).images || [(found as any).coverImage || "https://images.unsplash.com/photo-1505051508008-923feaf90180?q=80&w=2070&auto=format&fit=crop"],
-        inclusions: (found as any).inclusions || [],
-        exclusions: (found as any).exclusions || []
-      });
+    const enrich = (found: any) => ({
+      ...found,
+      duration: found.durationDays
+        ? `${found.durationDays} Jours`
+        : found.duration || "7 Jours",
+      agency: found.agency
+        ? {
+            id: found.agency.id,
+            name: found.agency.name,
+            rating: 4.9,
+            reviews: 120,
+          }
+        : { name: "MaghrebVoyage Partner", rating: 5.0, reviews: 1 },
+      images:
+        found.images?.length > 0
+          ? found.images
+          : [
+              found.coverImage ||
+                "https://images.unsplash.com/photo-1505051508008-923feaf90180?q=80&w=2070&auto=format&fit=crop",
+            ],
+      inclusions: found.inclusions || [],
+      exclusions: found.exclusions || [],
+    });
+
+    async function load() {
+      try {
+        const res = await fetch(`/api/trips/${params.slug}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.trip) {
+            setTrip(enrich(data.trip));
+            setRelatedTrips(data.relatedTrips || []);
+            return;
+          }
+        }
+      } catch {
+        /* ignore */
+      }
+
+      setNotFound(true);
     }
 
+    load();
   }, [params.slug]);
 
-  if (!trip) return <div className="min-h-screen bg-white flex items-center justify-center font-black uppercase tracking-widest text-gray-300">Chargement...</div>;
+  if (notFound) {
+    return (
+      <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center gap-6 px-6">
+        <p className="text-2xl font-black text-[#0F172A]">Voyage introuvable</p>
+        <p className="text-gray-500 text-center max-w-md">
+          Ce voyage n&apos;existe plus ou n&apos;est pas encore publié.
+        </p>
+        <Link
+          href="/voyages"
+          className="bg-[#2563EB] text-white px-8 py-3 rounded-full text-xs font-black uppercase tracking-widest"
+        >
+          Voir tous les voyages
+        </Link>
+      </div>
+    );
+  }
+
+  if (!trip) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center font-black uppercase tracking-widest text-gray-300">
+        Chargement...
+      </div>
+    );
+  }
 
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] font-outfit">
-      {/* Header / Nav */}
-      <MainNavbar />
-
+    <div>
       <main className="max-w-7xl mx-auto px-6 py-10">
         <Breadcrumbs />
         <div className="grid lg:grid-cols-3 gap-12">
@@ -206,12 +121,18 @@ export default function TripDetailPage({ params }: { params: { slug: string } })
                   <button 
                     onClick={() => {
                       navigator.clipboard.writeText(window.location.href);
-                      alert("Lien copié !");
+                      setLinkCopied(true);
+                      setTimeout(() => setLinkCopied(false), 2500);
                     }}
-                    className="bg-white/80 backdrop-blur-md text-gray-500 w-10 h-10 rounded-full flex items-center justify-center hover:bg-orange-500 hover:text-white transition-all shadow-sm border border-gray-100"
+                    className="bg-white/80 backdrop-blur-md text-gray-500 w-10 h-10 rounded-full flex items-center justify-center hover:bg-orange-500 hover:text-white transition-all shadow-sm border border-gray-100 relative"
                     title="Copier le lien"
                   >
                     <Share2 size={18} />
+                    {linkCopied && (
+                      <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 whitespace-nowrap bg-[#0F172A] text-white text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full">
+                        Lien copié !
+                      </span>
+                    )}
                   </button>
                   <button 
                     onClick={() => {
@@ -367,6 +288,21 @@ export default function TripDetailPage({ params }: { params: { slug: string } })
           {/* Sticky Sidebar (Right) */}
           <div className="relative">
              <div className="sticky top-32 space-y-8">
+                {trip.agency?.id && (
+                  <Link
+                    href={`/agence/${trip.agency.id}`}
+                    className="block bg-[#F8FAFC] rounded-[2.5rem] border border-gray-100 p-6 hover:border-orange-500/30 transition-all text-center"
+                  >
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">
+                      Organisé par
+                    </p>
+                    <p className="text-lg font-black text-[#0F172A]">{trip.agency.name}</p>
+                    <p className="text-[10px] font-black text-orange-600 uppercase tracking-widest mt-2">
+                      Voir tous les voyages de cette agence →
+                    </p>
+                  </Link>
+                )}
+
                 <div id="booking-section" className="bg-white rounded-[4rem] border border-gray-100 shadow-2xl p-4 space-y-8 scroll-mt-32">
                    <BookingForm 
                      tripId={trip.id}
@@ -426,15 +362,23 @@ export default function TripDetailPage({ params }: { params: { slug: string } })
            </div>
            
            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              {MOCK_TRIPS.filter(t => t.id !== trip.id).slice(0, 3).map((otherTrip) => (
+              {relatedTrips.length === 0 && (
+                <p className="text-gray-400 font-bold text-sm col-span-full">
+                  Aucun autre voyage de cette agence pour le moment.
+                </p>
+              )}
+              {relatedTrips.map((otherTrip) => (
                 <Link key={otherTrip.id} href={`/trip/${otherTrip.slug}`} className="group bg-white rounded-[3rem] border border-gray-100 overflow-hidden hover:shadow-2xl transition-all duration-500">
                    <div className="h-48 relative">
-                      <Image src={otherTrip.coverImage} alt={otherTrip.title} fill className="object-cover transition-transform duration-700 group-hover:scale-110" />
+                      <SafeImage src={otherTrip.coverImage} alt={otherTrip.title} fill destination={otherTrip.destination} className="object-cover transition-transform duration-700 group-hover:scale-110" />
                    </div>
                    <div className="p-8">
                       <h4 className="font-black text-[#0F172A] mb-2 group-hover:text-orange-600 transition-colors">{otherTrip.title}</h4>
                       <div className="flex justify-between items-center mt-4">
-                         <span className="text-xl font-black text-[#0F172A]">{otherTrip.totalPrice}€</span>
+                         <div>
+                           <span className="text-xl font-black text-[#0F172A]">{formatPriceShort(otherTrip.totalPrice)}</span>
+                           <p className="text-[9px] text-gray-400 font-bold">(~{Math.round(otherTrip.totalPrice)} €)</p>
+                         </div>
                          <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Voir plus →</span>
                       </div>
                    </div>
@@ -444,20 +388,6 @@ export default function TripDetailPage({ params }: { params: { slug: string } })
         </div>
       </main>
 
-      <footer className="bg-[#0F172A] py-16 px-6 text-center mt-20">
-         <div className="max-w-7xl mx-auto space-y-8">
-            <div className="flex justify-center gap-8 text-[10px] font-black uppercase tracking-widest text-gray-500">
-               <Link href="/legal/mentions" className="hover:text-white transition-colors">Mentions Légales</Link>
-               <Link href="/legal/cgu" className="hover:text-white transition-colors">CGV</Link>
-               <Link href="/legal/confidentialite" className="hover:text-white transition-colors">Confidentialité</Link>
-               <Link href="/about" className="hover:text-white transition-colors">Contact</Link>
-            </div>
-            <p className="text-[10px] text-gray-600 font-black uppercase tracking-widest">
-               © 2026 MaghrebVoyage — Fièrement construit pour l'aventure
-            </p>
-         </div>
-      </footer>
-      <AIChatWidget />
     </div>
   );
 }

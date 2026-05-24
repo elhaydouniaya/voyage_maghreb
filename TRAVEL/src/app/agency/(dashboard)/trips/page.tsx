@@ -7,92 +7,42 @@ import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { getFallbackImage } from "@/lib/images";
 
-// Mock data for frontend demonstration
-const MOCK_TRIPS = [
-  {
-    id: "1",
-    title: "Réveillon à Taghit 2025",
-    slug: "reveillon-taghit-2025",
-    destination: "Taghit, Algérie",
-    startDate: "2024-12-27",
-    endDate: "2025-01-02",
-    totalPrice: 1250,
-    depositAmount: 300,
-    totalSpots: 12,
-    bookedSpots: 8,
-    status: "PUBLISHED",
-    coverImage: "https://images.unsplash.com/photo-1509316785289-025f5b846b35?q=80&w=1000&auto=format&fit=crop",
-  },
-  {
-    id: "2",
-    title: "Trek dans le Tassili",
-    slug: "trek-aventure-tassili",
-    destination: "Djanet, Algérie",
-    startDate: "2025-03-12",
-    endDate: "2025-03-19",
-    totalPrice: 1350,
-    depositAmount: 350,
-    totalSpots: 12,
-    bookedSpots: 5,
-    status: "FULL",
-    coverImage: "https://images.unsplash.com/photo-1504233529578-6d46baba6d34?q=80&w=1000&auto=format&fit=crop",
-  },
-  {
-    id: "3",
-    title: "Découverte de Marrakech",
-    slug: "escapade-culturelle-marrakech",
-    destination: "Marrakech, Maroc",
-    startDate: "2025-04-05",
-    endDate: "2025-04-12",
-    totalPrice: 890,
-    depositAmount: 200,
-    totalSpots: 15,
-    bookedSpots: 14,
-    status: "PUBLISHED",
-    coverImage: "https://images.unsplash.com/photo-1539020140153-e479b8c22e70?q=80&w=1000&auto=format&fit=crop",
-  },
-  {
-    id: "4",
-    title: "Circuit des Kasbahs",
-    slug: "circuit-kasbahs",
-    destination: "Ouarzazate, Maroc",
-    startDate: "2025-04-18",
-    endDate: "2025-04-25",
-    totalPrice: 950,
-    depositAmount: 250,
-    totalSpots: 14,
-    bookedSpots: 0,
-    status: "PENDING_REVIEW",
-    coverImage: "https://images.unsplash.com/photo-1489749798305-4fea3ae63d43?q=80&w=1000&auto=format&fit=crop",
-  },
-  {
-    id: "5",
-    title: "Dunes et Oasis",
-    slug: "dunes-oasis",
-    destination: "Timimoun, Algérie",
-    startDate: "2025-05-01",
-    endDate: "2025-05-08",
-    totalPrice: 1100,
-    depositAmount: 300,
-    totalSpots: 10,
-    bookedSpots: 4,
-    status: "DRAFT",
-    coverImage: "https://images.unsplash.com/photo-1509316785289-025f5b846b35?q=80&w=1000&auto=format&fit=crop",
-  }
-];
-
+type AgencyTrip = {
+  id: string;
+  title: string;
+  slug: string;
+  destination: string;
+  startDate: string;
+  endDate: string;
+  totalPrice: number;
+  depositAmount: number;
+  totalSpots: number;
+  bookedSpots: number;
+  status: string;
+  coverImage: string;
+};
 
 export default function AgencyTripsPage() {
-  const [trips, setTrips] = useState(MOCK_TRIPS);
+  const [trips, setTrips] = useState<AgencyTrip[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   useEffect(() => {
-    // Load local trips from storage for the demo
-    const localTrips = JSON.parse(localStorage.getItem("agency_trips") || "[]");
-    if (localTrips.length > 0) {
-      setTrips([...MOCK_TRIPS, ...localTrips]);
+    async function load() {
+      try {
+        const res = await fetch("/api/agency/trips");
+        if (res.ok) {
+          const data = await res.json();
+          setTrips(data.trips || []);
+        }
+      } catch {
+        /* ignore */
+      } finally {
+        setLoading(false);
+      }
     }
+    load();
   }, []);
 
   const filteredTrips = trips.filter(trip => 
@@ -113,17 +63,80 @@ export default function AgencyTripsPage() {
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   };
 
-  const toggleStatus = (id: string, currentStatus: string) => {
-    const statusOrder = ['DRAFT', 'PUBLISHED', 'FULL'];
+  const handleCancelTrip = async (id: string, title: string) => {
+    const reason = prompt(
+      `Motif d'annulation pour « ${title} » (obligatoire) :`,
+      "Force majeure"
+    );
+    if (!reason || reason.trim().length < 5) {
+      if (reason !== null) alert("Le motif doit contenir au moins 5 caractères.");
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/agency/trips/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "CANCELLED", cancelReason: reason.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "Annulation impossible.");
+        return;
+      }
+      setTrips((prev) =>
+        prev.map((t) => (t.id === id ? { ...t, status: "CANCELLED" } : t))
+      );
+      alert("Voyage annulé. Les clients confirmés ont été notifiés par email.");
+    } catch {
+      alert("Erreur réseau.");
+    }
+  };
+
+  const handleDelete = async (id: string, title: string) => {
+    if (
+      !confirm(
+        `Supprimer définitivement « ${title} » ? Cette action est irréversible.`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/agency/trips/${id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "Suppression impossible.");
+        return;
+      }
+      setTrips((prev) => prev.filter((t) => t.id !== id));
+    } catch {
+      alert("Erreur réseau.");
+    }
+  };
+
+  const toggleStatus = async (id: string, currentStatus: string) => {
+    const statusOrder = ["DRAFT", "PUBLISHED", "FULL"];
     const currentIndex = statusOrder.indexOf(currentStatus);
     const nextStatus = statusOrder[(currentIndex + 1) % statusOrder.length];
-    
-    setTrips(prev => prev.map(trip => 
-      trip.id === id ? { ...trip, status: nextStatus } : trip
-    ));
-    
-    // In a real app, this would be an API call
-    console.log(`Status of trip ${id} changed to ${nextStatus}`);
+
+    try {
+      const res = await fetch(`/api/agency/trips/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: nextStatus }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "Impossible de changer le statut.");
+        return;
+      }
+      setTrips((prev) =>
+        prev.map((trip) => (trip.id === id ? { ...trip, status: data.trip.status } : trip))
+      );
+    } catch {
+      alert("Erreur réseau.");
+    }
   };
 
   return (
@@ -162,7 +175,11 @@ export default function AgencyTripsPage() {
       </div>
 
       {/* Trips Grid/List */}
-      {filteredTrips.length === 0 ? (
+      {loading ? (
+        <div className="bg-white rounded-[3rem] border border-gray-100 p-20 text-center text-gray-400 font-bold uppercase tracking-widest text-xs">
+          Chargement...
+        </div>
+      ) : filteredTrips.length === 0 ? (
         <div className="bg-white rounded-[3rem] shadow-sm border border-gray-100 p-20 text-center flex flex-col items-center justify-center">
           <div className="w-24 h-24 bg-gray-50 rounded-full flex items-center justify-center mb-8">
             <MapPin className="text-gray-200" size={48} />
@@ -178,7 +195,7 @@ export default function AgencyTripsPage() {
           {!searchQuery && (
             <Link 
               href="/agency/trips/new"
-              className="bg-[#2563EB] text-white px-10 py-4 rounded-full text-xs font-black uppercase tracking-widest hover:scale-105 transition-all"
+              className="bg-orange-600 text-white px-10 py-4 rounded-full text-xs font-black uppercase tracking-widest hover:scale-105 transition-all"
             >
               Créer un voyage
             </Link>
@@ -225,10 +242,10 @@ export default function AgencyTripsPage() {
                       <h3 className="text-3xl font-black text-[#0F172A] mb-4 tracking-tight">{trip.title}</h3>
                       <div className="flex flex-wrap gap-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">
                         <div className="flex items-center gap-2">
-                          <MapPin size={14} className="text-[#2563EB]" /> {trip.destination}
+                          <MapPin size={14} className="text-orange-600" /> {trip.destination}
                         </div>
                         <div className="flex items-center gap-2">
-                          <Calendar size={14} className="text-[#2563EB]" /> 
+                          <Calendar size={14} className="text-orange-600" /> 
                           {(() => {
                             try {
                               return format(new Date(trip.startDate), 'MMM. yyyy', { locale: fr });
@@ -241,7 +258,7 @@ export default function AgencyTripsPage() {
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="text-3xl font-black text-[#2563EB] tracking-tighter">{trip.totalPrice}€</div>
+                      <div className="text-3xl font-black text-orange-600 tracking-tighter">{trip.totalPrice}€</div>
                       <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">Prix Total</div>
                     </div>
                   </div>
@@ -284,24 +301,30 @@ export default function AgencyTripsPage() {
                        <Link 
                         href={`/trip/${trip.slug}`} 
                         target="_blank" 
-                        className="flex items-center gap-2 p-3 bg-white border border-gray-100 rounded-2xl text-gray-400 hover:text-[#2563EB] hover:border-[#2563EB]/20 transition-all shadow-sm group/btn"
+                        className="flex items-center gap-2 p-3 bg-white border border-gray-100 rounded-2xl text-gray-400 hover:text-orange-600 hover:border-orange-600/20 transition-all shadow-sm group/btn"
                        >
                           <Eye size={18} />
                           <span className="text-[8px] font-black uppercase tracking-widest hidden group-hover/btn:block">Voir</span>
                        </Link>
                        <Link 
                         href={`/agency/trips/${trip.id}/edit`} 
-                        className="flex items-center gap-2 p-3 bg-white border border-gray-100 rounded-2xl text-gray-400 hover:text-[#2563EB] hover:border-[#2563EB]/20 transition-all shadow-sm group/btn"
+                        className="flex items-center gap-2 p-3 bg-white border border-gray-100 rounded-2xl text-gray-400 hover:text-orange-600 hover:border-orange-600/20 transition-all shadow-sm group/btn"
                        >
                           <Pencil size={18} />
                           <span className="text-[8px] font-black uppercase tracking-widest hidden group-hover/btn:block">Éditer</span>
                        </Link>
+                       {trip.status !== "CANCELLED" && trip.status !== "DRAFT" && (
+                         <button
+                           type="button"
+                           onClick={() => handleCancelTrip(trip.id, trip.title)}
+                           className="flex items-center gap-2 px-4 py-3 text-red-500 bg-red-50 rounded-2xl text-[8px] font-black uppercase tracking-widest hover:bg-red-100 transition-all"
+                         >
+                           Annuler le voyage
+                         </button>
+                       )}
                        <button 
-                        onClick={() => {
-                          if(confirm("Voulez-vous vraiment supprimer ce voyage ?")) {
-                            setTrips(prev => prev.filter(t => t.id !== trip.id));
-                          }
-                        }}
+                        type="button"
+                        onClick={() => handleDelete(trip.id, trip.title)}
                         className="flex items-center gap-2 p-3 text-gray-300 hover:text-red-500 transition-all group/btn"
                       >
                           <Trash2 size={18} />

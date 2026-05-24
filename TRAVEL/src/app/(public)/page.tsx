@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import HeroAnimatedWidget from "@/components/public/HeroAnimatedWidget";
 import MaghrebCarousel from "@/components/public/MaghrebCarousel";
+import SafeImage from "@/components/ui/SafeImage";
+import { formatPriceShort } from "@/lib/currency";
+import { sanitizeImageUrl } from "@/lib/images";
 import { 
   ArrowRight, 
   MapPin, 
@@ -25,20 +27,113 @@ import {
   Calendar
 } from "lucide-react";
 
-import { NavbarAuth } from "@/components/auth/NavbarAuth";
-import AIChatWidget from "@/components/ai/AIChatWidget";
-import GuideTouristiqueIA from "@/components/ai/GuideTouristiqueIA";
 import DestinationsSection from "@/components/public/DestinationsSection";
-import MainNavbar from "@/components/layout/MainNavbar";
+
+const TRIP_TAG_COLORS: Record<string, string> = {
+  DESERT: "bg-orange-500",
+  CULTURE: "bg-[#0F172A]",
+  ADVENTURE: "bg-orange-600",
+  RELAXATION: "bg-[#10B981]",
+  NATURE: "bg-emerald-600",
+};
+
+const TRIP_TYPE_LABELS: Record<string, string> = {
+  DESERT: "Désert",
+  CULTURE: "Culture",
+  ADVENTURE: "Aventure",
+  RELAXATION: "Détente",
+  NATURE: "Nature",
+};
+
+function FeaturedTrips() {
+  const [trips, setTrips] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/trips")
+      .then((res) => res.json())
+      .then((data) => {
+        const list = (data.trips || [])
+          .filter((t: any) => t.status === "PUBLISHED")
+          .slice(0, 4);
+        setTrips(list);
+      })
+      .catch(() => setTrips([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="bg-white rounded-[3rem] overflow-hidden border border-gray-100 animate-pulse">
+            <div className="aspect-[4/5] bg-gray-100" />
+            <div className="p-8 space-y-4">
+              <div className="h-6 bg-gray-100 rounded-lg w-3/4" />
+              <div className="h-4 bg-gray-50 rounded w-1/2" />
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (trips.length === 0) {
+    return (
+      <p className="text-center text-gray-400 font-bold uppercase tracking-widest text-xs py-12">
+        Aucun voyage publié pour le moment — revenez bientôt.
+      </p>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+      {trips.map((trip) => {
+        const spotsLeft = Math.max(0, (trip.totalSpots || 0) - (trip.bookedSpots || 0));
+        const tagColor = TRIP_TAG_COLORS[trip.tripType] || "bg-orange-500";
+        const tagLabel = TRIP_TYPE_LABELS[trip.tripType] || trip.tripType;
+        const cover = sanitizeImageUrl(trip.coverImage, trip.destination);
+
+        return (
+          <div key={trip.id} className="group bg-white rounded-[3rem] overflow-hidden border border-gray-100 shadow-sm hover:shadow-2xl transition-all duration-700">
+            <div className="relative aspect-[4/5] overflow-hidden">
+              <SafeImage src={cover} alt={trip.title} fill sizes="(max-width: 768px) 100vw, 25vw" destination={trip.destination} className="object-cover transition-transform duration-[2000ms] group-hover:scale-110" />
+              <div className={`absolute top-6 left-6 ${tagColor} text-white text-[10px] font-black uppercase tracking-widest px-4 py-1.5 rounded-full shadow-2xl`}>
+                {tagLabel}
+              </div>
+            </div>
+            <div className="p-8 space-y-6">
+              <div>
+                <h4 className="font-black text-[#0F172A] text-xl mb-1 tracking-tight group-hover:text-orange-600 transition-colors">{trip.title}</h4>
+                <div className="flex items-center gap-2 text-gray-400 font-bold text-[10px] uppercase tracking-widest">
+                  <MapPin size={10} /> {trip.destination}
+                </div>
+              </div>
+              <div className="flex items-center justify-between pt-6 border-t border-gray-50">
+                <div>
+                  <div className="text-2xl font-black text-[#0F172A]">{formatPriceShort(trip.totalPrice)}</div>
+                  <div className="text-[9px] text-gray-400 font-bold">(~{Math.round(trip.totalPrice)} €)</div>
+                  {spotsLeft > 0 && (
+                    <div className="text-[10px] text-orange-600 font-black uppercase tracking-widest mt-1">{spotsLeft} places restantes</div>
+                  )}
+                </div>
+                <Link href={`/trip/${trip.slug}`} className="w-12 h-12 bg-[#F8FAFC] rounded-2xl flex items-center justify-center text-[#0F172A] hover:bg-orange-600 hover:text-white transition-all shadow-sm">
+                  <ArrowRight size={18} />
+                </Link>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 export default function Home() {
   return (
     <div className="flex flex-col min-h-screen bg-white font-outfit">
-      {/* Navbar */}
-      <MainNavbar />
-
       {/* Hero Section */}
-      <section className="relative pt-32 pb-20 md:pt-40 md:pb-40 px-6 min-h-[800px] flex items-center">
+      <section className="relative pt-16 pb-20 md:pt-24 md:pb-40 px-6 min-h-[800px] flex items-center">
         <div className="max-w-7xl mx-auto grid lg:grid-cols-5 gap-12 items-center w-full">
           <div className="lg:col-span-3 text-center lg:text-left z-10">
             <h1 className="text-6xl md:text-8xl font-black tracking-tight text-[#0F172A] mb-8 leading-[1.1]">
@@ -123,76 +218,7 @@ export default function Home() {
             </Link>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-            {[
-              { 
-                title: "Réveillon à Taghit 2025", 
-                loc: "Taghit, Algérie", 
-                price: "680", 
-                left: "12 places",
-                img: "https://images.unsplash.com/photo-1509316785289-025f5b846b35?q=80&w=1000&auto=format&fit=crop",
-                tag: "Désert",
-                tagColor: "bg-orange-500",
-                href: "/trip/reveillon-taghit-2025"
-              },
-              { 
-                title: "Trésors du Maroc", 
-                loc: "Marrakech & Fès", 
-                price: "890", 
-                left: "8 places",
-                img: "https://images.unsplash.com/photo-1539020140153-e479b8c22e70?q=80&w=1000&auto=format&fit=crop",
-                tag: "Culture",
-                tagColor: "bg-[#0F172A]",
-                href: "/trip/escapade-culturelle-marrakech"
-              },
-              { 
-                title: "Atlas & Vallées Berbères", 
-                loc: "Haut Atlas, Maroc", 
-                price: "750", 
-                left: "10 places",
-                img: "https://images.unsplash.com/photo-1489749798305-4fea3ae63d43?q=80&w=1000&auto=format&fit=crop",
-                tag: "Aventure",
-                tagColor: "bg-orange-600",
-                href: "/trip/circuit-kasbahs"
-              },
-              { 
-                title: "Évasion en Tunisie", 
-                loc: "Djerba & Sud", 
-                price: "560", 
-                left: "15 places",
-                img: "https://images.unsplash.com/photo-1549877452-9c387954fbc2?q=80&w=1000&auto=format&fit=crop",
-                tag: "Détente",
-                tagColor: "bg-[#10B981]",
-                href: "/trip/sahara-oasis-4x4"
-              },
-            ].map((trip, i) => (
-              <div key={i} className="group bg-white rounded-[3rem] overflow-hidden border border-gray-100 shadow-sm hover:shadow-2xl transition-all duration-700">
-                <div className="relative aspect-[4/5] overflow-hidden">
-                   <Image src={trip.img} alt={trip.title} fill sizes="(max-width: 768px) 100vw, 25vw" className="object-cover transition-transform duration-[2000ms] group-hover:scale-110" />
-                   <div className={`absolute top-6 left-6 ${trip.tagColor} text-white text-[10px] font-black uppercase tracking-widest px-4 py-1.5 rounded-full shadow-2xl`}>
-                      {trip.tag}
-                   </div>
-                </div>
-                <div className="p-8 space-y-6">
-                   <div>
-                      <h4 className="font-black text-[#0F172A] text-xl mb-1 tracking-tight group-hover:text-orange-600 transition-colors">{trip.title}</h4>
-                      <div className="flex items-center gap-2 text-gray-400 font-bold text-[10px] uppercase tracking-widest">
-                         <MapPin size={10} /> {trip.loc}
-                      </div>
-                   </div>
-                   <div className="flex items-center justify-between pt-6 border-t border-gray-50">
-                      <div>
-                         <div className="text-2xl font-black text-[#0F172A]">€{trip.price}</div>
-                         <div className="text-[10px] text-orange-600 font-black uppercase tracking-widest">{trip.left} restantes</div>
-                      </div>
-                      <Link href={trip.href} className="w-12 h-12 bg-[#F8FAFC] rounded-2xl flex items-center justify-center text-[#0F172A] hover:bg-orange-600 hover:text-white transition-all shadow-sm">
-                         <ArrowRight size={18} />
-                      </Link>
-                   </div>
-                </div>
-              </div>
-            ))}
-          </div>
+          <FeaturedTrips />
         </div>
       </section>
 
@@ -291,27 +317,6 @@ export default function Home() {
          </div>
       </section>
 
-      {/* Footer */}
-      <footer className="bg-white py-20 px-6 border-t border-gray-50">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-10">
-          <div className="flex items-center gap-3">
-             <div className="w-10 h-10 bg-orange-500 rounded-xl flex items-center justify-center text-white">
-                <Globe size={24} />
-             </div>
-             <span className="text-2xl font-black tracking-tight text-[#0F172A]">MaghrebVoyage</span>
-          </div>
-          <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">
-            © 2026 MaghrebVoyage — Fièrement construit pour l'aventure
-          </p>
-          <div className="flex flex-wrap justify-center gap-8 text-[10px] font-black uppercase tracking-widest text-gray-400">
-             <Link href="/legal/mentions" className="hover:text-orange-600 transition-colors">Mentions Légales</Link>
-             <Link href="/legal/cgu" className="hover:text-orange-600 transition-colors">CGU</Link>
-             <Link href="/legal/confidentialite" className="hover:text-orange-600 transition-colors">Confidentialité</Link>
-             <Link href="/legal/remboursements" className="hover:text-orange-600 transition-colors">Remboursements</Link>
-             <Link href="/about" className="hover:text-orange-600 transition-colors">À propos</Link>
-          </div>
-        </div>
-      </footer>
     </div>
   );
 }

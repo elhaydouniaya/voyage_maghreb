@@ -1,18 +1,37 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Globe, X, Mail, Lock, Eye, EyeOff } from "lucide-react";
-import { signIn } from "next-auth/react";
+import { Globe, X, Mail, Lock, Eye, EyeOff, CheckCircle2 } from "lucide-react";
+import { loginWithFreshSession } from "@/lib/login-client";
+import { DemoAccountsBox } from "@/components/auth/DemoAccountsBox";
+import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 
-export default function ClientLoginPage() {
+function ClientLoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get("registered") === "true") {
+      setSuccessMessage(
+        "Compte créé avec succès. Connectez-vous avec votre email et mot de passe."
+      );
+      const prefill = searchParams.get("email");
+      if (prefill) setEmail(prefill);
+    }
+    if (searchParams.get("error") === "google_role") {
+      setError(
+        "Ce compte est agence ou admin. Utilisez la connexion email sur la page dédiée."
+      );
+    }
+  }, [searchParams]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -26,22 +45,11 @@ export default function ClientLoginPage() {
     }
 
     try {
-      const result = await signIn("credentials", {
-        email,
-        password,
-        redirect: false,
+      const outcome = await loginWithFreshSession(email, password, {
+        requiredRole: "CLIENT",
       });
-
-      if (result?.error) {
-        setError("Identifiants incorrects.");
-      } else {
-        if (email === "admin@maghrebvoyage.com") {
-          window.location.href = "/admin/dashboard";
-        } else if (email === "agency@test.com") {
-          window.location.href = "/agency/dashboard";
-        } else {
-          window.location.href = "/profile";
-        }
+      if (!outcome.ok) {
+        setError(outcome.error);
       }
     } catch (err) {
       setError("Une erreur est survenue.");
@@ -111,12 +119,21 @@ export default function ClientLoginPage() {
             <h1 className="text-3xl font-black tracking-tight mb-1">
               Maghreb<span className="text-orange-200">Voyage</span>
             </h1>
-            <p className="text-orange-100 text-xs font-bold uppercase tracking-widest">Bienvenue</p>
+            <p className="text-orange-100 text-xs font-bold uppercase tracking-widest">
+              Espace Voyageur
+            </p>
           </div>
         </div>
 
         {/* Form Content */}
         <div className="p-8 md:p-10 overflow-y-auto flex-1 max-h-[calc(90vh-200px)]">
+          {successMessage && (
+            <div className="bg-green-50 border border-green-200 text-green-800 rounded-xl p-4 mb-6 text-sm font-bold flex items-center gap-3">
+              <CheckCircle2 size={20} className="text-green-600 flex-shrink-0" />
+              {successMessage}
+            </div>
+          )}
+
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-4 mb-6 text-sm font-bold flex items-center gap-3 animate-in slide-in-from-top">
               <span className="w-6 h-6 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
@@ -141,7 +158,7 @@ export default function ClientLoginPage() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="agency@test.com"
+                  placeholder="vous@exemple.com"
                   className="w-full bg-gray-50 border-2 border-gray-200 rounded-xl pl-12 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent font-semibold text-gray-900 transition-all"
                   required
                 />
@@ -176,6 +193,15 @@ export default function ClientLoginPage() {
               </div>
             </div>
 
+            <div className="text-right">
+              <Link
+                href="/forgot-password"
+                className="text-xs font-bold text-orange-600 hover:underline"
+              >
+                Mot de passe oublié ?
+              </Link>
+            </div>
+
             {/* Submit Button */}
             <button
               type="submit"
@@ -186,11 +212,13 @@ export default function ClientLoginPage() {
             </button>
           </form>
 
-          {/* Divider */}
-          <div className="my-8 flex items-center gap-4">
-            <div className="flex-1 h-px bg-gray-200" />
-            <span className="text-xs text-gray-400 font-bold">OU</span>
-            <div className="flex-1 h-px bg-gray-200" />
+          <div className="mt-6 space-y-6">
+            <div className="flex items-center gap-4">
+              <div className="flex-1 h-px bg-gray-200" />
+              <span className="text-xs text-gray-400 font-bold">OU</span>
+              <div className="flex-1 h-px bg-gray-200" />
+            </div>
+            <GoogleSignInButton callbackUrl="/profile" />
           </div>
 
           {/* Sign Up Link */}
@@ -204,18 +232,16 @@ export default function ClientLoginPage() {
             </Link>
           </p>
 
-          {/* Demo Credentials */}
-          <div className="bg-gradient-to-r from-orange-50 to-orange-100 border-2 border-orange-200 p-5 rounded-xl text-center">
-            <p className="text-xs font-black text-orange-700 uppercase tracking-widest mb-2">
-              🔓 Démo Voyageur
-            </p>
-            <p className="text-sm font-bold text-gray-800 font-mono">
-              client@test.com / client123
-            </p>
-          </div>
+          <DemoAccountsBox
+            portal="client"
+            onSelectAccount={(account) => {
+              setEmail(account.email);
+              setPassword(account.password);
+              setError("");
+            }}
+          />
 
-          {/* Agency Login Link */}
-          <div className="mt-6 pt-6 border-t border-gray-200 text-center">
+          <div className="mt-6 pt-6 border-t border-gray-200 text-center space-y-3">
             <Link
               href="/agency/login"
               className="text-xs font-black text-gray-500 uppercase tracking-widest hover:text-orange-600 transition-colors inline-flex items-center gap-2"
@@ -223,9 +249,29 @@ export default function ClientLoginPage() {
               Accès Agence Partenaire
               <span>→</span>
             </Link>
+            <Link
+              href="/admin/login"
+              className="text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-orange-600 transition-colors block"
+            >
+              Administration
+            </Link>
           </div>
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ClientLoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="fixed inset-0 bg-white flex items-center justify-center font-outfit">
+          <p className="text-sm font-bold text-gray-500">Chargement...</p>
+        </div>
+      }
+    >
+      <ClientLoginForm />
+    </Suspense>
   );
 }

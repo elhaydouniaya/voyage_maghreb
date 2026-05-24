@@ -10,140 +10,151 @@ import {
   XCircle, 
   Clock, 
   BarChart3, 
-  Globe, 
-  ShieldCheck,
   TrendingUp,
-  MoreVertical,
-  AlertTriangle,
   RefreshCcw,
   ArrowRight,
   Sparkles,
-  LogOut,
-  MapPin
+  MapPin,
 } from "lucide-react";
-import { signOut } from "next-auth/react";
-import { NavbarAuth } from "@/components/auth/NavbarAuth";
+import { format } from "date-fns";
+import { fr } from "date-fns/locale";
+import AdminCharts from "@/components/admin/AdminCharts";
+
+type PendingAgency = {
+  id: string;
+  name: string;
+  email: string;
+  siret: string;
+  createdAt: string;
+};
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState({
-    totalBookings: 2840,
-    monthBookings: 142,
-    totalRevenue: 142500,
-    conversionRate: 12.4,
-    fillingRate: 78,
-    activeTrips: 45,
-    pendingAgencies: 3,
-    pendingRefunds: 2
+    totalBookings: 0,
+    monthBookings: 0,
+    monthRevenue: 0,
+    conversionRate: 0,
+    fillingRate: 0,
+    activeTrips: 0,
+    publishedTrips: 0,
+    pendingAgencies: 0,
+    pendingRefunds: 0,
+    monthTravelRequests: 0,
   });
+  const [topDestinations, setTopDestinations] = useState("—");
+  const [topAgencies, setTopAgencies] = useState("—");
+  const [recentCancellations, setRecentCancellations] = useState<
+    { id: string; user: string; amount: string; trip: string; reason: string }[]
+  >([]);
 
-  const [pendingAgencies, setPendingAgencies] = useState([
-    { id: 1, name: "Sahara Tours Expert", email: "contact@sahara.com", date: "Il y a 2h", siret: "842 123 456" },
-    { id: 2, name: "Atlas Adventure", email: "info@atlas.ma", date: "Il y a 14h", siret: "MA-982341" },
-    { id: 3, name: "Djerba Evasion", email: "hello@djerba.tn", date: "Il y a 1j", siret: "TN-23421" },
-  ]);
+  const [pendingAgencies, setPendingAgencies] = useState<PendingAgency[]>([]);
 
-  const [rejectionTarget, setRejectionTarget] = useState<number | null>(null);
+  const [rejectionTarget, setRejectionTarget] = useState<string | null>(null);
   const [rejectionMotif, setRejectionMotif] = useState("");
-  const [processingId, setProcessingId] = useState<number | null>(null);
+  const [processingId, setProcessingId] = useState<string | null>(null);
+  const [refundingId, setRefundingId] = useState<string | null>(null);
 
-  const handleValidate = (id: number) => {
-    setProcessingId(id);
-    setTimeout(() => {
-      setPendingAgencies(prev => prev.filter(a => a.id !== id));
-      setStats(prev => ({ ...prev, pendingAgencies: prev.pendingAgencies - 1 }));
-      setProcessingId(null);
-    }, 1000);
+  useEffect(() => {
+    async function load() {
+      try {
+        const res = await fetch("/api/admin/dashboard");
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.stats) setStats(data.stats);
+        if (data.topDestinations) setTopDestinations(data.topDestinations);
+        if (data.topAgencies) setTopAgencies(data.topAgencies);
+        if (data.pendingAgencies) setPendingAgencies(data.pendingAgencies);
+        if (data.recentCancellations) setRecentCancellations(data.recentCancellations);
+      } catch {
+        /* ignore */
+      }
+    }
+    load();
+  }, []);
+
+  const patchAgency = async (id: string, status: string, note?: string) => {
+    const res = await fetch(`/api/admin/agencies/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status, note }),
+    });
+    return res.ok;
   };
 
-  const handleReject = (id: number) => {
+  const handleValidate = async (id: string) => {
+    setProcessingId(id);
+    const ok = await patchAgency(id, "VERIFIED");
+    if (ok) {
+      setPendingAgencies((prev) => prev.filter((a) => a.id !== id));
+      setStats((prev) => ({
+        ...prev,
+        pendingAgencies: Math.max(0, prev.pendingAgencies - 1),
+      }));
+    }
+    setProcessingId(null);
+  };
+
+  const handleReject = async (id: string) => {
     if (rejectionTarget === id && rejectionMotif.length > 5) {
       setProcessingId(id);
-      setTimeout(() => {
-        setPendingAgencies(prev => prev.filter(a => a.id !== id));
-        setStats(prev => ({ ...prev, pendingAgencies: prev.pendingAgencies - 1 }));
+      const ok = await patchAgency(id, "REJECTED", rejectionMotif);
+      if (ok) {
+        setPendingAgencies((prev) => prev.filter((a) => a.id !== id));
+        setStats((prev) => ({
+          ...prev,
+          pendingAgencies: Math.max(0, prev.pendingAgencies - 1),
+        }));
         setRejectionTarget(null);
         setRejectionMotif("");
-        setProcessingId(null);
-      }, 1000);
+      }
+      setProcessingId(null);
     } else {
       setRejectionTarget(id);
     }
   };
 
+  const handleRefund = async (bookingId: string) => {
+    if (!confirm("Confirmer le remboursement de l'acompte ?")) return;
+    setRefundingId(bookingId);
+    try {
+      const res = await fetch(`/api/admin/bookings/${bookingId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "refund" }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "Remboursement impossible.");
+        return;
+      }
+      setRecentCancellations((prev) => prev.filter((r) => r.id !== bookingId));
+      setStats((s) => ({
+        ...s,
+        pendingRefunds: Math.max(0, s.pendingRefunds - 1),
+      }));
+    } catch {
+      alert("Erreur réseau.");
+    } finally {
+      setRefundingId(null);
+    }
+  };
+
   const kpiCards = [
-    { label: "Réservations totales", value: stats.totalBookings, sub: "Confirmées (Toutes périodes)", icon: CheckCircle2, color: "bg-blue-500", highlight: false },
-    { label: "Réservations ce mois", value: stats.monthBookings, sub: "+12% vs mois dernier", icon: TrendingUp, color: "bg-green-500", highlight: true },
-    { label: "Acomptes (ce mois)", value: `12,450€`, sub: "Cumulé: 142k€", icon: CreditCard, color: "bg-orange-500", highlight: false },
-    { label: "Conversion IA", value: `${stats.conversionRate}%`, sub: "Demandes -> Bookings", icon: Sparkles, color: "bg-purple-500", highlight: false },
+    { label: "Réservations totales", value: stats.totalBookings, sub: "Confirmées (toutes périodes)", icon: CheckCircle2, color: "bg-blue-500", highlight: false },
+    { label: "Réservations ce mois", value: stats.monthBookings, sub: `${stats.monthTravelRequests} demandes IA ce mois`, icon: TrendingUp, color: "bg-green-500", highlight: true },
+    { label: "Acomptes (ce mois)", value: `${stats.monthRevenue.toLocaleString("fr-FR")}€`, sub: "Dépôts confirmés", icon: CreditCard, color: "bg-orange-500", highlight: false },
+    { label: "Conversion IA", value: `${stats.conversionRate}%`, sub: "Demandes → réservations", icon: Sparkles, color: "bg-purple-500", highlight: false },
     { label: "Remplissage moyen", value: `${stats.fillingRate}%`, sub: "Voyages actifs", icon: BarChart3, color: "bg-pink-500", highlight: false },
-    { label: "Voyages actifs", value: `${stats.activeTrips} / 52`, sub: "52 publiés au total", icon: Briefcase, color: "bg-indigo-500", highlight: false },
-    { label: "Top Destinations", value: "Taghit, Marrakech", sub: "Les plus réservées", icon: MapPin, color: "bg-teal-500", highlight: false },
-    { label: "Top Agences", value: "Sahara Tours, Atlas", sub: "Les plus actives", icon: Users, color: "bg-yellow-500", highlight: false },
+    { label: "Voyages actifs", value: `${stats.activeTrips} / ${stats.publishedTrips}`, sub: "publiés au total", icon: Briefcase, color: "bg-indigo-500", highlight: false },
+    { label: "Top Destinations", value: topDestinations, sub: "Les plus proposées", icon: MapPin, color: "bg-teal-500", highlight: false },
+    { label: "Top Agences", value: topAgencies, sub: "Les plus actives", icon: Users, color: "bg-yellow-500", highlight: false },
   ];
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] font-outfit">
-      {/* Sidebar */}
-      <aside className="fixed left-0 top-0 bottom-0 w-80 bg-[#0F172A] p-8 hidden lg:flex flex-col z-20">
-         <div className="flex items-center gap-3 mb-16">
-            <div className="w-10 h-10 bg-orange-600 rounded-xl flex items-center justify-center text-white">
-               <Globe size={24} />
-            </div>
-            <span className="text-2xl font-black tracking-tight text-white">AdminPanel</span>
-         </div>
+    <>
+        <AdminCharts />
 
-         <nav className="space-y-2 flex-1">
-            <div className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] mb-4 ml-4">Supervision</div>
-            <Link href="/admin/dashboard" className="flex items-center gap-4 text-gray-400 hover:text-white px-6 py-4 rounded-2xl font-bold transition-all hover:bg-white/5 group">
-               <BarChart3 size={20} className="group-hover:text-orange-500" /> Dashboard
-            </Link>
-            <Link href="/admin/agencies" className="flex items-center gap-4 text-gray-400 hover:text-white px-6 py-4 rounded-2xl font-bold transition-all hover:bg-white/5 group">
-               <Briefcase size={20} className="group-hover:text-orange-500" /> Agences
-               {stats.pendingAgencies > 0 && <span className="ml-auto w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-[10px]">{stats.pendingAgencies}</span>}
-            </Link>
-            <Link href="/admin/trips" className="flex items-center gap-4 text-gray-400 hover:text-white px-6 py-4 rounded-2xl font-bold transition-all hover:bg-white/5 group">
-               <Globe size={20} className="group-hover:text-orange-500" /> Voyages
-            </Link>
-            <Link href="/admin/bookings" className="flex items-center gap-4 text-gray-400 hover:text-white px-6 py-4 rounded-2xl font-bold transition-all hover:bg-white/5 group">
-               <CreditCard size={20} className="group-hover:text-orange-500" /> Réservations
-            </Link>
-            <Link href="/admin/ai-requests" className="flex items-center gap-4 text-gray-400 hover:text-white px-6 py-4 rounded-2xl font-bold transition-all hover:bg-white/5 group">
-               <Sparkles size={20} className="group-hover:text-orange-500" /> Demandes IA
-            </Link>
-         </nav>
-
-         <div className="mt-auto space-y-4">
-            <div className="p-6 bg-white/5 rounded-[2.5rem] border border-white/10">
-               <div className="flex items-center gap-3 mb-4">
-                  <div className="w-8 h-8 bg-green-500/20 rounded-full flex items-center justify-center text-green-500">
-                     <ShieldCheck size={16} />
-                  </div>
-                  <span className="text-[10px] font-black text-white uppercase tracking-widest">Stripe Production</span>
-               </div>
-               <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest leading-relaxed">Connecté • v1.0.4</p>
-            </div>
-
-            <button 
-              onClick={() => signOut({ callbackUrl: "/" })}
-              className="w-full flex items-center gap-4 px-6 py-4 text-gray-400 hover:text-red-400 hover:bg-white/5 rounded-2xl transition-all"
-            >
-              <LogOut size={20} />
-              <span className="text-sm font-bold">Déconnexion</span>
-            </button>
-         </div>
-      </aside>
-
-      <main className="lg:ml-80 p-6 md:p-12">
-        {/* Header */}
-        <header className="flex justify-between items-center mb-12">
-           <div>
-              <h1 className="text-4xl font-black text-[#0F172A] tracking-tight">Tableau de bord Admin</h1>
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mt-1 ml-1">Analyse et supervision de MaghrebVoyage</p>
-           </div>
-           <NavbarAuth />
-        </header>
-
-        {/* KPI Grid (Module K.7) */}
+        {/* KPI Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-8 mb-12">
            {kpiCards.map((stat, i) => (
              <div key={i} className={`bg-white p-8 rounded-[3rem] border shadow-sm group hover:shadow-xl transition-all duration-500 ${stat.highlight ? 'border-orange-500/30 ring-4 ring-orange-500/5' : 'border-gray-100'}`}>
@@ -181,6 +192,9 @@ export default function AdminDashboard() {
                              <div>
                                 <p className="text-base font-black text-[#0F172A]">{agency.name}</p>
                                 <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{agency.email}</p>
+                                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">
+                                  {format(new Date(agency.createdAt), "d MMM yyyy", { locale: fr })}
+                                </p>
                                 <p className="text-[10px] text-orange-600 font-black mt-1 uppercase tracking-widest">SIRET: {agency.siret}</p>
                              </div>
                           </div>
@@ -243,11 +257,13 @@ export default function AdminDashboard() {
                     <RefreshCcw size={24} className="text-orange-500" /> Remboursements
                  </h2>
                  <div className="space-y-6 mb-10">
-                    {[
-                      { user: "Jean Dupont", amount: "300€", trip: "Désert Oasis", reason: "Annulation client" },
-                      { user: "Sarah Cohen", amount: "250€", trip: "Marrakech Express", reason: "Voyage annulé par agence" },
-                    ].map((r, i) => (
-                      <div key={i} className="flex items-center justify-between p-6 bg-white/5 rounded-[2.5rem] border border-white/5 hover:bg-white/10 transition-all">
+                    {recentCancellations.length === 0 && (
+                      <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest text-center py-8">
+                        Aucune annulation récente
+                      </p>
+                    )}
+                    {recentCancellations.map((r) => (
+                      <div key={r.id} className="flex items-center justify-between p-6 bg-white/5 rounded-[2.5rem] border border-white/5 hover:bg-white/10 transition-all">
                          <div>
                             <p className="text-sm font-black text-white">{r.user}</p>
                             <p className="text-[10px] text-orange-500 font-black uppercase tracking-widest">{r.trip}</p>
@@ -255,31 +271,28 @@ export default function AdminDashboard() {
                          </div>
                          <div className="text-right">
                             <p className="text-lg font-black text-white">{r.amount}</p>
-                            <button className="text-[9px] font-black text-orange-500 uppercase tracking-widest hover:underline mt-1">Traiter sur Stripe</button>
+                            <button
+                              type="button"
+                              disabled={refundingId === r.id}
+                              onClick={() => handleRefund(r.id)}
+                              className="text-[9px] font-black text-orange-500 uppercase tracking-widest hover:underline mt-1 disabled:opacity-50"
+                            >
+                              {refundingId === r.id ? "Traitement..." : "Rembourser l'acompte"}
+                            </button>
                          </div>
                       </div>
                     ))}
                  </div>
-                 <button className="w-full bg-white text-[#0F172A] py-4 rounded-full font-black text-xs uppercase tracking-widest hover:scale-105 transition-all shadow-xl shadow-black/20">
+                 <Link
+                   href="/admin/bookings?filter=refunds"
+                   className="block w-full bg-white text-[#0F172A] py-4 rounded-full font-black text-xs uppercase tracking-widest hover:scale-105 transition-all shadow-xl shadow-black/20 text-center"
+                 >
                     Voir tous les remboursements
-                 </button>
+                 </Link>
               </div>
 
-              <div className="bg-white rounded-[3rem] border border-gray-100 p-10 flex items-center justify-between group cursor-pointer hover:border-orange-500/30 transition-all shadow-sm">
-                 <div className="flex items-center gap-6">
-                    <div className="w-14 h-14 bg-orange-50 rounded-2xl flex items-center justify-center text-orange-600 group-hover:bg-orange-600 group-hover:text-white transition-all">
-                       <ShieldCheck size={28} />
-                    </div>
-                    <div>
-                       <h4 className="text-lg font-black text-[#0F172A]">Audit de sécurité</h4>
-                       <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Tout est sous contrôle</p>
-                    </div>
-                 </div>
-                 <ArrowRight size={20} className="text-gray-300 group-hover:text-[#0F172A] transition-colors" />
-              </div>
            </div>
         </div>
-      </main>
-    </div>
+    </>
   );
 }

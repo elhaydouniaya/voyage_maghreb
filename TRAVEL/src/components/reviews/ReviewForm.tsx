@@ -65,17 +65,17 @@ export default function ReviewForm() {
         return;
       }
 
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-
-      // Store in localStorage for demo
-      const reviews = JSON.parse(localStorage.getItem("userReviews") || "[]");
-      reviews.push({
-        ...formData,
-        id: Date.now().toString(),
-        date: new Date().toLocaleDateString("fr-FR"),
+      const res = await fetch("/api/reviews", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
       });
-      localStorage.setItem("userReviews", JSON.stringify(reviews));
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Erreur lors de l'envoi.");
+        setIsSubmitting(false);
+        return;
+      }
 
       setSuccess(true);
       setFormData({

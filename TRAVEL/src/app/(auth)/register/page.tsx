@@ -3,13 +3,16 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Globe, X, Mail, Lock, User, Eye, EyeOff, CheckCircle2 } from "lucide-react";
+import { Globe, X, Mail, Lock, User, Eye, EyeOff, CheckCircle2, Phone } from "lucide-react";
+import { loginWithFreshSession } from "@/lib/login-client";
+import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 
 export default function ClientRegisterPage() {
   const router = useRouter();
   const [formData, setFormData] = useState({
     name: "",
     email: "",
+    phone: "",
     password: "",
     confirmPassword: "",
   });
@@ -47,10 +50,42 @@ export default function ClientRegisterPage() {
       return;
     }
 
-    // MOCK REGISTER
-    setTimeout(() => {
-      router.push("/login?registered=true");
-    }, 1500);
+    try {
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: formData.name.trim(),
+          email: formData.email.trim(),
+          phone: formData.phone.trim() || undefined,
+          password: formData.password,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || "Inscription impossible.");
+        setIsLoading(false);
+        return;
+      }
+
+      const loginOutcome = await loginWithFreshSession(
+        formData.email.trim(),
+        formData.password,
+        { requiredRole: "CLIENT" }
+      );
+
+      if (!loginOutcome.ok) {
+        router.push(
+          `/login?registered=true&email=${encodeURIComponent(formData.email.trim())}`
+        );
+      }
+      /* succès : redirection automatique vers /profile */
+    } catch {
+      setError("Impossible de contacter le serveur. Réessayez.");
+      setIsLoading(false);
+    }
   };
 
   const handleBackdropClick = (e: React.MouseEvent) => {
@@ -178,6 +213,28 @@ export default function ClientRegisterPage() {
               </div>
             </div>
 
+            {/* Phone Field */}
+            <div>
+              <label className="text-xs font-black text-gray-500 uppercase tracking-widest mb-2 block">
+                Téléphone <span className="text-gray-400 font-bold normal-case">(optionnel)</span>
+              </label>
+              <div className="relative">
+                <Phone
+                  size={18}
+                  className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"
+                />
+                <input
+                  type="tel"
+                  placeholder="+33 6 12 34 56 78"
+                  value={formData.phone}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, phone: e.target.value }))
+                  }
+                  className="w-full bg-gray-50 border-2 border-gray-200 rounded-xl pl-12 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent font-semibold text-gray-900 transition-all"
+                />
+              </div>
+            </div>
+
             {/* Password Field */}
             <div>
               <label className="text-xs font-black text-gray-500 uppercase tracking-widest mb-2 block">
@@ -261,11 +318,13 @@ export default function ClientRegisterPage() {
             </button>
           </form>
 
-          {/* Divider */}
-          <div className="my-6 flex items-center gap-4">
-            <div className="flex-1 h-px bg-gray-200" />
-            <span className="text-xs text-gray-400 font-bold">OU</span>
-            <div className="flex-1 h-px bg-gray-200" />
+          <div className="my-6 space-y-6">
+            <div className="flex items-center gap-4">
+              <div className="flex-1 h-px bg-gray-200" />
+              <span className="text-xs text-gray-400 font-bold">OU</span>
+              <div className="flex-1 h-px bg-gray-200" />
+            </div>
+            <GoogleSignInButton callbackUrl="/profile" />
           </div>
 
           {/* Login Link */}
