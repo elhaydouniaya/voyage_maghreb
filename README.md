@@ -24,6 +24,15 @@ npm run dev
 
 Application : [http://localhost:3000](http://localhost:3000)
 
+## Scripts utiles
+
+| Commande | Description |
+|----------|-------------|
+| `npm run dev` | Développement |
+| `npm run build` | Build production |
+| `npm run health` | Vérification DB + env |
+| `npm run prod:local` | Build + serveur prod local |
+
 ## Stripe webhooks (local)
 
 Dans un **second terminal** (Stripe CLI requis) :
