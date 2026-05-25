@@ -1,0 +1,442 @@
+/**
+ * AI Service for MaghrebVoyage
+ * Implements Module C of the CDC: Structuration and Matching.
+ */
+
+import { getOpenAIClient, isOpenAIConfigured } from "@/lib/openai";
+import {
+  isOpenAIPaused,
+  isOpenAIQuotaOrRateLimitError,
+  pauseOpenAI,
+} from "@/lib/openai-errors";
+import type { ClientGuideContext } from "@/services/guide-profile.service";
+
+const GUIDE_SYSTEM_PROMPT = `Tu es le Guide Touristique personnel MaghrebVoyage, réservé aux clients connectés.
+Tu accompagnes le voyageur dans la préparation de son voyage au Maghreb (Maroc, Algérie, Tunisie, Mauritanie, Libye).
+Réponds en français, avec chaleur et expertise. Mène une vraie conversation : pose des questions pour mieux connaître le client avant de conseiller.
+Utilise le profil mémorisé (destinations, style, budget, nombre de voyageurs) pour personnaliser chaque réponse.
+Propose 1 à 2 suggestions concrètes (destination, saison, type de circuit) adaptées à ce profil.
+Si le client cherche un voyage précis à réserver, oriente-le vers /recherche ou /voyages.
+Ne invente pas de prix ou de disponibilités exactes.`;
+
+export interface TravelRequestData {
+  destination: string;
+  isDateFlexible: boolean;
+  startDate?: string;
+  endDate?: string;
+  duration?: number;
+  budgetMax: number;
+  tripType: string[];
+  tripStyle?: string[];
+  numberOfTravelers: number;
+  accommodation?: string;
+  transportIncluded?: boolean;
+  activities?: string[];
+  constraints?: string;
+}
+
+export interface StructuredDemand {
+  summary: string;
+  tags: string[];
+  complexity: 1 | 2 | 3 | 4 | 5;
+  destinationNormalized: string;
+  budgetLevel: 'low' | 'medium' | 'high' | 'premium';
+  dominantTripType: string;
+  targetDuration: number;
+  startDate?: Date;
+  numberOfSeats: number;
+  budgetMax: number;
+}
+
+export interface TripScore {
+  tripId: string;
+  score: number;
+  compatibility: number;
+  reasons: string[];
+}
+
+export class AIService {
+  /**
+   * C.1 - Structuration de la demande via LLM
+   * Normalise les entrées du formulaire pour le matching.
+   */
+  static structureDemandHeuristic(request: TravelRequestData): StructuredDemand {
+    return {
+      summary: `Voyage à ${request.destination} pour ${request.numberOfTravelers} personnes. Budget: ${request.budgetMax}€.`,
+      tags: [...request.tripType, ...(request.activities || [])].map((t) => t.toLowerCase()),
+      complexity: 2,
+      destinationNormalized: request.destination
+        .toLowerCase()
+        .trim()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, ""),
+      budgetLevel:
+        request.budgetMax < 800
+          ? "low"
+          : request.budgetMax < 1800
+            ? "medium"
+            : request.budgetMax < 3500
+              ? "high"
+              : "premium",
+      dominantTripType: request.tripType[0] || "AVENTURE",
+      targetDuration: request.duration || 7,
+      startDate: request.startDate ? new Date(request.startDate) : undefined,
+      numberOfSeats: request.numberOfTravelers,
+      budgetMax: request.budgetMax,
+    };
+  }
+
+  static async structureDemand(request: TravelRequestData): Promise<StructuredDemand> {
+    const fallback = () => this.structureDemandHeuristic(request);
+
+    if (!isOpenAIConfigured() || isOpenAIPaused()) return fallback();
+
+    const openai = getOpenAIClient();
+    if (!openai) return fallback();
+
+    try {
+      const completion = await openai.chat.completions.create({
+        model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content: `Tu structures une demande de voyage au Maghreb pour un moteur de matching.
+Réponds UNIQUEMENT en JSON avec: summary, tags (string[]), complexity (1-5), destinationNormalized, budgetLevel (low|medium|high|premium), dominantTripType, targetDuration, startDate (ISO ou null), numberOfSeats, budgetMax.`,
+          },
+          { role: "user", content: JSON.stringify(request) },
+        ],
+        response_format: { type: "json_object" },
+        max_tokens: 400,
+        temperature: 0.3,
+      });
+
+      const raw = completion.choices[0]?.message?.content;
+      if (!raw) return fallback();
+
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      const base = fallback();
+      const budgetLevel = parsed.budgetLevel;
+      const complexity = Number(parsed.complexity);
+
+      return {
+        summary: String(parsed.summary || base.summary),
+        tags: Array.isArray(parsed.tags)
+          ? parsed.tags.map((t) => String(t).toLowerCase())
+          : base.tags,
+        complexity:
+          complexity >= 1 && complexity <= 5
+            ? (complexity as 1 | 2 | 3 | 4 | 5)
+            : base.complexity,
+        destinationNormalized: String(
+          parsed.destinationNormalized || base.destinationNormalized
+        ),
+        budgetLevel:
+          budgetLevel === "low" ||
+          budgetLevel === "medium" ||
+          budgetLevel === "high" ||
+          budgetLevel === "premium"
+            ? budgetLevel
+            : base.budgetLevel,
+        dominantTripType: String(parsed.dominantTripType || base.dominantTripType),
+        targetDuration: Number(parsed.targetDuration) || base.targetDuration,
+        startDate: parsed.startDate
+          ? new Date(String(parsed.startDate))
+          : base.startDate,
+        numberOfSeats: Number(parsed.numberOfSeats) || base.numberOfSeats,
+        budgetMax: Number(parsed.budgetMax) || base.budgetMax,
+      };
+    } catch (error) {
+      if (isOpenAIQuotaOrRateLimitError(error)) {
+        pauseOpenAI(60);
+        console.warn("OpenAI structureDemand quota — mode local");
+      } else {
+        console.error("OpenAI structureDemand error:", error);
+      }
+      return fallback();
+    }
+  }
+
+  /**
+   * C.2 - Algorithme de Matching (Phase 1, 2, 3)
+   * Score sur 18 points selon le CDC MaghrebVoyage vFinal.
+   */
+  static async matchTrips(demand: StructuredDemand, trips: any[]): Promise<TripScore[]> {
+    const scoredTrips = trips.map(trip => {
+      let score = 0;
+      const reasons: string[] = [];
+
+      // --- PHASE 1: Filtres durs (Éliminatoires) ---
+      if (trip.status !== "PUBLISHED") return null;
+      if (trip.bookedSpots >= trip.totalSpots) return null;
+      
+      const tripStartDate = new Date(trip.startDate);
+      const now = new Date();
+      if (tripStartDate <= now) return null;
+
+      // --- PHASE 2: Score de pertinence (Max 18 pts) ---
+      
+      // 1. Destination (+4)
+      const tripDest = trip.destination.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      if (tripDest.includes(demand.destinationNormalized) || demand.destinationNormalized.includes(tripDest)) {
+        score += 4;
+        reasons.push("Destination correspondante");
+      }
+
+      // 2. Dates compatibles (+3 + 1 bonus)
+      if (demand.startDate) {
+        const diffTime = Math.abs(tripStartDate.getTime() - demand.startDate.getTime());
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        
+        if (diffDays <= 14) {
+          score += 3;
+          reasons.push("Dates proches de vos souhaits");
+          if (diffDays <= 7) {
+             // Logic says +3 base. We can add +1 if really close or if client is flexible as per CDC
+             score += 1; 
+          }
+        }
+      } else {
+        // If no date provided, we give a base score for future trips
+        score += 2;
+      }
+
+      // 3. Budget compatible (+3 + 1 bonus)
+      const tripPrice = Number(trip.totalPrice);
+      if (tripPrice <= demand.budgetMax) {
+        score += 3;
+        reasons.push("Respecte votre budget");
+        if (tripPrice <= demand.budgetMax * 0.8) {
+          score += 1; // Bonus +1 if well under budget
+          reasons.push("Excellent rapport qualité/prix");
+        }
+      }
+
+      // 4. Type de voyage (+2)
+      if (trip.tripType === demand.dominantTripType) {
+        score += 2;
+        reasons.push(`${trip.tripType} : Votre style favori`);
+      }
+
+      // 5. Tags en commun (+1/tag, Max +4)
+      const tripTags = trip.aiTags || [];
+      const commonTags = tripTags.filter((t: string) => demand.tags.includes(t.toLowerCase()));
+      const tagPoints = Math.min(commonTags.length, 4);
+      score += tagPoints;
+      if (tagPoints > 0) reasons.push("Correspond à vos centres d'intérêt");
+
+      // 6. Places suffisantes (+1)
+      if (trip.totalSpots - trip.bookedSpots >= demand.numberOfSeats) {
+        score += 1;
+      }
+
+      // Final Compatibility %
+      const maxScore = 18;
+      const compatibility = Math.min(Math.round((score / maxScore) * 100), 100);
+
+      return {
+        tripId: trip.id,
+        score,
+        compatibility,
+        reasons: Array.from(new Set(reasons)) // Unique reasons
+      };
+    }).filter(Boolean) as TripScore[];
+
+    // --- PHASE 3: Tri et Sélection ---
+    let results = scoredTrips
+      .sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        // Priority to closest start date on equal score
+        const tripA = trips.find(t => t.id === a.tripId);
+        const tripB = trips.find(t => t.id === b.tripId);
+        return new Date(tripA.startDate).getTime() - new Date(tripB.startDate).getTime();
+      })
+      .slice(0, 3);
+
+    // C.2.Fallback : Si 0 résultat -> Afficher les 3 prochains départs
+    if (results.length === 0) {
+      const nextTrips = trips
+        .filter(t => t.status === "PUBLISHED" && new Date(t.startDate) > new Date())
+        .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())
+        .slice(0, 3)
+        .map(t => ({
+          tripId: t.id,
+          score: 0,
+          compatibility: 0,
+          reasons: ["Prochain départ disponible"]
+        }));
+      results = nextTrips;
+    }
+
+    return results;
+  }
+
+  static formatContextBlock(ctx: ClientGuideContext): string {
+    const lines: string[] = [];
+    if (ctx.profile.preferredDestinations.length) {
+      lines.push(`Destinations d'intérêt : ${ctx.profile.preferredDestinations.join(", ")}`);
+    }
+    if (ctx.profile.travelStyles.length) {
+      lines.push(`Styles : ${ctx.profile.travelStyles.join(", ")}`);
+    }
+    if (ctx.profile.budgetMax) lines.push(`Budget indicatif : ${ctx.profile.budgetMax}€`);
+    if (ctx.profile.travelersCount) {
+      lines.push(`Voyageurs : ${ctx.profile.travelersCount}`);
+    }
+    if (ctx.profile.preferredSeason) {
+      lines.push(`Saison préférée : ${ctx.profile.preferredSeason}`);
+    }
+    if (ctx.recentBookings.length) {
+      lines.push(
+        `Réservations : ${ctx.recentBookings.map((b) => `${b.title} (${b.destination})`).join("; ")}`
+      );
+    }
+    if (ctx.favoriteDestinations.length) {
+      lines.push(`Favoris : ${ctx.favoriteDestinations.join(", ")}`);
+    }
+    if (ctx.pastAiDestinations.length) {
+      lines.push(`Recherches passées : ${ctx.pastAiDestinations.join(", ")}`);
+    }
+    return lines.length ? lines.join("\n") : "Profil en cours de découverte.";
+  }
+
+  /**
+   * Guide conversationnel local (sans OpenAI) — personnalisé au profil client.
+   */
+  static guideChatOffline(
+    messages: { role: "user" | "assistant"; content: string }[],
+    ctx: ClientGuideContext
+  ): string {
+    const last = messages[messages.length - 1]?.content?.toLowerCase() || "";
+    const greeting = ctx.userName?.split(" ")[0] || "voyageur";
+    const p = ctx.profile;
+    const primaryDest = p.preferredDestinations[0];
+
+    if (
+      /^(salam|bonjour|hello|coucou|hey|bonsoir)/.test(last.trim()) ||
+      last.includes("bonjour")
+    ) {
+      if (p.preferredDestinations.length === 0) {
+        return `Salam ${greeting} ! Ravi de vous accompagner. Pour commencer : vers quelle destination du Maghreb souhaitez-vous partir ? (Maroc, Algérie, Tunisie, Sahara…)`;
+      }
+      return `Salam ${greeting} ! Content de vous revoir. Vous aviez mentionné ${p.preferredDestinations.join(" et ")}. Qu’est-ce qui vous intéresse aujourd’hui : dates, budget, ou idées d’activités ?`;
+    }
+
+    if (!p.preferredDestinations.length && !this.extractDestinationsFromText(last).length) {
+      return `Pour vous conseiller au mieux, dites-moi d’abord quelle région vous attire : le Maroc (Marrakech, désert), l’Algérie (Sud, oasis), la Tunisie, ou un mix ?`;
+    }
+
+    if (p.preferredDestinations.length > 0 && p.travelStyles.length === 0) {
+      if (!/(aventure|culture|famille|détente|desert|désert|tradition)/.test(last)) {
+        return `Parfait pour ${primaryDest || "le Maghreb"} ! Quel style de voyage vous correspond : aventure, culture & médinas, famille, ou détente ?`;
+      }
+    }
+
+    if (p.preferredDestinations.length > 0 && !p.budgetMax && !/(\d{3,5}|€|budget|prix)/.test(last)) {
+      return `Très bien. Pour ${primaryDest}, quel budget par personne envisagez-vous (par ex. 800€, 1200€, 2000€) ? Cela m’aide à cibler les bons circuits.`;
+    }
+
+    if (p.preferredDestinations.length > 0 && !p.travelersCount && !/(personnes|voyageurs|couple|famille|\d+)/.test(last)) {
+      return `Combien serez-vous à voyager ? (seul, couple, famille…) Je adapterai mes suggestions.`;
+    }
+
+    if (last.includes("sahara") || last.includes("désert") || last.includes("desert")) {
+      const destLine = primaryDest
+        ? `Pour votre projet ${primaryDest}, `
+        : "";
+      return `${destLine}le Sahara (Merzouga, Taghit, Djanet, Timimoun) est idéal d’octobre à avril — 7 à 10 jours, guide local recommandé. Je vous suggère de comparer les départs sur /voyages ou le configurateur /recherche. Souhaitez-vous plutôt dunes & bivouac ou oasis & culture ?`;
+    }
+
+    if (last.includes("budget") || last.includes("prix") || last.includes("€")) {
+      const b = p.budgetMax ? `Avec votre budget d’environ ${Math.round(p.budgetMax)}€, ` : "";
+      return `${b}comptez 700–1 200€/semaine en groupe standard au Maghreb (hors vols). L’acompte sur MaghrebVoyage sécurise la place. Voulez-vous que je vous oriente vers des circuits ${primaryDest || "adaptés"} ?`;
+    }
+
+    if (last.includes("réserver") || last.includes("reserver")) {
+      return `Pour réserver : parcourez /voyages, ou lancez /recherche pour un matching personnalisé${primaryDest ? ` vers ${primaryDest}` : ""}. Vos réservations sont dans Profil → Mes réservations.`;
+    }
+
+    if (primaryDest && (last.includes("conseil") || last.includes("idée") || last.includes("suggest"))) {
+      const style = p.travelStyles[0] || "découverte";
+      const season = p.preferredSeason || "printemps ou automne";
+      return `Voici 3 pistes pour vous (${primaryDest}, style ${style}) :\n1) Circuit médinas & riads si vous aimez la culture.\n2) Extension désert 3–4 jours depuis Marrakech ou Ouarzazate.\n3) Voyage groupe tout compris — meilleur rapport qualité/prix.\nSaison conseillée : ${season}. Dites-moi si vous préférez l’une de ces options !`;
+    }
+
+    const dests = [...new Set([...p.preferredDestinations, ...this.extractDestinationsFromText(last)])];
+    if (dests.length > 0) {
+      const style = p.travelStyles.join(", ") || "sur mesure";
+      const travelers = p.travelersCount ? `${p.travelersCount} voyageur(s)` : "votre groupe";
+      return `Merci ! Pour ${dests.join(" / ")}, avec ${travelers} en style ${style}, je recommande de prévoir 7–10 jours. Consultez /voyages pour les départs actuels, ou précisez vos dates pour que j’affine (ex. « en octobre », « 2 semaines »).`;
+    }
+
+    return `Je note votre message. Pour affiner : destination, dates approximatives, nombre de voyageurs et budget. Je garde tout en mémoire pour nos prochains échanges !`;
+  }
+
+  private static extractDestinationsFromText(text: string): string[] {
+    const lower = text.toLowerCase();
+    const found: string[] = [];
+    const map: Record<string, string> = {
+      maroc: "Maroc",
+      marrakech: "Marrakech",
+      algérie: "Algérie",
+      algerie: "Algérie",
+      tunisie: "Tunisie",
+      sahara: "Sahara",
+    };
+    for (const [k, v] of Object.entries(map)) {
+      if (lower.includes(k) && !found.includes(v)) found.push(v);
+    }
+    return found;
+  }
+
+  static async guideChat(
+    messages: { role: "user" | "assistant"; content: string }[],
+    ctx: ClientGuideContext
+  ): Promise<{ reply: string; mode: "openai" | "offline" }> {
+    if (!isOpenAIConfigured() || isOpenAIPaused()) {
+      return { reply: this.guideChatOffline(messages, ctx), mode: "offline" };
+    }
+
+    const openai = getOpenAIClient();
+    if (!openai) {
+      return { reply: this.guideChatOffline(messages, ctx), mode: "offline" };
+    }
+
+    const profileBlock = this.formatContextBlock(ctx);
+    const systemWithUser = `${GUIDE_SYSTEM_PROMPT}
+
+Profil mémorisé du client :
+${profileBlock}
+${ctx.userName ? `Prénom : ${ctx.userName.split(" ")[0]}.` : ""}
+${!ctx.profile.onboardingComplete ? "Le profil est incomplet : posez une question ciblée (destination, style, budget ou nombre de voyageurs) avant de donner des conseils détaillés." : "Profil complet : proposez des suggestions personnalisées."}`;
+
+    try {
+      const completion = await openai.chat.completions.create({
+        model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+        messages: [
+          { role: "system", content: systemWithUser },
+          ...messages.slice(-14).map((m) => ({
+            role: m.role as "user" | "assistant",
+            content: m.content,
+          })),
+        ],
+        max_tokens: 650,
+        temperature: 0.75,
+      });
+
+      const reply =
+        completion.choices[0]?.message?.content?.trim() ||
+        this.guideChatOffline(messages, ctx);
+
+      return { reply, mode: "openai" };
+    } catch (error) {
+      if (isOpenAIQuotaOrRateLimitError(error)) {
+        pauseOpenAI(60);
+        console.warn("OpenAI quota/rate limit — guide en mode local 60 min");
+      } else {
+        console.error("OpenAI guideChat error:", error);
+      }
+      return { reply: this.guideChatOffline(messages, ctx), mode: "offline" };
+    }
+  }
+}
+

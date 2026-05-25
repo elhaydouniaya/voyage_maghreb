@@ -1,0 +1,50 @@
+import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth-options";
+import { ReviewsService } from "@/services/reviews.service";
+
+export const dynamic = "force-dynamic";
+
+export async function GET() {
+  try {
+    const [reviews, stats] = await Promise.all([
+      ReviewsService.listApproved(),
+      ReviewsService.getStats(),
+    ]);
+    return NextResponse.json({ reviews, stats });
+  } catch (error) {
+    console.error("GET /api/reviews", error);
+    return NextResponse.json({ reviews: [], stats: { count: 0, average: 0 } });
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    const session = await getServerSession(authOptions);
+
+    const review = await ReviewsService.create({
+      userId: session?.user?.id,
+      authorName: String(body.name || session?.user?.name || ""),
+      authorEmail: String(body.email || session?.user?.email || ""),
+      rating: Number(body.rating) || 5,
+      title: String(body.title || ""),
+      content: String(body.content || ""),
+      destination: String(body.destination || ""),
+      tripDate: body.tripDate ? String(body.tripDate) : undefined,
+      groupTripId: body.groupTripId ? String(body.groupTripId) : undefined,
+    });
+
+    return NextResponse.json({
+      review: { id: review.id, status: review.status },
+      message:
+        review.status === "APPROVED"
+          ? "Merci ! Votre avis est publié."
+          : "Merci ! Votre avis sera visible après validation par notre équipe.",
+    }, { status: 201 });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Impossible d'enregistrer l'avis.";
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
+}

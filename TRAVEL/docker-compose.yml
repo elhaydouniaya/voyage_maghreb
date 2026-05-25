@@ -1,0 +1,20 @@
+# Base PostgreSQL locale pour le développement
+# Démarrer : docker compose up -d
+# Puis dans .env :
+# DATABASE_URL="postgresql://maghreb:maghreb@localhost:5432/maghrebvoyage?schema=public"
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: maghreb
+      POSTGRES_PASSWORD: maghreb
+      POSTGRES_DB: maghrebvoyage
+    ports:
+      - "5432:5432"
+    volumes:
+      - maghreb_pgdata:/var/lib/postgresql/data
+
+volumes:
+  maghreb_pgdata:

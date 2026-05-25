@@ -1,0 +1,23 @@
+{
+  "name": "voyage-workspace",
+  "private": true,
+  "description": "Scripts racine — l'app Next.js est dans TRAVEL/",
+  "scripts": {
+    "dev": "npm run dev --prefix TRAVEL",
+    "build": "npm run build --prefix TRAVEL",
+    "start": "npm run start --prefix TRAVEL",
+    "lint": "npm run lint --prefix TRAVEL",
+    "typecheck": "npm run typecheck --prefix TRAVEL",
+    "test": "npm run test --prefix TRAVEL",
+    "seed": "npm run seed --prefix TRAVEL",
+    "db:push": "npm run db:push --prefix TRAVEL",
+    "db:migrate": "npm run db:migrate --prefix TRAVEL",
+    "db:baseline": "npm run db:baseline --prefix TRAVEL",
+    "db:setup": "npm run db:setup --prefix TRAVEL",
+    "health": "npm run health --prefix TRAVEL",
+    "health:prod": "npm run health:prod --prefix TRAVEL",
+    "prod:smoke": "npm run prod:smoke --prefix TRAVEL",
+    "prod:local": "npm run prod:local --prefix TRAVEL",
+    "prod:restart": "npm run prod:restart --prefix TRAVEL"
+  }
+}
