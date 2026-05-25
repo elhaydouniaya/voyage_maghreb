@@ -3,6 +3,7 @@ import { generateUniqueSlug } from "@/lib/slug";
 import { generateTripAiTags } from "@/lib/trip-tags";
 import { formatTrip } from "@/lib/trip-format";
 import { sendTripCancelledToClientEmail } from "@/lib/booking-emails";
+import { sortTripsBySeason } from "@/lib/seasons";
 import type { PhysicalLevel, TripStatus, TripType } from "@prisma/client";
 
 export interface CreateTripInput {
@@ -80,7 +81,10 @@ export class TripsService {
         startDate: { gt: now },
       },
       include: { agency: true },
-      orderBy: { startDate: "asc" },
+      orderBy: [
+        { season: "asc" },
+        { startDate: "asc" }
+      ],
     });
     } catch (error) {
       console.error("TripsService.listPublished DB error:", error);

@@ -28,6 +28,9 @@ import {
 } from "lucide-react";
 
 import DestinationsSection from "@/components/public/DestinationsSection";
+import TripsGroupedBySeason from "@/components/trips/TripsGroupedBySeason";
+import { groupTripsBySeason, SEASON_ORDER } from "@/lib/seasons";
+import type { Season } from "@/lib/seasons";
 
 const TRIP_TAG_COLORS: Record<string, string> = {
   DESERT: "bg-orange-500",
