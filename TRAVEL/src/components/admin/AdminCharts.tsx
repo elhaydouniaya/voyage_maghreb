@@ -45,7 +45,7 @@ export default function AdminCharts() {
         <h3 className="text-lg font-black text-[#0F172A] mb-6">
           Réservations confirmées par semaine
         </h3>
-        <div className="h-64 w-full">
+        <div style={{ width: "100%", height: "256px" }}>
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={data.weeklyBookings}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
@@ -66,7 +66,7 @@ export default function AdminCharts() {
 
       <div className="bg-white rounded-[3rem] border border-gray-100 p-8 shadow-sm">
         <h3 className="text-lg font-black text-[#0F172A] mb-6">Top agences (réservations)</h3>
-        <div className="h-64 w-full">
+        <div style={{ width: "100%", height: "256px" }}>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data.agencyPerformance} layout="vertical">
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
@@ -81,7 +81,7 @@ export default function AdminCharts() {
 
       <div className="bg-white rounded-[3rem] border border-gray-100 p-8 shadow-sm">
         <h3 className="text-lg font-black text-[#0F172A] mb-6">Destinations publiées</h3>
-        <div className="h-64 w-full">
+        <div style={{ width: "100%", height: "256px" }}>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data.topDestinations}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />

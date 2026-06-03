@@ -98,11 +98,36 @@ export default function TripDetailPage({ params }: { params: { slug: string } })
 
   if (!trip) {
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center font-black uppercase tracking-widest text-gray-300">
-        Chargement...
+      <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center gap-4 px-6">
+        <p className="text-2xl font-black text-[#0F172A]">Chargement du voyage...</p>
+        <p className="text-gray-500 text-center max-w-md">
+          Nous préparons les détails de votre aventure.
+        </p>
       </div>
     );
   }
+
+  const handleShare = (platform: string) => {
+    const url = window.location.href;
+    const text = `Découvre ce voyage sur MaghrebVoyage : ${trip.title}`;
+    const encodedUrl = encodeURIComponent(url);
+    const encodedText = encodeURIComponent(text);
+
+    const shareUrls: Record<string, string> = {
+      whatsapp: `https://wa.me/?text=${encodedText}%0A${encodedUrl}`,
+      facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`,
+      instagram: `https://www.instagram.com/`,
+      tiktok: `https://www.tiktok.com/`,
+    };
+
+    if (platform === 'instagram' || platform === 'tiktok') {
+      navigator.clipboard.writeText(`${text}\n${url}`);
+      alert(`Lien copié ! Partagez-le sur ${platform === 'instagram' ? 'Instagram' : 'TikTok'} 📱`);
+      window.open(shareUrls[platform], '_blank');
+    } else {
+      window.open(shareUrls[platform], '_blank');
+    }
+  };
 
 
   return (
@@ -113,38 +138,68 @@ export default function TripDetailPage({ params }: { params: { slug: string } })
           
           {/* Main Content (Left) */}
           <div className="lg:col-span-2 space-y-12">
-            <TripGallery images={trip.images} title={trip.title} />
+            <TripGallery images={trip?.images || []} title={trip?.title || ""} />
 
             {/* Title & Info */}
             <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm relative overflow-hidden">
-               <div className="absolute top-0 right-0 p-8 flex gap-4">
-                  <button 
-                    onClick={() => {
-                      navigator.clipboard.writeText(window.location.href);
-                      setLinkCopied(true);
-                      setTimeout(() => setLinkCopied(false), 2500);
-                    }}
-                    className="bg-white/80 backdrop-blur-md text-gray-500 w-10 h-10 rounded-full flex items-center justify-center hover:bg-orange-500 hover:text-white transition-all shadow-sm border border-gray-100 relative"
-                    title="Copier le lien"
-                  >
-                    <Share2 size={18} />
-                    {linkCopied && (
-                      <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 whitespace-nowrap bg-[#0F172A] text-white text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full">
-                        Lien copié !
-                      </span>
-                    )}
-                  </button>
-                  <button 
-                    onClick={() => {
-                      const text = encodeURIComponent(`Découvre ce voyage sur MaghrebVoyage : ${trip.title} - ${window.location.href}`);
-                      window.open(`https://wa.me/?text=${text}`, '_blank');
-                    }}
-                    className="bg-green-500 text-white w-10 h-10 rounded-full flex items-center justify-center hover:bg-green-600 transition-all shadow-lg"
-                    title="Partager sur WhatsApp"
-                  >
-                    <Globe size={18} /> {/* Using Globe as a placeholder for WhatsApp if needed, but let's try to find a better one */}
-                  </button>
-                  <div className="bg-orange-500 text-white px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg flex items-center gap-2">
+               <div className="absolute top-0 right-0 p-8 flex flex-col gap-4">
+                  <div className="flex gap-3 bg-white/80 backdrop-blur-md rounded-full p-2 shadow-lg border border-gray-100">
+                    {/* Copier le lien */}
+                    <button 
+                      onClick={() => {
+                        navigator.clipboard.writeText(window.location.href);
+                        setLinkCopied(true);
+                        setTimeout(() => setLinkCopied(false), 2500);
+                      }}
+                      className="text-gray-600 w-10 h-10 rounded-full flex items-center justify-center hover:bg-orange-500 hover:text-white transition-all relative"
+                      title="Copier le lien"
+                    >
+                      <Share2 size={18} />
+                      {linkCopied && (
+                        <span className="absolute -bottom-10 left-1/2 -translate-x-1/2 whitespace-nowrap bg-[#0F172A] text-white text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full">
+                          Lien copié !
+                        </span>
+                      )}
+                    </button>
+
+                    {/* WhatsApp */}
+                    <button 
+                      onClick={() => handleShare('whatsapp')}
+                      className="text-green-500 w-10 h-10 rounded-full flex items-center justify-center hover:bg-green-500 hover:text-white transition-all font-black text-lg"
+                      title="Partager sur WhatsApp"
+                    >
+                      W
+                    </button>
+
+                    {/* Facebook */}
+                    <button 
+                      onClick={() => handleShare('facebook')}
+                      className="text-blue-600 w-10 h-10 rounded-full flex items-center justify-center hover:bg-blue-600 hover:text-white transition-all font-black text-lg"
+                      title="Partager sur Facebook"
+                    >
+                      f
+                    </button>
+
+                    {/* Instagram */}
+                    <button 
+                      onClick={() => handleShare('instagram')}
+                      className="bg-gradient-to-r from-purple-600 to-pink-600 text-white w-10 h-10 rounded-full flex items-center justify-center hover:shadow-lg transition-all font-black text-lg"
+                      title="Partager sur Instagram"
+                    >
+                      📷
+                    </button>
+
+                    {/* TikTok */}
+                    <button 
+                      onClick={() => handleShare('tiktok')}
+                      className="bg-black text-white w-10 h-10 rounded-full flex items-center justify-center hover:shadow-lg transition-all font-black text-lg"
+                      title="Partager sur TikTok"
+                    >
+                      🎵
+                    </button>
+                  </div>
+
+                  <div className="bg-orange-500 text-white px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg flex items-center gap-2 w-fit">
                     <CheckCircle2 size={12} /> Départ Garanti
                   </div>
                </div>

@@ -157,7 +157,7 @@ export default function AdminPortalLayout({
           })}
         </nav>
 
-        <div className="p-6 mt-auto space-y-4">
+        <div className="p-6 mt-auto space-y-3 border-t border-white/10">
           <div className="p-5 bg-white/5 rounded-[2rem] border border-white/10">
             <div className="flex items-center gap-3 mb-2">
               <ShieldCheck size={16} className="text-green-500" />
@@ -165,17 +165,17 @@ export default function AdminPortalLayout({
                 Supervision active
               </span>
             </div>
-            <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">
+            <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest truncate">
               {admin?.email || "admin@maghrebvoyage.com"}
             </p>
           </div>
           <button
             type="button"
             onClick={() => signOutToHome()}
-            className="w-full flex items-center gap-4 px-6 py-4 text-gray-400 hover:text-white hover:bg-white/5 rounded-2xl transition-all"
+            className="w-full flex items-center gap-3 px-6 py-3 bg-orange-600 text-white hover:bg-orange-700 font-bold rounded-2xl transition-all shadow-lg shadow-orange-600/20 hover:shadow-orange-600/40"
           >
-            <LogOut size={20} />
-            <span className="text-sm font-bold">Déconnexion</span>
+            <LogOut size={18} />
+            <span className="text-sm">Déconnexion</span>
           </button>
         </div>
       </aside>

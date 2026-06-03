@@ -82,7 +82,6 @@ export class TripsService {
       },
       include: { agency: true },
       orderBy: [
-        { season: "asc" },
         { startDate: "asc" }
       ],
     });

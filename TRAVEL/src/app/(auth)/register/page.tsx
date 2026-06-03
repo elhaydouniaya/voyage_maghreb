@@ -145,13 +145,15 @@ export default function ClientRegisterPage() {
           <div className="absolute bottom-0 left-0 w-32 h-32 bg-orange-500/20 rounded-full blur-3xl pointer-events-none" />
 
           <div className="relative z-10">
-            <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-orange-600 mx-auto mb-6 shadow-xl">
-              <Globe size={32} />
-            </div>
-            <h1 className="text-3xl font-black tracking-tight mb-1">
-              Maghreb<span className="text-orange-200">Voyage</span>
-            </h1>
-            <p className="text-orange-100 text-xs font-bold uppercase tracking-widest">Créer un compte</p>
+            <Link href="/" className="group cursor-pointer inline-block">
+              <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-orange-600 mx-auto mb-6 shadow-xl group-hover:scale-105 transition-transform">
+                <Globe size={32} />
+              </div>
+              <h1 className="text-3xl font-black tracking-tight mb-1 text-white">
+                Maghreb<span className="text-orange-200">Voyage</span>
+              </h1>
+            </Link>
+            <p className="text-orange-100 text-xs font-bold uppercase tracking-widest mt-2">Créer un compte</p>
           </div>
         </div>
 
