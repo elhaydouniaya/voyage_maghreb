@@ -3,12 +3,14 @@
  * Implements Module C of the CDC: Structuration and Matching.
  */
 
-import { getOpenAIClient, isOpenAIConfigured } from "@/lib/openai";
 import {
-  isOpenAIPaused,
-  isOpenAIQuotaOrRateLimitError,
-  pauseOpenAI,
-} from "@/lib/openai-errors";
+  isLlmConfigured,
+  isLlmDisabled,
+  llmChatCompletion,
+} from "@/lib/llm";
+import { buildCatalogContext } from "@/lib/catalog-context";
+import { destinationsMatch, normalizeForMatch } from "@/lib/string-similarity";
+import { buildNextDeparturesScores } from "@/lib/match-fallback";
 import type { ClientGuideContext } from "@/services/guide-profile.service";
 
 const GUIDE_SYSTEM_PROMPT = `Tu es le Guide Touristique personnel MaghrebVoyage, réservé aux clients connectés.
@@ -44,6 +46,7 @@ export interface StructuredDemand {
   dominantTripType: string;
   targetDuration: number;
   startDate?: Date;
+  isDateFlexible?: boolean;
   numberOfSeats: number;
   budgetMax: number;
 }
@@ -55,6 +58,18 @@ export interface TripScore {
   reasons: string[];
 }
 
+type MatchableTrip = {
+  id: string;
+  status: string;
+  bookedSpots: number;
+  totalSpots: number;
+  startDate: string | Date;
+  destination: string;
+  totalPrice: number | string;
+  tripType: string;
+  aiTags?: string[];
+};
+
 export class AIService {
   /**
    * C.1 - Structuration de la demande via LLM
@@ -65,11 +80,8 @@ export class AIService {
       summary: `Voyage à ${request.destination} pour ${request.numberOfTravelers} personnes. Budget: ${request.budgetMax}€.`,
       tags: [...request.tripType, ...(request.activities || [])].map((t) => t.toLowerCase()),
       complexity: 2,
-      destinationNormalized: request.destination
-        .toLowerCase()
-        .trim()
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, ""),
+      destinationNormalized: normalizeForMatch(request.destination),
+      isDateFlexible: request.isDateFlexible,
       budgetLevel:
         request.budgetMax < 800
           ? "low"
@@ -78,7 +90,7 @@ export class AIService {
             : request.budgetMax < 3500
               ? "high"
               : "premium",
-      dominantTripType: request.tripType[0] || "AVENTURE",
+      dominantTripType: (request.tripType[0] || "AVENTURE").toUpperCase(),
       targetDuration: request.duration || 7,
       startDate: request.startDate ? new Date(request.startDate) : undefined,
       numberOfSeats: request.numberOfTravelers,
@@ -89,14 +101,10 @@ export class AIService {
   static async structureDemand(request: TravelRequestData): Promise<StructuredDemand> {
     const fallback = () => this.structureDemandHeuristic(request);
 
-    if (!isOpenAIConfigured() || isOpenAIPaused()) return fallback();
-
-    const openai = getOpenAIClient();
-    if (!openai) return fallback();
+    if (isLlmDisabled() || !isLlmConfigured()) return fallback();
 
     try {
-      const completion = await openai.chat.completions.create({
-        model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+      const raw = await llmChatCompletion({
         messages: [
           {
             role: "system",
@@ -105,12 +113,11 @@ Réponds UNIQUEMENT en JSON avec: summary, tags (string[]), complexity (1-5), de
           },
           { role: "user", content: JSON.stringify(request) },
         ],
-        response_format: { type: "json_object" },
-        max_tokens: 400,
+        jsonMode: true,
+        maxTokens: 400,
         temperature: 0.3,
       });
 
-      const raw = completion.choices[0]?.message?.content;
       if (!raw) return fallback();
 
       const parsed = JSON.parse(raw) as Record<string, unknown>;
@@ -142,16 +149,15 @@ Réponds UNIQUEMENT en JSON avec: summary, tags (string[]), complexity (1-5), de
         startDate: parsed.startDate
           ? new Date(String(parsed.startDate))
           : base.startDate,
+        isDateFlexible:
+          typeof request.isDateFlexible === "boolean"
+            ? request.isDateFlexible
+            : base.isDateFlexible,
         numberOfSeats: Number(parsed.numberOfSeats) || base.numberOfSeats,
         budgetMax: Number(parsed.budgetMax) || base.budgetMax,
       };
     } catch (error) {
-      if (isOpenAIQuotaOrRateLimitError(error)) {
-        pauseOpenAI(60);
-        console.warn("OpenAI structureDemand quota — mode local");
-      } else {
-        console.error("OpenAI structureDemand error:", error);
-      }
+      console.error("structureDemand error:", error);
       return fallback();
     }
   }
@@ -160,7 +166,7 @@ Réponds UNIQUEMENT en JSON avec: summary, tags (string[]), complexity (1-5), de
    * C.2 - Algorithme de Matching (Phase 1, 2, 3)
    * Score sur 18 points selon le CDC MaghrebVoyage vFinal.
    */
-  static async matchTrips(demand: StructuredDemand, trips: any[]): Promise<TripScore[]> {
+  static async matchTrips(demand: StructuredDemand, trips: MatchableTrip[]): Promise<TripScore[]> {
     const scoredTrips = trips.map(trip => {
       let score = 0;
       const reasons: string[] = [];
@@ -175,28 +181,36 @@ Réponds UNIQUEMENT en JSON avec: summary, tags (string[]), complexity (1-5), de
 
       // --- PHASE 2: Score de pertinence (Max 18 pts) ---
       
-      // 1. Destination (+4)
-      const tripDest = trip.destination.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-      if (tripDest.includes(demand.destinationNormalized) || demand.destinationNormalized.includes(tripDest)) {
+      // 1. Destination (+4) — Levenshtein / inclusion (CDC)
+      if (destinationsMatch(trip.destination, demand.destinationNormalized)) {
         score += 4;
         reasons.push("Destination correspondante");
       }
 
-      // 2. Dates compatibles (+3 + 1 bonus)
+      // 2. Dates compatibles (+3, bonus +1 si flexible ou ≤7j)
       if (demand.startDate) {
-        const diffTime = Math.abs(tripStartDate.getTime() - demand.startDate.getTime());
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        
-        if (diffDays <= 14) {
+        const clientStart = demand.startDate.getTime();
+        const tripStart = tripStartDate.getTime();
+        const windowStart = clientStart - 7 * 86400000;
+        const windowEnd = clientStart + 14 * 86400000;
+
+        if (tripStart >= windowStart && tripStart <= windowEnd) {
           score += 3;
           reasons.push("Dates proches de vos souhaits");
-          if (diffDays <= 7) {
-             // Logic says +3 base. We can add +1 if really close or if client is flexible as per CDC
-             score += 1; 
+          const diffDays = Math.ceil(
+            Math.abs(tripStart - clientStart) / 86400000
+          );
+          if (diffDays <= 7 || demand.isDateFlexible) {
+            score += 1;
+            if (demand.isDateFlexible) {
+              reasons.push("Dates flexibles prises en compte");
+            }
           }
         }
+      } else if (demand.isDateFlexible) {
+        score += 3;
+        reasons.push("Dates flexibles — départs à venir");
       } else {
-        // If no date provided, we give a base score for future trips
         score += 2;
       }
 
@@ -248,23 +262,18 @@ Réponds UNIQUEMENT en JSON avec: summary, tags (string[]), complexity (1-5), de
         // Priority to closest start date on equal score
         const tripA = trips.find(t => t.id === a.tripId);
         const tripB = trips.find(t => t.id === b.tripId);
-        return new Date(tripA.startDate).getTime() - new Date(tripB.startDate).getTime();
+        const aStart = tripA
+          ? new Date(tripA.startDate).getTime()
+          : Number.MAX_SAFE_INTEGER;
+        const bStart = tripB
+          ? new Date(tripB.startDate).getTime()
+          : Number.MAX_SAFE_INTEGER;
+        return aStart - bStart;
       })
       .slice(0, 3);
 
-    // C.2.Fallback : Si 0 résultat -> Afficher les 3 prochains départs
     if (results.length === 0) {
-      const nextTrips = trips
-        .filter(t => t.status === "PUBLISHED" && new Date(t.startDate) > new Date())
-        .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())
-        .slice(0, 3)
-        .map(t => ({
-          tripId: t.id,
-          score: 0,
-          compatibility: 0,
-          reasons: ["Prochain départ disponible"]
-        }));
-      results = nextTrips;
+      results = buildNextDeparturesScores(trips);
     }
 
     return results;
@@ -391,52 +400,53 @@ Réponds UNIQUEMENT en JSON avec: summary, tags (string[]), complexity (1-5), de
   static async guideChat(
     messages: { role: "user" | "assistant"; content: string }[],
     ctx: ClientGuideContext
-  ): Promise<{ reply: string; mode: "openai" | "offline" }> {
-    if (!isOpenAIConfigured() || isOpenAIPaused()) {
-      return { reply: this.guideChatOffline(messages, ctx), mode: "offline" };
-    }
-
-    const openai = getOpenAIClient();
-    if (!openai) {
+  ): Promise<{ reply: string; mode: "llm" | "offline" }> {
+    if (isLlmDisabled() || !isLlmConfigured()) {
       return { reply: this.guideChatOffline(messages, ctx), mode: "offline" };
     }
 
     const profileBlock = this.formatContextBlock(ctx);
+    const lastUser = [...messages].reverse().find((m) => m.role === "user")?.content || "";
+
+    let catalogBlock = "";
+    try {
+      catalogBlock = await buildCatalogContext({
+        query: lastUser,
+        destinations: ctx.profile.preferredDestinations,
+        tripTypes: ctx.profile.travelStyles,
+        budgetMax: ctx.profile.budgetMax ?? undefined,
+        limit: 5,
+      });
+    } catch {
+      catalogBlock = "";
+    }
+
     const systemWithUser = `${GUIDE_SYSTEM_PROMPT}
 
 Profil mémorisé du client :
 ${profileBlock}
 ${ctx.userName ? `Prénom : ${ctx.userName.split(" ")[0]}.` : ""}
-${!ctx.profile.onboardingComplete ? "Le profil est incomplet : posez une question ciblée (destination, style, budget ou nombre de voyageurs) avant de donner des conseils détaillés." : "Profil complet : proposez des suggestions personnalisées."}`;
+${!ctx.profile.onboardingComplete ? "Le profil est incomplet : posez une question ciblée (destination, style, budget ou nombre de voyageurs) avant de donner des conseils détaillés." : "Profil complet : proposez des suggestions personnalisées."}
 
-    try {
-      const completion = await openai.chat.completions.create({
-        model: process.env.OPENAI_MODEL || "gpt-4o-mini",
-        messages: [
-          { role: "system", content: systemWithUser },
-          ...messages.slice(-14).map((m) => ({
-            role: m.role as "user" | "assistant",
-            content: m.content,
-          })),
-        ],
-        max_tokens: 650,
-        temperature: 0.75,
-      });
+${catalogBlock ? `${catalogBlock}\nCite uniquement ces voyages réels quand vous recommandez une offre précise.` : ""}`;
 
-      const reply =
-        completion.choices[0]?.message?.content?.trim() ||
-        this.guideChatOffline(messages, ctx);
+    const llmReply = await llmChatCompletion({
+      messages: [
+        { role: "system", content: systemWithUser },
+        ...messages.slice(-14).map((m) => ({
+          role: m.role as "user" | "assistant",
+          content: m.content,
+        })),
+      ],
+      maxTokens: 650,
+      temperature: 0.75,
+    });
 
-      return { reply, mode: "openai" };
-    } catch (error) {
-      if (isOpenAIQuotaOrRateLimitError(error)) {
-        pauseOpenAI(60);
-        console.warn("OpenAI quota/rate limit — guide en mode local 60 min");
-      } else {
-        console.error("OpenAI guideChat error:", error);
-      }
-      return { reply: this.guideChatOffline(messages, ctx), mode: "offline" };
+    if (llmReply) {
+      return { reply: llmReply, mode: "llm" };
     }
+
+    return { reply: this.guideChatOffline(messages, ctx), mode: "offline" };
   }
 }
 

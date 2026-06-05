@@ -6,6 +6,7 @@ import {
   sendBookingConfirmationEmail,
   sendClientCancellationEmail,
 } from "@/lib/booking-emails";
+import { TravelRequestsService } from "@/services/travel-requests.service";
 
 function formatFrDate(d: Date) {
   return d.toLocaleDateString("fr-FR", {
@@ -61,12 +62,17 @@ export class BookingsService {
     const depositPerSeat = Number(trip.depositAmount);
     const totalPerSeat = Number(trip.totalPrice);
 
+    const travelRequestId = await TravelRequestsService.resolveRequestIdForUser(
+      input.userId,
+      input.travelRequestId
+    );
+
     const booking = await prisma.booking.create({
       data: {
         groupTripId: trip.id,
         agencyId: trip.agencyId,
         userId: input.userId,
-        travelRequestId: input.travelRequestId,
+        travelRequestId,
         clientName: input.clientName.trim(),
         clientEmail: input.clientEmail.trim().toLowerCase(),
         clientPhone: input.clientPhone,
@@ -82,6 +88,10 @@ export class BookingsService {
         groupTrip: true,
       },
     });
+
+    if (travelRequestId) {
+      void TravelRequestsService.markPaymentPending(travelRequestId);
+    }
 
     return booking;
   }
@@ -202,17 +212,41 @@ export class BookingsService {
         clientName: b.clientName,
         confirmationCode: b.confirmationCode,
       });
+      const { sendAdminRefundPendingEmail } = await import("@/lib/booking-emails");
+      await sendAdminRefundPendingEmail({
+        tripTitle: b.groupTrip.title,
+        clientName: b.clientName,
+        confirmationCode: b.confirmationCode,
+        amount: Math.round(Number(b.depositPaid)),
+      });
     } catch (e) {
       console.error("Cancellation emails:", e);
     }
   }
 
-  static async sendConfirmationEmails(bookingId: string) {
+  static async sendConfirmationEmails(
+    bookingId: string,
+    options?: { force?: boolean }
+  ) {
+    return this.ensureConfirmationEmailsSent(bookingId, options);
+  }
+
+  static async ensureConfirmationEmailsSent(
+    bookingId: string,
+    options?: { force?: boolean }
+  ): Promise<{ sent: boolean; alreadySent: boolean; to: string }> {
     const b = await prisma.booking.findUnique({
       where: { id: bookingId },
-      include: { groupTrip: true, agency: true },
+      include: { groupTrip: true, agency: true, payment: true },
     });
-    if (!b || b.status !== "CONFIRMED") return;
+    if (!b) throw new Error("Réservation introuvable.");
+    if (b.status !== "CONFIRMED") {
+      throw new Error("Seules les réservations confirmées peuvent recevoir l'email.");
+    }
+
+    if (b.confirmationEmailSentAt && !options?.force) {
+      return { sent: false, alreadySent: true, to: b.clientEmail };
+    }
 
     const deposit = Math.round(Number(b.depositPaid));
     const total = Math.round(Number(b.totalAmount));
@@ -235,19 +269,47 @@ export class BookingsService {
         meetingPoint: b.groupTrip.meetingPoint,
         cancellationToken: b.cancellationToken,
       });
-      await sendAgencyNewBookingEmail({
-        to: b.agency.email,
-        agencyName: b.agency.name,
-        tripTitle: b.groupTrip.title,
-        clientName: b.clientName,
-        clientEmail: b.clientEmail,
-        clientPhone: b.clientPhone,
-        numberOfSeats: b.numberOfSeats,
-        depositPaid: deposit,
-        confirmationCode: b.confirmationCode,
+      if (b.agency.notifyBookingsEmail) {
+        await sendAgencyNewBookingEmail({
+          to: b.agency.email,
+          agencyName: b.agency.name,
+          tripTitle: b.groupTrip.title,
+          clientName: b.clientName,
+          clientEmail: b.clientEmail,
+          clientPhone: b.clientPhone,
+          numberOfSeats: b.numberOfSeats,
+          depositPaid: deposit,
+          confirmationCode: b.confirmationCode,
+        });
+      }
+      if (
+        b.agency.notifyPaymentsEmail &&
+        b.payment?.payoutMode === "connect" &&
+        b.payment.status === "SUCCEEDED"
+      ) {
+        const { sendAgencyConnectPayoutEmail } = await import("@/lib/agency-emails");
+        const grossCents = Math.round(Number(b.payment.amount) * 100);
+        await sendAgencyConnectPayoutEmail({
+          agencyEmail: b.agency.email,
+          agencyName: b.agency.name,
+          tripTitle: b.groupTrip.title,
+          confirmationCode: b.confirmationCode,
+          grossCents,
+          platformFeeCents: b.payment.platformFeeCents,
+          agencyNetCents: b.payment.agencyNetCents,
+          currency: b.payment.currency,
+        });
+      }
+
+      await prisma.booking.update({
+        where: { id: bookingId },
+        data: { confirmationEmailSentAt: new Date() },
       });
+
+      return { sent: true, alreadySent: false, to: b.clientEmail };
     } catch (e) {
       console.error("Confirmation emails:", e);
+      throw e instanceof Error ? e : new Error("Envoi d'email impossible.");
     }
   }
 
@@ -262,6 +324,26 @@ export class BookingsService {
 
     const bookingId = metadata.bookingId;
     if (!bookingId) throw new Error("bookingId manquant dans metadata Stripe.");
+
+    let enrichedMeta = { ...metadata };
+    let paymentIntentId: string | undefined;
+
+    const { stripe } = await import("@/lib/stripe");
+    if (stripe) {
+      try {
+        const session = await stripe.checkout.sessions.retrieve(stripeSessionId);
+        enrichedMeta = { ...enrichedMeta, ...(session.metadata || {}) };
+        if (typeof session.payment_intent === "string") {
+          paymentIntentId = session.payment_intent;
+        }
+      } catch (e) {
+        console.warn("Stripe session retrieve:", e);
+      }
+    }
+
+    const platformFeeCents = Number(enrichedMeta.platformFeeCents || 0);
+    const payoutMode =
+      enrichedMeta.payoutMode === "connect" ? "connect" : "platform";
 
     return prisma.$transaction(async (tx) => {
       const booking = await tx.booking.findUnique({
@@ -306,9 +388,16 @@ export class BookingsService {
           groupTripId: booking.groupTripId,
           agencyId: booking.agencyId,
           stripeSessionId,
-          stripeCustomerEmail: metadata.clientEmail || booking.clientEmail,
+          stripePaymentIntentId: paymentIntentId,
+          stripeCustomerEmail: enrichedMeta.clientEmail || booking.clientEmail,
           amount: booking.depositPaid,
           currency: trip.currency,
+          payoutMode,
+          platformFeeCents,
+          agencyNetCents: Math.max(
+            0,
+            Math.round(Number(booking.depositPaid) * 100) - platformFeeCents
+          ),
           status: "SUCCEEDED",
           paidAt: new Date(),
         },
@@ -326,6 +415,11 @@ export class BookingsService {
         payment,
         confirmationCode: booking.confirmationCode,
       };
+    }).then(async (result) => {
+      if (!result.alreadyProcessed && "bookingId" in result) {
+        await TravelRequestsService.markPaidForBooking(result.bookingId);
+      }
+      return result;
     });
   }
 
@@ -340,6 +434,11 @@ export class BookingsService {
     });
 
     if (payment?.booking.status === "CONFIRMED") {
+      try {
+        await this.ensureConfirmationEmailsSent(payment.booking.id);
+      } catch (e) {
+        console.error("Confirmation email on lookup:", e);
+      }
       return this.formatBookingSummary(payment.booking);
     }
 
@@ -360,7 +459,11 @@ export class BookingsService {
     });
 
     if (!result.alreadyProcessed && "bookingId" in result && result.bookingId) {
-      await this.sendConfirmationEmails(result.bookingId);
+      try {
+        await this.ensureConfirmationEmailsSent(result.bookingId);
+      } catch (e) {
+        console.error("Confirmation email after Stripe session:", e);
+      }
     }
 
     const bookingId = session.metadata?.bookingId;
@@ -449,14 +552,17 @@ export class BookingsService {
       );
     }
 
-    return prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       const booking = await tx.booking.findFirst({
         where: { id: bookingId },
         include: { groupTrip: true, agency: true },
       });
       if (!booking) throw new Error("Réservation introuvable.");
       if (booking.status === "CONFIRMED") {
-        return this.formatBookingSummary(booking);
+        return {
+          summary: this.formatBookingSummary(booking),
+          bookingId: booking.id,
+        };
       }
 
       const trip = booking.groupTrip;
@@ -484,7 +590,7 @@ export class BookingsService {
       });
 
       const summary = this.formatBookingSummary(confirmed);
-      await this.sendConfirmationEmails(confirmed.id);
+      await TravelRequestsService.markPaidForBooking(confirmed.id);
 
       const { AuditLogService } = await import("@/services/audit-log.service");
       await AuditLogService.record(
@@ -497,11 +603,19 @@ export class BookingsService {
         _userId
       );
 
-      return summary;
+      return { summary, bookingId: confirmed.id };
     });
+
+    try {
+      await this.ensureConfirmationEmailsSent(result.bookingId);
+    } catch (e) {
+      console.error("Demo booking confirmation email:", e);
+    }
+
+    return result.summary;
   }
 
-  static async finalizeFromStripeSession(stripeSessionId: string, userId: string) {
+  static async finalizeFromStripeSession(stripeSessionId: string, _userId: string) {
     return this.getPublicByStripeSession(stripeSessionId);
   }
 
@@ -570,6 +684,7 @@ export class BookingsService {
       `${Math.round(n).toLocaleString("fr-FR")} ${booking.groupTrip.currency || "EUR"}`;
 
     return {
+      id: booking.id,
       confirmationCode: booking.confirmationCode,
       issuedAt: formatFrDate(new Date()),
       tripTitle: booking.groupTrip.title,

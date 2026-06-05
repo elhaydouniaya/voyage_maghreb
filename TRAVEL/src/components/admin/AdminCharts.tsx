@@ -12,6 +12,7 @@ import {
   Bar,
   CartesianGrid,
 } from "recharts";
+import ChartContainer from "@/components/admin/ChartContainer";
 
 type ChartData = {
   weeklyBookings: { label: string; count: number }[];
@@ -45,8 +46,8 @@ export default function AdminCharts() {
         <h3 className="text-lg font-black text-[#0F172A] mb-6">
           Réservations confirmées par semaine
         </h3>
-        <div className="h-64 w-full">
-          <ResponsiveContainer width="100%" height="100%">
+        <ChartContainer>
+          <ResponsiveContainer width="100%" height="100%" minWidth={0}>
             <LineChart data={data.weeklyBookings}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
               <XAxis dataKey="label" tick={{ fontSize: 10 }} />
@@ -61,13 +62,13 @@ export default function AdminCharts() {
               />
             </LineChart>
           </ResponsiveContainer>
-        </div>
+        </ChartContainer>
       </div>
 
       <div className="bg-white rounded-[3rem] border border-gray-100 p-8 shadow-sm">
         <h3 className="text-lg font-black text-[#0F172A] mb-6">Top agences (réservations)</h3>
-        <div className="h-64 w-full">
-          <ResponsiveContainer width="100%" height="100%">
+        <ChartContainer>
+          <ResponsiveContainer width="100%" height="100%" minWidth={0}>
             <BarChart data={data.agencyPerformance} layout="vertical">
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
               <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10 }} />
@@ -76,13 +77,13 @@ export default function AdminCharts() {
               <Bar dataKey="bookings" fill="#2563eb" radius={[0, 8, 8, 0]} />
             </BarChart>
           </ResponsiveContainer>
-        </div>
+        </ChartContainer>
       </div>
 
       <div className="bg-white rounded-[3rem] border border-gray-100 p-8 shadow-sm">
         <h3 className="text-lg font-black text-[#0F172A] mb-6">Destinations publiées</h3>
-        <div className="h-64 w-full">
-          <ResponsiveContainer width="100%" height="100%">
+        <ChartContainer>
+          <ResponsiveContainer width="100%" height="100%" minWidth={0}>
             <BarChart data={data.topDestinations}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
               <XAxis dataKey="name" tick={{ fontSize: 9 }} />
@@ -91,7 +92,7 @@ export default function AdminCharts() {
               <Bar dataKey="trips" fill="#10b981" radius={[8, 8, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
-        </div>
+        </ChartContainer>
       </div>
     </div>
   );

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Globe, ArrowLeft, Check, Shield, FileText, X } from "lucide-react";
+import { Globe, Check, Shield, FileText, X } from "lucide-react";
 import { loginWithFreshSession } from "@/lib/login-client";
 
 export default function AgencyRegisterPage() {

@@ -1,7 +1,7 @@
 "use client";
 
 import ReviewsList from "@/components/reviews/ReviewsList";
-import { Star, MessageCircle } from "lucide-react";
+import { MessageCircle } from "lucide-react";
 import Link from "next/link";
 
 export default function ReviewsPage() {

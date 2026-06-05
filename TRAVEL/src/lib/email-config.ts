@@ -1,4 +1,5 @@
 import prisma from "@/lib/prisma";
+import { getLlmProviderLabel, isLlmConfigured } from "@/lib/llm";
 
 export function isEmailConfigured() {
   return Boolean(process.env.RESEND_API_KEY?.trim());
@@ -46,8 +47,25 @@ export function getSystemIntegrationsStatus() {
       secretSet: Boolean(cronSecret),
       secureInProduction: !isProd || Boolean(cronSecret),
     },
+    llm: {
+      configured: isLlmConfigured(),
+      disabled: process.env.OPENAI_DISABLE === "true",
+      provider: getLlmProviderLabel(),
+      model:
+        process.env.LLM_MODEL?.trim() ||
+        process.env.OPENAI_MODEL?.trim() ||
+        "gpt-4o-mini",
+    },
+    vapi: {
+      configured: Boolean(
+        process.env.NEXT_PUBLIC_VAPI_PUBLIC_KEY?.trim() &&
+          process.env.NEXT_PUBLIC_VAPI_ASSISTANT_ID?.trim()
+      ),
+      webhookSecretSet: Boolean(process.env.VAPI_WEBHOOK_SECRET?.trim()),
+    },
+    /** @deprecated use integrations.llm */
     openai: {
-      configured: Boolean(process.env.OPENAI_API_KEY?.trim()),
+      configured: isLlmConfigured(),
       disabled: process.env.OPENAI_DISABLE === "true",
     },
   };

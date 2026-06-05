@@ -6,6 +6,10 @@ import { getClientIp, rateLimit } from "@/lib/rate-limit";
 import { BookingsService } from "@/services/bookings.service";
 import { isDemoPaymentsAllowed } from "@/lib/payments-config";
 import { PaymentsService } from "@/services/payments.service";
+import {
+  bookingInitiateSchema,
+  formatZodError,
+} from "@/lib/api-schemas";
 
 export async function POST(request: Request) {
   const ip = getClientIp(request);
@@ -20,35 +24,45 @@ export async function POST(request: Request) {
   }
 
   try {
-    const body = await request.json();
-    const session = await getServerSession(authOptions);
-
-    const clientEmail = String(body.clientEmail || "").trim().toLowerCase();
-    const clientName = String(body.clientName || "").trim();
-
-    if (!clientEmail || !clientName) {
+    const raw = await request.json();
+    const parsed = bookingInitiateSchema.safeParse(raw);
+    if (!parsed.success) {
       return NextResponse.json(
-        { error: "Nom et email sont obligatoires." },
+        { error: formatZodError(parsed.error) },
         { status: 400 }
       );
     }
+
+    const body = parsed.data;
+    const session = await getServerSession(authOptions);
+
+    const clientEmail = body.clientEmail.toLowerCase();
+    const clientName = body.clientName;
 
     const userId =
       session?.user?.id ||
       (await findOrCreateGuestUser(clientEmail, clientName));
 
+    const groupTripId = body.groupTripId || body.tripId;
+    if (!groupTripId) {
+      return NextResponse.json(
+        { error: "Identifiant du voyage manquant." },
+        { status: 400 }
+      );
+    }
+
     const booking = await BookingsService.initiate({
-      groupTripId: body.groupTripId || body.tripId,
+      groupTripId,
       userId,
       clientName,
       clientEmail,
       clientPhone: body.clientPhone,
       clientCountry: body.clientCountry,
-      numberOfSeats: Number(body.numberOfSeats) || 1,
+      numberOfSeats: body.numberOfSeats,
       notes: body.notes,
       travelRequestId: body.travelRequestId,
-      acceptCgu: Boolean(body.acceptCgu),
-      acceptRgpd: Boolean(body.acceptRgpd),
+      acceptCgu: body.acceptCgu,
+      acceptRgpd: body.acceptRgpd,
     });
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";

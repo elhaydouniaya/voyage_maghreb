@@ -32,7 +32,12 @@ type DashboardData = {
     isVerified: boolean;
     hasPublishedTrip: boolean;
     hasBookings: boolean;
+    stripeConnectActive?: boolean;
     progressPercent: number;
+  };
+  payments?: {
+    stripeConnectActive: boolean;
+    stripeOnboardingComplete: boolean;
   };
 };
 
@@ -104,6 +109,7 @@ export default function AgencyDashboardPage() {
   };
   const recentBookings = data?.recentBookings ?? [];
   const upcomingTrips = data?.upcomingTrips ?? [];
+  const payments = data?.payments;
 
   const statsConfig = [
     { label: "Voyages actifs", val: stats.activeTrips, link: "/agency/trips" },
@@ -122,6 +128,18 @@ export default function AgencyDashboardPage() {
   ];
 
   const steps = [
+    {
+      title: "Stripe Connect",
+      sub: payments?.stripeConnectActive
+        ? "Versements automatiques actifs"
+        : "Recevez vos acomptes sur votre compte",
+      status: payments?.stripeConnectActive
+        ? "completed"
+        : onboarding.isVerified
+          ? "pending"
+          : "locked",
+      link: "/agency/settings",
+    },
     {
       title: "Compte vérifié",
       sub: "Validation MaghrebVoyage",

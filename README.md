@@ -1,6 +1,6 @@
 # MaghrebVoyage (voyage_maghreb)
 
-Plateforme de réservation de voyages au Maghreb — Next.js 14, Prisma, Stripe, Resend, OpenAI.
+Plateforme de réservation de voyages au Maghreb — Next.js 16, Prisma, Stripe, Resend, Groq/OpenAI.
 
 ## Structure
 
@@ -31,7 +31,7 @@ Application : [http://localhost:3000](http://localhost:3000)
 | `npm run dev` | Développement |
 | `npm run build` | Build production |
 | `npm run health` | Vérification DB + env |
-| `npm run prod:local` | Build + serveur prod local |
+| `npm run prod:restart` | Build + serveur prod local |
 
 ## Stripe webhooks (local)
 

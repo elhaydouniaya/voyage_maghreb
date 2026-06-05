@@ -3,9 +3,17 @@
 import { Search, Filter, ChevronDown, Calendar, MapPin, Wallet, Sparkles } from "lucide-react";
 import { useState } from "react";
 
+type TripFilterParams = {
+  destination: string;
+  month: string;
+  budget: number;
+  type: string;
+  search: string;
+};
+
 interface TripFiltersProps {
   onSort?: (order: "asc" | "desc") => void;
-  onFilter?: (filters: any) => void;
+  onFilter?: (filters: TripFilterParams) => void;
   currentSort?: string;
 }
 

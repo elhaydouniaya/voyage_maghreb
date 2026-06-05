@@ -17,7 +17,9 @@ import {
   UserCircle,
   Settings,
   ShieldCheck,
+  BarChart3,
 } from "lucide-react";
+import NotificationBell from "@/components/ui/NotificationBell";
 
 type AdminMe = {
   name: string;
@@ -72,6 +74,12 @@ export default function AdminPortalLayout({
   const menuItems = [
     { icon: LayoutDashboard, label: "Tableau de bord", href: "/admin/dashboard", badge: null },
     {
+      icon: BarChart3,
+      label: "Décisionnel",
+      href: "/admin/decision-dashboard",
+      badge: null,
+    },
+    {
       icon: Briefcase,
       label: "Agences",
       href: "/admin/agencies",
@@ -90,7 +98,9 @@ export default function AdminPortalLayout({
   const pageTitle =
     pathname === "/admin/dashboard"
       ? "Tableau de bord"
-      : pathname.includes("/agencies")
+      : pathname === "/admin/decision-dashboard"
+        ? "Tableau décisionnel"
+        : pathname.includes("/agencies")
         ? "Agences partenaires"
         : pathname.includes("/clients")
           ? "Voyageurs"
@@ -190,6 +200,7 @@ export default function AdminPortalLayout({
               {pageTitle} · Supervision MaghrebVoyage
             </p>
           </div>
+          <NotificationBell fetchUrl="/api/admin/notifications" />
         </header>
         {children}
       </main>

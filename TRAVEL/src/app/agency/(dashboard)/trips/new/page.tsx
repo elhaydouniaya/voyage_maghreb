@@ -7,14 +7,12 @@ import {
   ArrowLeft, 
   ArrowRight, 
   Save, 
-  Sparkles, 
   Map, 
   CreditCard, 
   Settings, 
-  Camera, 
-  Check,
-  Globe
+  Check
 } from "lucide-react";
+import TripImageUpload from "@/components/trips/TripImageUpload";
 
 enum TripType {
   DESERT = "DESERT",
@@ -59,6 +57,7 @@ export default function NewTripPage() {
     programDays: "",
     physicalLevel: PhysicalLevel.MEDIUM,
     guideLanguages: ["FR", "AR"],
+    guideLanguagesText: "FR, AR",
     coverImage: "",
     images: [] as string[],
   });
@@ -87,10 +86,26 @@ export default function NewTripPage() {
     setError("");
 
     try {
+      const langs = formData.guideLanguagesText
+        .split(/[,;]+/)
+        .map((s) => s.trim().toUpperCase())
+        .filter(Boolean);
+
+      const programWithPolicy = formData.cancelPolicy.trim()
+        ? `${formData.programDays}\n\n--- Politique d'annulation ---\n${formData.cancelPolicy.trim()}`
+        : formData.programDays;
+
+      const { cancelPolicy: _cp, guideLanguagesText: _gt, ...rest } = formData;
+
       const res = await fetch("/api/agency/trips", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...formData, publish: true }),
+        body: JSON.stringify({
+          ...rest,
+          guideLanguages: langs.length ? langs : formData.guideLanguages,
+          programDays: programWithPolicy,
+          publish: true,
+        }),
       });
       const data = await res.json();
 
@@ -243,7 +258,7 @@ export default function NewTripPage() {
                </div>
                <div className="space-y-3">
                   <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Langues du guide</label>
-                  <input type="text" placeholder="FR, AR, EN..." className="w-full bg-[#F8FAFC] border border-gray-100 rounded-2xl px-5 py-4 font-bold text-[#0F172A]" />
+                  <input type="text" name="guideLanguagesText" value={formData.guideLanguagesText} onChange={handleChange} placeholder="FR, AR, EN..." className="w-full bg-[#F8FAFC] border border-gray-100 rounded-2xl px-5 py-4 font-bold text-[#0F172A]" />
                </div>
             </div>
           </div>
@@ -252,37 +267,14 @@ export default function NewTripPage() {
         return (
           <div className="space-y-8 animate-in fade-in slide-in-from-right-4">
             <div className="flex items-center gap-4 border-b border-gray-50 pb-6">
-               <div className="w-10 h-10 bg-orange-500/10 rounded-xl flex items-center justify-center text-orange-600">
-                  <Camera size={20} />
-               </div>
                <h2 className="text-xl font-black text-[#0F172A]">Étape 4 : Photos</h2>
             </div>
-            
-            <div className="space-y-6">
-               <div className="space-y-3">
-                  <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Image principale (URL) *</label>
-                  <input type="url" name="coverImage" value={formData.coverImage} onChange={handleChange} required placeholder="https://images.unsplash.com/..." className="w-full bg-[#F8FAFC] border border-gray-100 rounded-2xl px-5 py-4 font-bold text-[#0F172A]" />
-               </div>
-               
-               <div className="aspect-video rounded-[3rem] overflow-hidden bg-gray-50 border-2 border-dashed border-gray-100 flex items-center justify-center relative group">
-                  {formData.coverImage ? (
-                    <img src={formData.coverImage} className="w-full h-full object-cover" alt="Preview" />
-                  ) : (
-                    <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Aperçu de l'image s'affichera ici</p>
-                  )}
-               </div>
-
-               <div className="space-y-3">
-                  <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Galerie photo (facultatif)</label>
-                  <div className="grid grid-cols-4 gap-4">
-                     {[1,2,3,4].map(i => (
-                        <div key={i} className="aspect-square bg-gray-50 rounded-2xl border border-dashed border-gray-200 flex items-center justify-center text-gray-300">
-                           <Camera size={20} />
-                        </div>
-                     ))}
-                  </div>
-               </div>
-            </div>
+            <TripImageUpload
+              coverImage={formData.coverImage}
+              gallery={formData.images}
+              onCoverChange={(url) => setFormData((prev) => ({ ...prev, coverImage: url }))}
+              onGalleryChange={(images) => setFormData((prev) => ({ ...prev, images }))}
+            />
           </div>
         );
       default:

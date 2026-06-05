@@ -10,8 +10,11 @@ export async function GET() {
   }
 
   try {
-    const payments = await AdminService.listPayments();
-    return NextResponse.json({ payments });
+    const [payments, stripeConnect] = await Promise.all([
+      AdminService.listPayments(),
+      AdminService.getStripeConnectOverview(),
+    ]);
+    return NextResponse.json({ payments, stripeConnect });
   } catch (error) {
     console.error("GET /api/admin/payments", error);
     return NextResponse.json({ error: "Erreur serveur." }, { status: 500 });

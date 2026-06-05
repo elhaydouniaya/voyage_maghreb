@@ -1,5 +1,4 @@
 import { wrapEmailHtml } from "@/lib/email-template";
-import { isEmailConfigured } from "@/lib/email-config";
 
 type SendEmailInput = {
   to: string;

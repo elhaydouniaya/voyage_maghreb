@@ -33,25 +33,25 @@ const COUNTRIES = [
   },
   {
     name: "Algérie",
-    image: "alger.jpg",
+    image: "/alger.jpg",
     description: "Mémorial du martyr", 
     gradient: "" 
   },
   {
     name: "Tunisie",
-    image: "tunisie.jpg",
+    image: "/tunisie.jpg",
     description: "Sidi Bou Saïd",
     gradient: ""
   },
   {
     name: "Libye",
-    image: "libye_capi.jpg",
+    image: "/libye_capi.jpg",
     description: "capitale de la Libye",
     gradient: ""
   },
   {
     name: "Mauritanie",
-    image: "Chinguetti_libye.jpg",
+    image: "/Chinguetti_libye.jpg",
     description: "Chinguetti",
     gradient: ""
   }
@@ -68,7 +68,6 @@ export default function MaghrebCarousel({ autoPlay = true, interval = 5000 }: Ma
 
   // Audio State
   const [lang, setLang] = useState<keyof typeof LANGUAGES>("fr");
-  const [muted, setMuted] = useState(false);
   const [hasSpoken, setHasSpoken] = useState(false);
   const [speaking, setSpeaking] = useState(false);
   const [showLangMenu, setShowLangMenu] = useState(false);
@@ -152,7 +151,6 @@ export default function MaghrebCarousel({ autoPlay = true, interval = 5000 }: Ma
     }
 
     setHasSpoken(true);
-    setMuted(false);
   };
 
   const speakArabicWithGoogle = (text: string) => {
@@ -164,21 +162,20 @@ export default function MaghrebCarousel({ autoPlay = true, interval = 5000 }: Ma
       const audio = new Audio(audioUrl);
       audio.onplay = () => setSpeaking(true);
       audio.onended = () => setSpeaking(false);
-      audio.onerror = (e) => {
+      audio.onerror = () => {
         setSpeaking(false);
         fallbackToSystemSpeech(text);
       };
       
-      audio.play().catch(err => {
+      audio.play().catch(() => {
         setSpeaking(false);
         fallbackToSystemSpeech(text);
       });
-    } catch (e) {
+    } catch {
       setSpeaking(false);
       fallbackToSystemSpeech(text);
     }
     setHasSpoken(true);
-    setMuted(false);
   };
 
   const fallbackToSystemSpeech = (text: string) => {
@@ -193,7 +190,7 @@ export default function MaghrebCarousel({ autoPlay = true, interval = 5000 }: Ma
       utter.onend = () => setSpeaking(false);
       utter.onerror = () => setSpeaking(false);
       window.speechSynthesis.speak(utter);
-    } catch (e) {
+    } catch {
       setSpeaking(false);
     }
   };
@@ -204,10 +201,8 @@ export default function MaghrebCarousel({ autoPlay = true, interval = 5000 }: Ma
         window.speechSynthesis.cancel();
       }
       setSpeaking(false);
-      setMuted(true);
     } else {
       speak();
-      setMuted(false);
     }
   };
 

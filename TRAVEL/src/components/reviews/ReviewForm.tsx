@@ -92,7 +92,7 @@ export default function ReviewForm() {
       setTimeout(() => {
         router.push("/reviews");
       }, 2000);
-    } catch (err) {
+    } catch {
       setError("Erreur lors de la submission de l'avis. Veuillez réessayer.");
     } finally {
       setIsSubmitting(false);

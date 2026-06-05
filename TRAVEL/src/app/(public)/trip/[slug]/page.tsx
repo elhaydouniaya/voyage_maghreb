@@ -1,40 +1,78 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { use, useState, useEffect } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { 
   MapPin, 
   Calendar, 
   CheckCircle2, 
   XCircle,
-  ArrowLeft,
   Share2,
-  Clock,
   Navigation,
   Check,
   Users,
   Star,
-  ChevronRight,
   Globe,
   Lightbulb,
   Sparkles,
   CloudSun,
-  Thermometer
 } from "lucide-react";
 import TripGallery from "@/components/trips/TripGallery";
 import BookingForm from "@/components/booking/BookingForm";
 import Breadcrumbs from "@/components/ui/Breadcrumbs";
 import SafeImage from "@/components/ui/SafeImage";
 import { formatPriceShort } from "@/lib/currency";
-export default function TripDetailPage({ params }: { params: { slug: string } }) {
-  const [trip, setTrip] = useState<any>(null);
-  const [relatedTrips, setRelatedTrips] = useState<any[]>([]);
+import { openWhatsAppShare } from "@/lib/whatsapp-share";
+
+type AgencyInfo = {
+  id?: string;
+  slug?: string;
+  name: string;
+  rating?: number;
+  reviews?: number;
+};
+
+type TripDetail = {
+  id: string;
+  slug: string;
+  title: string;
+  destination: string;
+  startDate: string;
+  description: string;
+  meetingPoint: string;
+  tripType: string;
+  duration?: string;
+  durationDays?: number;
+  agency: AgencyInfo;
+  images: string[];
+  coverImage?: string | null;
+  inclusions: string[];
+  exclusions: string[];
+  totalSpots: number;
+  bookedSpots: number;
+  status?: string;
+  totalPrice: number;
+  depositAmount: number;
+};
+
+type RelatedTrip = {
+  id: string;
+  slug: string;
+  title: string;
+  destination: string;
+  coverImage: string;
+  totalPrice: number;
+};
+
+export default function TripDetailPage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = use(params);
+  const [trip, setTrip] = useState<TripDetail | null>(null);
+  const [relatedTrips, setRelatedTrips] = useState<RelatedTrip[]>([]);
   const [notFound, setNotFound] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
 
   useEffect(() => {
-    const enrich = (found: any) => ({
+    const enrich = (found: TripDetail): TripDetail => ({
       ...found,
       duration: found.durationDays
         ? `${found.durationDays} Jours`
@@ -42,13 +80,14 @@ export default function TripDetailPage({ params }: { params: { slug: string } })
       agency: found.agency
         ? {
             id: found.agency.id,
+            slug: found.agency.slug,
             name: found.agency.name,
             rating: 4.9,
             reviews: 120,
           }
         : { name: "MaghrebVoyage Partner", rating: 5.0, reviews: 1 },
       images:
-        found.images?.length > 0
+        Array.isArray(found.images) && found.images.length > 0
           ? found.images
           : [
               found.coverImage ||
@@ -60,12 +99,12 @@ export default function TripDetailPage({ params }: { params: { slug: string } })
 
     async function load() {
       try {
-        const res = await fetch(`/api/trips/${params.slug}`);
+        const res = await fetch(`/api/trips/${slug}`);
         if (res.ok) {
           const data = await res.json();
           if (data.trip) {
-            setTrip(enrich(data.trip));
-            setRelatedTrips(data.relatedTrips || []);
+            setTrip(enrich(data.trip as TripDetail));
+            setRelatedTrips((data.relatedTrips || []) as RelatedTrip[]);
             return;
           }
         }
@@ -77,7 +116,7 @@ export default function TripDetailPage({ params }: { params: { slug: string } })
     }
 
     load();
-  }, [params.slug]);
+  }, [slug]);
 
   if (notFound) {
     return (
@@ -136,8 +175,9 @@ export default function TripDetailPage({ params }: { params: { slug: string } })
                   </button>
                   <button 
                     onClick={() => {
-                      const text = encodeURIComponent(`Découvre ce voyage sur MaghrebVoyage : ${trip.title} - ${window.location.href}`);
-                      window.open(`https://wa.me/?text=${text}`, '_blank');
+                      openWhatsAppShare(
+                        `Découvre ce voyage sur MaghrebVoyage : ${trip.title} - ${window.location.href}`
+                      );
                     }}
                     className="bg-green-500 text-white w-10 h-10 rounded-full flex items-center justify-center hover:bg-green-600 transition-all shadow-lg"
                     title="Partager sur WhatsApp"
@@ -290,7 +330,7 @@ export default function TripDetailPage({ params }: { params: { slug: string } })
              <div className="sticky top-32 space-y-8">
                 {trip.agency?.id && (
                   <Link
-                    href={`/agence/${trip.agency.id}`}
+                    href={`/agence/${trip.agency.slug || trip.agency.id}`}
                     className="block bg-[#F8FAFC] rounded-[2.5rem] border border-gray-100 p-6 hover:border-orange-500/30 transition-all text-center"
                   >
                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">
@@ -312,6 +352,11 @@ export default function TripDetailPage({ params }: { params: { slug: string } })
                      tripTitle={trip.title}
                      totalPrice={trip.totalPrice}
                      depositAmount={trip.depositAmount}
+                     spotsLeft={trip.totalSpots - trip.bookedSpots}
+                     isSoldOut={
+                       trip.status === "FULL" ||
+                       trip.bookedSpots >= trip.totalSpots
+                     }
                    />
                 </div>
 

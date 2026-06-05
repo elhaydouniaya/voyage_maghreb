@@ -11,23 +11,26 @@ import {
   ArrowRight, 
   MapPin, 
   ShieldCheck, 
-  Zap, 
   Star, 
   CheckCircle2,
-  Globe,
-  CalendarDays,
-  Lock,
-  UserCheck,
-  CreditCard,
-  MessageCircle,
   ChevronDown,
   Sparkles,
-  Bot,
-  X,
-  Calendar
 } from "lucide-react";
 
+import dynamic from "next/dynamic";
 import DestinationsSection from "@/components/public/DestinationsSection";
+import NewsletterSignup from "@/components/public/NewsletterSignup";
+import TrustStrip from "@/components/public/TrustStrip";
+import ProductPaths from "@/components/public/ProductPaths";
+import SectionHeader from "@/components/ui/SectionHeader";
+import HomeAiLauncher from "@/components/public/HomeAiLauncher";
+
+const HeroAnimatedWidget = dynamic(
+  () => import("@/components/public/HeroAnimatedWidget"),
+  { ssr: false, loading: () => (
+    <div className="aspect-[4/5] rounded-[3rem] bg-[#0F172A] animate-pulse border-8 border-white" />
+  ) }
+);
 
 const TRIP_TAG_COLORS: Record<string, string> = {
   DESERT: "bg-orange-500",
@@ -46,7 +49,20 @@ const TRIP_TYPE_LABELS: Record<string, string> = {
 };
 
 function FeaturedTrips() {
-  const [trips, setTrips] = useState<any[]>([]);
+  type FeaturedTrip = {
+    id: string;
+    title: string;
+    slug: string;
+    destination: string;
+    status: string;
+    coverImage: string | null;
+    tripType: string;
+    totalPrice: number;
+    totalSpots: number;
+    bookedSpots: number;
+  };
+
+  const [trips, setTrips] = useState<FeaturedTrip[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -54,9 +70,9 @@ function FeaturedTrips() {
       .then((res) => res.json())
       .then((data) => {
         const list = (data.trips || [])
-          .filter((t: any) => t.status === "PUBLISHED")
+          .filter((t: FeaturedTrip) => t.status === "PUBLISHED")
           .slice(0, 4);
-        setTrips(list);
+        setTrips(list as FeaturedTrip[]);
       })
       .catch(() => setTrips([]))
       .finally(() => setLoading(false));
@@ -92,7 +108,7 @@ function FeaturedTrips() {
         const spotsLeft = Math.max(0, (trip.totalSpots || 0) - (trip.bookedSpots || 0));
         const tagColor = TRIP_TAG_COLORS[trip.tripType] || "bg-orange-500";
         const tagLabel = TRIP_TYPE_LABELS[trip.tripType] || trip.tripType;
-        const cover = sanitizeImageUrl(trip.coverImage, trip.destination);
+        const cover = sanitizeImageUrl(trip.coverImage ?? undefined, trip.destination);
 
         return (
           <div key={trip.id} className="group bg-white rounded-[3rem] overflow-hidden border border-gray-100 shadow-sm hover:shadow-2xl transition-all duration-700">
@@ -141,10 +157,11 @@ export default function Home() {
               voyage au Maghreb, <br />
               <span className="text-orange-500 underline decoration-4 underline-offset-8">commence ici.</span>
             </h1>
-            <p className="text-lg text-gray-500 mb-12 max-w-xl mx-auto lg:mx-0 font-medium leading-relaxed">
+            <p className="text-lg text-gray-500 mb-6 max-w-xl mx-auto lg:mx-0 font-medium leading-relaxed">
               Des agences locales vérifiées, des expériences uniques, et un paiement 100% sécurisé.
             </p>
-            <div className="flex flex-col sm:flex-row gap-6 justify-center lg:justify-start items-center mt-12">
+            <HomeAiLauncher />
+            <div className="flex flex-col sm:flex-row gap-6 justify-center lg:justify-start items-center mt-8">
                <Link 
                  href="/recherche"
                  className="w-full sm:w-auto bg-orange-600 text-white font-black px-12 py-6 rounded-[2rem] text-sm uppercase tracking-widest hover:bg-orange-700 transition-all flex items-center justify-center gap-4 shadow-2xl shadow-orange-600/30 active:scale-95 group"
@@ -158,7 +175,8 @@ export default function Home() {
                  Voir les voyages <ArrowRight size={18} />
                </Link>
             </div>
-            <div className="flex flex-col sm:flex-row gap-6 mt-12 justify-center lg:justify-start">
+            <TrustStrip />
+            <div className="flex flex-col sm:flex-row gap-6 mt-8 justify-center lg:justify-start">
                <div className="flex items-center gap-6 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">
                   <span>Explorez :</span>
                   <Link href="/voyages?destination=Maroc" className="hover:text-orange-500 transition-colors">Maroc</Link>
@@ -168,19 +186,26 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="lg:col-span-2 relative h-[500px] md:h-[600px]">
-            <MaghrebCarousel autoPlay={true} interval={5000} />
+          <div className="lg:col-span-2 relative min-h-[480px] md:min-h-[580px]">
+            <HeroAnimatedWidget />
           </div>
         </div>
+        <div className="max-w-7xl mx-auto mt-16 px-0">
+          <MaghrebCarousel autoPlay interval={5000} />
+        </div>
       </section>
+
+      <ProductPaths />
 
       {/* How it Works Section */}
       <section id="how-it-works" className="py-32 px-6 bg-white border-y border-gray-50">
         <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-20">
-            <h2 className="text-4xl md:text-5xl font-black text-[#0F172A] mb-4 tracking-tight">Comment ça marche</h2>
-            <p className="text-gray-400 font-bold uppercase tracking-[0.2em] text-xs">Votre voyage commence en 3 étapes simples</p>
-          </div>
+          <SectionHeader
+            align="center"
+            eyebrow="Parcours"
+            title="Comment ça marche"
+            description="Votre voyage commence en 3 étapes simples, de l'idée à la réservation."
+          />
           
           <div className="grid md:grid-cols-3 gap-12 relative">
             {/* Step 1 */}
@@ -208,15 +233,16 @@ export default function Home() {
       {/* Featured Trips */}
       <section className="py-32 px-6">
         <div className="max-w-7xl mx-auto">
-          <div className="flex justify-between items-end mb-20">
-            <div>
-              <h2 className="text-4xl md:text-5xl font-black text-[#0F172A] tracking-tight mb-4">Voyages à la une ✨</h2>
-              <p className="text-gray-400 font-bold uppercase tracking-widest text-[10px]">Sélectionnés pour leur authenticité</p>
-            </div>
-            <Link href="/voyages" className="text-xs font-black text-gray-400 uppercase tracking-widest hover:text-orange-600 transition-colors flex items-center gap-3 bg-white px-8 py-4 rounded-full border border-gray-100 shadow-sm">
-               Explorer tout <ArrowRight size={14} />
-            </Link>
-          </div>
+          <SectionHeader
+            eyebrow="Catalogue"
+            title="Voyages à la une"
+            description="Sélectionnés pour leur authenticité — réservation directe avec acompte Stripe."
+            action={
+              <Link href="/voyages" className="text-xs font-black text-gray-400 uppercase tracking-widest hover:text-orange-600 transition-colors flex items-center gap-3 bg-white px-8 py-4 rounded-full border border-gray-100 shadow-sm">
+                Explorer tout <ArrowRight size={14} />
+              </Link>
+            }
+          />
 
           <FeaturedTrips />
         </div>
@@ -303,16 +329,7 @@ export default function Home() {
             <p className="text-gray-400 text-lg font-medium mb-12 max-w-2xl mx-auto">
                Inscrivez-vous pour recevoir nos meilleurs itinéraires et des offres exclusives directement dans votre boîte mail.
             </p>
-            <div className="flex flex-col sm:flex-row gap-4 max-w-lg mx-auto">
-               <input 
-                  type="email" 
-                  placeholder="Votre email" 
-                  className="flex-1 bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-white placeholder:text-gray-500 focus:outline-none focus:border-orange-500 transition-all font-medium"
-               />
-               <button className="bg-orange-600 text-white font-black px-8 py-4 rounded-2xl hover:bg-orange-700 transition-all shadow-xl shadow-orange-600/20 whitespace-nowrap">
-                  S'inscrire
-               </button>
-            </div>
+            <NewsletterSignup />
             <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-8">Pas de spam, c'est promis. Désinscrivez-vous quand vous voulez.</p>
          </div>
       </section>

@@ -4,46 +4,77 @@ import { ArrowRight, MapPin, Search } from "lucide-react";
 import DestinationCarousel from "@/components/public/DestinationCarousel";
 
 import { COUNTRY_IMAGES } from "@/lib/images";
+import prisma from "@/lib/prisma";
 
-const destinations = [
+export const revalidate = 300;
+
+const DEST_META = [
   {
     name: "Maroc",
     description: "Des sommets de l'Atlas aux vagues de l'Atlantique, en passant par les médinas millénaires.",
     images: COUNTRY_IMAGES.MAROC,
-    count: "12 voyages disponibles",
     regions: ["Marrakech", "Fès", "Chefchaouen", "Essaouira"],
+    match: (d: string) =>
+      d.includes("maroc") || d.includes("marrakech") || d.includes("fès") || d.includes("essaouira"),
   },
   {
     name: "Algérie",
     description: "Le plus grand pays d'Afrique vous offre des paysages sahariens époustouflants et une côte méditerranéenne riche d'histoire.",
     images: COUNTRY_IMAGES.ALGERIE,
-    count: "8 voyages disponibles",
     regions: ["Taghit", "Alger", "Oran", "Constantine"],
+    match: (d: string) =>
+      d.includes("algér") || d.includes("alger") || d.includes("taghit") || d.includes("oran"),
   },
   {
     name: "Tunisie",
     description: "Entre farniente à Djerba, ruines de Carthage et l'hospitalité légendaire du Sud tunisien.",
     images: COUNTRY_IMAGES.TUNISIE,
-    count: "6 voyages disponibles",
     regions: ["Djerba", "Sidi Bou Saïd", "Tozeur", "Tunis"],
+    match: (d: string) => d.includes("tunis") || d.includes("djerba"),
   },
   {
     name: "Libye",
     description: "Des vestiges romains spectaculaires de Leptis Magna aux oasis ancestrales de Ghadamès.",
     images: COUNTRY_IMAGES.LIBYE,
-    count: "4 voyages disponibles",
     regions: ["Leptis Magna", "Ghadamès", "Tripoli", "Akakus"],
+    match: (d: string) => d.includes("liby"),
   },
   {
     name: "Mauritanie",
     description: "Entre les dunes majestueuses de l'Adrar et le littoral sauvage du Banc d'Arguin.",
     images: COUNTRY_IMAGES.MAURITANIE,
-    count: "5 voyages disponibles",
     regions: ["Chinguetti", "Nouakchott", "Banc d'Arguin", "Adrar"],
+    match: (d: string) => d.includes("mauritan"),
   },
 ];
 
-export default function DestinationsPage() {
+async function loadTripCounts() {
+  const now = new Date();
+  const trips = await prisma.groupTrip.findMany({
+    where: {
+      status: "PUBLISHED",
+      isPublic: true,
+      startDate: { gt: now },
+    },
+    select: { destination: true, bookedSpots: true, totalSpots: true },
+  });
+  return trips.filter((t) => t.bookedSpots < t.totalSpots);
+}
+
+export default async function DestinationsPage() {
+  const available = await loadTripCounts();
+  const destinations = DEST_META.map((meta) => {
+    const n = available.filter((t) =>
+      meta.match(t.destination.toLowerCase())
+    ).length;
+    return {
+      ...meta,
+      count:
+        n === 0
+          ? "Bientôt disponible"
+          : `${n} voyage${n > 1 ? "s" : ""} disponible${n > 1 ? "s" : ""}`,
+    };
+  });
   return (
     <div className="bg-[#F8FAFC]">
       {/* Hero */}

@@ -1,4 +1,5 @@
 import prisma from "@/lib/prisma";
+import bcrypt from "bcryptjs";
 import type { AgencyStatus } from "@prisma/client";
 
 const ALLOWED_STATUSES: AgencyStatus[] = [
@@ -10,6 +11,66 @@ const ALLOWED_STATUSES: AgencyStatus[] = [
 ];
 
 export class AgenciesService {
+  static async updatePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string
+  ) {
+    if (newPassword.length < 8) {
+      throw new Error("Le nouveau mot de passe doit contenir au moins 8 caractères.");
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, role: true, passwordHash: true },
+    });
+
+    if (!user || user.role !== "AGENCY") {
+      throw new Error("Compte agence introuvable.");
+    }
+    if (!user.passwordHash) {
+      throw new Error("Compte OAuth — mot de passe non modifiable ici.");
+    }
+
+    const valid = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!valid) {
+      throw new Error("Mot de passe actuel incorrect.");
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    await prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash },
+    });
+  }
+
+  static async updateNotificationPrefs(
+    userId: string,
+    prefs: {
+      notifyBookingsEmail?: boolean;
+      notifyPaymentsEmail?: boolean;
+      notifyPartnerNewsletter?: boolean;
+    }
+  ) {
+    const agency = await prisma.agency.findUnique({ where: { userId } });
+    if (!agency) throw new Error("Agence introuvable.");
+
+    return prisma.agency.update({
+      where: { id: agency.id },
+      data: {
+        ...(typeof prefs.notifyBookingsEmail === "boolean"
+          ? { notifyBookingsEmail: prefs.notifyBookingsEmail }
+          : {}),
+        ...(typeof prefs.notifyPaymentsEmail === "boolean"
+          ? { notifyPaymentsEmail: prefs.notifyPaymentsEmail }
+          : {}),
+        ...(typeof prefs.notifyPartnerNewsletter === "boolean"
+          ? { notifyPartnerNewsletter: prefs.notifyPartnerNewsletter }
+          : {}),
+      },
+    });
+  }
+
   static async getByUserId(userId: string) {
     return prisma.agency.findUnique({
       where: { userId },
@@ -48,6 +109,12 @@ export class AgenciesService {
       country: a.country,
       city: a.city,
       createdAt: a.createdAt.toISOString(),
+      stripeConnect: {
+        accountId: a.stripeConnectAccountId,
+        chargesEnabled: a.stripeConnectChargesEnabled,
+        payoutsEnabled: a.stripeConnectPayoutsEnabled,
+        onboardingComplete: a.stripeConnectOnboardingComplete,
+      },
     }));
   }
 
@@ -164,11 +231,15 @@ export class AgenciesService {
 
     const isVerified = agency.verificationStatus === "VERIFIED";
     const hasPublishedTrip = publishedCount > 0;
+    const stripeConnectActive = Boolean(
+      agency.stripeConnectAccountId && agency.stripeConnectChargesEnabled
+    );
     let completedSteps = 0;
+    if (stripeConnectActive) completedSteps += 1;
     if (isVerified) completedSteps += 1;
     if (hasPublishedTrip) completedSteps += 1;
     if (confirmedBookings > 0) completedSteps += 1;
-    const progressPercent = Math.round((completedSteps / 3) * 100);
+    const progressPercent = Math.round((completedSteps / 4) * 100);
 
     return {
       stats: {
@@ -198,7 +269,12 @@ export class AgenciesService {
         isVerified,
         hasPublishedTrip,
         hasBookings: confirmedBookings > 0,
+        stripeConnectActive,
         progressPercent,
+      },
+      payments: {
+        stripeConnectActive,
+        stripeOnboardingComplete: agency.stripeConnectOnboardingComplete,
       },
     };
   }

@@ -73,7 +73,7 @@ export default function ClientRegisterPage() {
       const loginOutcome = await loginWithFreshSession(
         formData.email.trim(),
         formData.password,
-        { requiredRole: "CLIENT" }
+        { requiredRole: "CLIENT", openGuide: true }
       );
 
       if (!loginOutcome.ok) {
@@ -324,7 +324,7 @@ export default function ClientRegisterPage() {
               <span className="text-xs text-gray-400 font-bold">OU</span>
               <div className="flex-1 h-px bg-gray-200" />
             </div>
-            <GoogleSignInButton callbackUrl="/profile" />
+            <GoogleSignInButton callbackUrl="/profile?tab=guide-ia" />
           </div>
 
           {/* Login Link */}

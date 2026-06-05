@@ -8,8 +8,91 @@ type Integrations = {
   email: { configured: boolean; from: string; mode: string };
   stripe: { configured: boolean; mode: string };
   cron: { secretSet: boolean; secureInProduction: boolean };
-  openai: { configured: boolean; disabled: boolean };
+  llm: {
+    configured: boolean;
+    disabled: boolean;
+    provider: string;
+    model: string;
+  };
+  vapi: { configured: boolean; webhookSecretSet: boolean };
+  openai?: { configured: boolean; disabled: boolean };
 };
+
+function PartnerNewsletterPanel() {
+  const [digest, setDigest] = useState<{
+    periodDays: number;
+    newTrips: number;
+    confirmedBookings: number;
+    aiLeads: number;
+    publishedTrips: number;
+  } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [result, setResult] = useState("");
+
+  useEffect(() => {
+    fetch("/api/admin/newsletter/partners", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.digest) setDigest(d.digest);
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  async function handleSend() {
+    if (!confirm("Envoyer la newsletter aux agences partenaires opt-in ?")) return;
+    setSending(true);
+    setResult("");
+    try {
+      const res = await fetch("/api/admin/newsletter/partners", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        setResult(data.error || "Échec de l'envoi.");
+        return;
+      }
+      setResult(
+        `Envoyé à ${data.sent} agence(s) (${data.total} opt-in, ${data.skipped} ignorée(s)).`
+      );
+    } catch {
+      setResult("Erreur réseau.");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <div className="mt-8 pt-8 border-t border-gray-100 space-y-4">
+      <h3 className="text-sm font-black text-[#0F172A] uppercase tracking-widest">
+        Newsletter partenaires
+      </h3>
+      <p className="text-sm text-gray-600 font-medium">
+        Agences vérifiées avec l&apos;option activée dans Paramètres → Notifications.
+      </p>
+      {loading ? (
+        <p className="text-xs text-gray-400 font-bold">Chargement du digest…</p>
+      ) : digest ? (
+        <ul className="text-xs font-bold text-gray-500 space-y-1">
+          <li>{digest.newTrips} nouveaux voyages (30 j)</li>
+          <li>{digest.confirmedBookings} réservations confirmées</li>
+          <li>{digest.aiLeads} prospects IA</li>
+          <li>{digest.publishedTrips} départs en ligne</li>
+        </ul>
+      ) : null}
+      <button
+        type="button"
+        onClick={handleSend}
+        disabled={sending}
+        className="bg-[#0F172A] text-white px-8 py-3 rounded-full text-[10px] font-black uppercase tracking-widest disabled:opacity-50 hover:bg-orange-600 transition-colors"
+      >
+        {sending ? "Envoi…" : "Envoyer aux agences opt-in"}
+      </button>
+      {result && <p className="text-sm font-bold text-green-600">{result}</p>}
+      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
+        Cron mensuel : GET /api/cron/partner-newsletter (Bearer CRON_SECRET)
+      </p>
+    </div>
+  );
+}
 
 function IntegrationsStatusPanel() {
   const [data, setData] = useState<{
@@ -60,14 +143,22 @@ function IntegrationsStatusPanel() {
         : "CRON_SECRET manquant (obligatoire en production)",
     },
     {
-      label: "OpenAI",
-      ok: i.openai.configured && !i.openai.disabled,
-      detail:
-        i.openai.disabled
-          ? "Désactivé (OPENAI_DISABLE=true)"
-          : i.openai.configured
-            ? "Clé API active"
-            : "Fallback local sans OpenAI",
+      label: `IA guide (${i.llm?.provider || "LLM"})`,
+      ok: i.llm?.configured && !i.llm?.disabled,
+      detail: i.llm?.disabled
+        ? "Désactivé (OPENAI_DISABLE=true)"
+        : i.llm?.configured
+          ? `${i.llm.provider} · ${i.llm.model}`
+          : "Mode local (heuristique)",
+    },
+    {
+      label: "VAPI (guide vocal)",
+      ok: i.vapi?.configured && i.vapi?.webhookSecretSet,
+      detail: i.vapi?.configured
+        ? i.vapi.webhookSecretSet
+          ? "Widget + webhook configurés"
+          : "Widget OK — ajoutez VAPI_WEBHOOK_SECRET"
+        : "NEXT_PUBLIC_VAPI_* non définis",
     },
   ];
 
@@ -109,6 +200,7 @@ function IntegrationsStatusPanel() {
         </a>
         {" "}puis ajoutez RESEND_API_KEY et RESEND_FROM dans .env
       </p>
+      <PartnerNewsletterPanel />
     </div>
   );
 }

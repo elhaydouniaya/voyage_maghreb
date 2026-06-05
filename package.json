@@ -10,6 +10,14 @@
     "typecheck": "npm run typecheck --prefix TRAVEL",
     "test": "npm run test --prefix TRAVEL",
     "seed": "npm run seed --prefix TRAVEL",
+    "analytics:seed": "npm run analytics:seed --prefix TRAVEL",
+    "audit": "npm run audit --prefix TRAVEL",
+    "audit:auth": "npm run audit:auth --prefix TRAVEL",
+    "audit:all": "node scripts/audit-all.mjs",
+    "local:verify": "node scripts/verify-local.mjs",
+    "local:finish": "npm run setup:full --prefix TRAVEL && node scripts/verify-local.mjs",
+    "prod:ready": "npm run prod:ready --prefix TRAVEL",
+    "setup:full": "npm run setup:full --prefix TRAVEL",
     "db:push": "npm run db:push --prefix TRAVEL",
     "db:migrate": "npm run db:migrate --prefix TRAVEL",
     "db:baseline": "npm run db:baseline --prefix TRAVEL",
@@ -17,7 +25,9 @@
     "health": "npm run health --prefix TRAVEL",
     "health:prod": "npm run health:prod --prefix TRAVEL",
     "prod:smoke": "npm run prod:smoke --prefix TRAVEL",
-    "prod:local": "npm run prod:local --prefix TRAVEL",
-    "prod:restart": "npm run prod:restart --prefix TRAVEL"
+    "prod:restart": "npm run prod:restart --prefix TRAVEL",
+    "clean": "npm run clean --prefix TRAVEL",
+    "env:fill": "npm run env:fill --prefix TRAVEL",
+    "stripe:connect-demo": "npm run stripe:connect-demo --prefix TRAVEL"
   }
 }

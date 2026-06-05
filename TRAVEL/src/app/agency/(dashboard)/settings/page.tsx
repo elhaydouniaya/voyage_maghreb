@@ -1,7 +1,17 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Settings, Lock, Bell, CreditCard, Shield, Check, Loader2 } from "lucide-react";
+import { useState, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
+import {
+  Settings,
+  Lock,
+  Bell,
+  CreditCard,
+  Shield,
+  Check,
+  Loader2,
+  ExternalLink,
+} from "lucide-react";
 
 const VERIFICATION_LABELS: Record<string, { label: string; className: string }> = {
   VERIFIED: { label: "Compte vérifié", className: "bg-green-50 text-green-700 border-green-100" },
@@ -11,7 +21,17 @@ const VERIFICATION_LABELS: Record<string, { label: string; className: string }> 
   SUSPENDED: { label: "Compte suspendu", className: "bg-gray-800 text-white border-gray-800" },
 };
 
-export default function AgencySettingsPage() {
+type StripeConnectStatus = {
+  configured: boolean;
+  accountId: string | null;
+  chargesEnabled: boolean;
+  payoutsEnabled: boolean;
+  onboardingComplete: boolean;
+  requiresAction: boolean;
+};
+
+function AgencySettingsContent() {
+  const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState("general");
   const [isSaved, setIsSaved] = useState(false);
   const [agency, setAgency] = useState<{
@@ -25,6 +45,41 @@ export default function AgencySettingsPage() {
     verificationNote: string | null;
   } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [saveError, setSaveError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [stripeStatus, setStripeStatus] = useState<StripeConnectStatus | null>(null);
+  const [stripeLoading, setStripeLoading] = useState(false);
+  const [stripeMessage, setStripeMessage] = useState("");
+  const [notifyBookingsEmail, setNotifyBookingsEmail] = useState(true);
+  const [notifyPaymentsEmail, setNotifyPaymentsEmail] = useState(true);
+  const [notifyPartnerNewsletter, setNotifyPartnerNewsletter] = useState(false);
+
+  const loadStripeStatus = () => {
+    return fetch("/api/agency/stripe-connect", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.status) setStripeStatus(data.status);
+      })
+      .catch(() => {
+        /* ignore */
+      });
+  };
+
+  useEffect(() => {
+    if (searchParams.get("stripe") === "return") {
+      setStripeMessage("Retour Stripe — mise à jour du statut de votre compte…");
+      setActiveTab("payments");
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (activeTab === "payments") {
+      setStripeLoading(true);
+      loadStripeStatus().finally(() => setStripeLoading(false));
+    }
+  }, [activeTab]);
 
   useEffect(() => {
     fetch("/api/agency/me", { cache: "no-store" })
@@ -41,12 +96,82 @@ export default function AgencySettingsPage() {
             verificationStatus: data.agency.verificationStatus,
             verificationNote: data.agency.verificationNote,
           });
+          setNotifyBookingsEmail(data.agency.notifyBookingsEmail ?? true);
+          setNotifyPaymentsEmail(data.agency.notifyPaymentsEmail ?? true);
+          setNotifyPartnerNewsletter(data.agency.notifyPartnerNewsletter ?? false);
         }
       })
       .finally(() => setLoading(false));
   }, []);
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    setSaveError("");
+
+    if (activeTab === "security") {
+      if (!currentPassword || !newPassword) {
+        setSaveError("Renseignez les deux mots de passe.");
+        return;
+      }
+      setSaving(true);
+      try {
+        const res = await fetch("/api/agency/me", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ currentPassword, newPassword }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          setSaveError(data.error || "Échec de la mise à jour.");
+          return;
+        }
+        setCurrentPassword("");
+        setNewPassword("");
+        setIsSaved(true);
+        setTimeout(() => setIsSaved(false), 3000);
+      } catch {
+        setSaveError("Erreur réseau.");
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+
+    if (activeTab === "notifications") {
+      setSaving(true);
+      try {
+        const res = await fetch("/api/agency/me", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "notifications",
+            notifyBookingsEmail,
+            notifyPaymentsEmail,
+            notifyPartnerNewsletter,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          setSaveError(data.error || "Échec de la mise à jour.");
+          return;
+        }
+        setIsSaved(true);
+        setTimeout(() => setIsSaved(false), 3000);
+      } catch {
+        setSaveError("Erreur réseau.");
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+
+    if (activeTab === "payments") {
+      return;
+    }
+
+    if (activeTab === "general") {
+      return;
+    }
+
     setIsSaved(true);
     setTimeout(() => setIsSaved(false), 3000);
   };
@@ -127,6 +252,13 @@ export default function AgencySettingsPage() {
                     <h3 className="text-lg font-black text-[#0F172A]">
                       Informations de l&apos;agence
                     </h3>
+                    <p className="text-xs text-gray-500 font-medium -mt-4">
+                      Pour modifier le nom ou le SIRET, contactez{" "}
+                      <a href="mailto:contact@maghrebvoyage.com" className="text-orange-600 underline">
+                        contact@maghrebvoyage.com
+                      </a>
+                      .
+                    </p>
                     <div className="grid grid-cols-1 gap-6">
                       <div className="space-y-2">
                         <label
@@ -204,11 +336,11 @@ export default function AgencySettingsPage() {
                   <div className="grid grid-cols-1 gap-6">
                     <div className="space-y-2">
                       <label htmlFor="currentPass" className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Mot de passe actuel</label>
-                      <input id="currentPass" type="password" placeholder="••••••••" className="w-full bg-[#F8FAFC] border border-gray-100 rounded-2xl px-5 py-4 focus:ring-4 focus:ring-orange-500/10 outline-none font-bold text-[#0F172A]" />
+                      <input id="currentPass" type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} placeholder="••••••••" className="w-full bg-[#F8FAFC] border border-gray-100 rounded-2xl px-5 py-4 focus:ring-4 focus:ring-orange-500/10 outline-none font-bold text-[#0F172A]" />
                     </div>
                     <div className="space-y-2">
                       <label htmlFor="newPass" className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Nouveau mot de passe</label>
-                      <input id="newPass" type="password" placeholder="Min. 8 caractères" className="w-full bg-[#F8FAFC] border border-gray-100 rounded-2xl px-5 py-4 focus:ring-4 focus:ring-orange-500/10 outline-none font-bold text-[#0F172A]" />
+                      <input id="newPass" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="Min. 8 caractères" className="w-full bg-[#F8FAFC] border border-gray-100 rounded-2xl px-5 py-4 focus:ring-4 focus:ring-orange-500/10 outline-none font-bold text-[#0F172A]" />
                     </div>
                   </div>
                 </div>
@@ -221,18 +353,53 @@ export default function AgencySettingsPage() {
                   <h3 className="text-lg font-black text-[#0F172A]">Préférences de notification</h3>
                   <div className="space-y-4">
                     {[
-                      { id: "email_res", label: "Nouvelles réservations", desc: "Recevez un email à chaque nouvelle vente." },
-                      { id: "email_pay", label: "Paiements reçus", desc: "Soyez informé des virements et acomptes." },
-                      { id: "email_news", label: "Newsletter Partenaires", desc: "Actualités et conseils pour les agences." },
+                      {
+                        id: "bookings",
+                        label: "Nouvelles réservations & prospects IA",
+                        desc: "Email à chaque vente ou lead qualifié.",
+                        value: notifyBookingsEmail,
+                        set: setNotifyBookingsEmail,
+                      },
+                      {
+                        id: "payments",
+                        label: "Paiements reçus",
+                        desc: "Récapitulatif net Stripe Connect après chaque acompte.",
+                        value: notifyPaymentsEmail,
+                        set: setNotifyPaymentsEmail,
+                      },
+                      {
+                        id: "news",
+                        label: "Newsletter partenaires",
+                        desc: "Actualités MaghrebVoyage pour agences (opt-in).",
+                        value: notifyPartnerNewsletter,
+                        set: setNotifyPartnerNewsletter,
+                      },
                     ].map((pref) => (
-                      <div key={pref.id} className="flex items-center justify-between p-4 bg-[#F8FAFC] rounded-2xl border border-gray-50">
+                      <div
+                        key={pref.id}
+                        className="flex items-center justify-between p-4 bg-[#F8FAFC] rounded-2xl border border-gray-50"
+                      >
                         <div>
                           <p className="text-sm font-black text-[#0F172A]">{pref.label}</p>
-                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{pref.desc}</p>
+                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                            {pref.desc}
+                          </p>
                         </div>
-                        <div className="w-12 h-6 bg-orange-500 rounded-full relative cursor-pointer">
-                          <div className="absolute right-1 top-1 w-4 h-4 bg-white rounded-full shadow-sm" />
-                        </div>
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={pref.value}
+                          onClick={() => pref.set(!pref.value)}
+                          className={`w-12 h-6 rounded-full relative transition-colors ${
+                            pref.value ? "bg-orange-500" : "bg-gray-200"
+                          }`}
+                        >
+                          <span
+                            className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-all ${
+                              pref.value ? "right-1" : "left-1"
+                            }`}
+                          />
+                        </button>
                       </div>
                     ))}
                   </div>
@@ -243,40 +410,161 @@ export default function AgencySettingsPage() {
             {activeTab === "payments" && (
               <div className="space-y-8 animate-in fade-in duration-500">
                 <div className="space-y-6">
-                  <h3 className="text-lg font-black text-[#0F172A]">Informations bancaires</h3>
+                  <h3 className="text-lg font-black text-[#0F172A]">Versements Stripe Connect</h3>
+
+                  {stripeMessage && (
+                    <p className="text-sm font-medium text-orange-700 bg-orange-50 border border-orange-100 rounded-2xl px-4 py-3">
+                      {stripeMessage}
+                    </p>
+                  )}
+
+                  <div className="p-6 bg-[#F8FAFC] border border-gray-100 rounded-3xl space-y-4">
+                    {stripeLoading ? (
+                      <div className="flex items-center gap-3 text-gray-400">
+                        <Loader2 className="animate-spin" size={20} />
+                        <span className="text-xs font-bold uppercase tracking-widest">
+                          Chargement Stripe…
+                        </span>
+                      </div>
+                    ) : stripeStatus ? (
+                      <>
+                        <div className="flex flex-wrap gap-2">
+                          <StatusPill
+                            ok={stripeStatus.onboardingComplete}
+                            label={
+                              stripeStatus.onboardingComplete
+                                ? "Compte actif"
+                                : "Configuration requise"
+                            }
+                          />
+                          <StatusPill
+                            ok={stripeStatus.chargesEnabled}
+                            label="Encaissements"
+                          />
+                          <StatusPill
+                            ok={stripeStatus.payoutsEnabled}
+                            label="Virements"
+                          />
+                        </div>
+                        {!stripeStatus.configured && (
+                          <p className="text-xs text-amber-700 font-medium">
+                            Stripe n&apos;est pas configuré sur le serveur (STRIPE_SECRET_KEY).
+                          </p>
+                        )}
+                        {stripeStatus.configured && (
+                          <p className="text-xs text-gray-500 font-medium leading-relaxed">
+                            Les acomptes clients passent par MaghrebVoyage. Une fois Connect actif,
+                            chaque paiement est réparti automatiquement : commission plateforme (~12 %
+                            par défaut) + versement sur votre compte Stripe.
+                          </p>
+                        )}
+                      </>
+                    ) : (
+                      <p className="text-xs text-gray-500">Statut indisponible.</p>
+                    )}
+
+                    <button
+                      type="button"
+                      disabled={stripeLoading || !stripeStatus?.configured}
+                      onClick={async () => {
+                        setSaveError("");
+                        setStripeLoading(true);
+                        try {
+                          const res = await fetch("/api/agency/stripe-connect", {
+                            method: "POST",
+                          });
+                          const data = await res.json();
+                          if (!res.ok || !data.url) {
+                            setSaveError(data.error || "Lien Stripe indisponible.");
+                            return;
+                          }
+                          window.location.href = data.url;
+                        } catch {
+                          setSaveError("Erreur réseau Stripe.");
+                        } finally {
+                          setStripeLoading(false);
+                        }
+                      }}
+                      className="inline-flex items-center gap-2 bg-[#0F172A] text-white px-6 py-3 rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-orange-600 transition-all disabled:opacity-50"
+                    >
+                      {stripeStatus?.onboardingComplete
+                        ? "Mettre à jour mon compte Stripe"
+                        : "Connecter mon compte Stripe"}
+                      <ExternalLink size={14} />
+                    </button>
+                  </div>
+
                   <div className="p-6 bg-orange-50 border border-orange-100 rounded-3xl flex items-start gap-4">
                     <Shield className="text-orange-600 shrink-0" size={24} />
                     <div>
-                      <p className="text-sm font-black text-orange-900">Versements via Stripe Connect</p>
+                      <p className="text-sm font-black text-orange-900">Emails automatiques</p>
                       <p className="text-xs font-medium text-orange-700 mt-1 leading-relaxed">
-                        Vos revenus sont transférés automatiquement sur votre compte bancaire une fois les acomptes validés.
+                        Chaque réservation confirmée et chaque prospect IA qualifié déclenche une
+                        notification à l&apos;email professionnel de votre agence.
                       </p>
                     </div>
-                  </div>
-                  <div className="space-y-2">
-                    <label htmlFor="iban" className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">RIB / IBAN principal</label>
-                    <input id="iban" type="text" defaultValue="FR76 1234 5678 9012 3456 7890 123" className="w-full bg-[#F8FAFC] border border-gray-100 rounded-2xl px-5 py-4 focus:ring-4 focus:ring-orange-500/10 outline-none font-bold text-[#0F172A]" />
                   </div>
                 </div>
               </div>
             )}
 
+            {saveError && (
+              <p className="text-sm font-bold text-red-600 pt-4">{saveError}</p>
+            )}
+
             <div className="pt-10 border-t border-gray-50 flex justify-end">
+               {activeTab !== "payments" && activeTab !== "general" && (
                <button 
+                 type="button"
                  onClick={handleSave}
-                 className={`flex items-center gap-3 px-10 py-4 rounded-full text-xs font-black uppercase tracking-widest transition-all ${
+                 disabled={saving}
+                 className={`flex items-center gap-3 px-10 py-4 rounded-full text-xs font-black uppercase tracking-widest transition-all disabled:opacity-60 ${
                    isSaved ? "bg-emerald-500 text-white" : "bg-[#0F172A] text-white hover:bg-black"
                  }`}
                >
-                  {isSaved ? (
+                  {saving ? (
+                    <>
+                      <Loader2 className="animate-spin" size={16} />
+                      Enregistrement...
+                    </>
+                  ) : isSaved ? (
                     <>Modifications enregistrées <Check size={16} /></>
                   ) : (
                     "Sauvegarder les modifications"
                   )}
                </button>
+               )}
             </div>
          </div>
       </div>
     </div>
+  );
+}
+
+function StatusPill({ ok, label }: { ok: boolean; label: string }) {
+  return (
+    <span
+      className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full border ${
+        ok
+          ? "bg-emerald-50 text-emerald-700 border-emerald-100"
+          : "bg-gray-50 text-gray-500 border-gray-100"
+      }`}
+    >
+      {label}
+    </span>
+  );
+}
+
+export default function AgencySettingsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="py-20 text-center text-xs font-bold text-gray-400 uppercase tracking-widest">
+          Chargement des paramètres…
+        </div>
+      }
+    >
+      <AgencySettingsContent />
+    </Suspense>
   );
 }

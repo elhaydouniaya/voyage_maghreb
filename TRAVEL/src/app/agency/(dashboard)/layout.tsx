@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   Map,
   CalendarCheck,
+  Sparkles,
   User,
   Settings,
   LogOut,
@@ -21,6 +22,8 @@ type AgencyMe = {
   managerName: string;
   verificationStatus: string;
   confirmedBookings: number;
+  unreadLeads?: number;
+  newBookings24h?: number;
 };
 
 export default function AgencyDashboardLayout({
@@ -51,8 +54,10 @@ export default function AgencyDashboardLayout({
     }
 
     load();
+    const interval = setInterval(load, 30_000);
     return () => {
       cancelled = true;
+      clearInterval(interval);
     };
   }, []);
 
@@ -67,8 +72,17 @@ export default function AgencyDashboardLayout({
       label: "Réservations",
       href: "/agency/bookings",
       badge:
-        agency && agency.confirmedBookings > 0
-          ? String(agency.confirmedBookings)
+        agency && (agency.newBookings24h ?? 0) > 0
+          ? String(agency.newBookings24h)
+          : null,
+    },
+    {
+      icon: Sparkles,
+      label: "Prospects IA",
+      href: "/agency/leads",
+      badge:
+        agency && (agency.unreadLeads ?? 0) > 0
+          ? String(agency.unreadLeads)
           : null,
     },
     { icon: User, label: "Mon profil", href: "/agency/profile", badge: null },
@@ -175,7 +189,7 @@ export default function AgencyDashboardLayout({
             </p>
           </div>
           <div className="flex items-center gap-6">
-            <NotificationBell count={agency?.confirmedBookings ?? 0} />
+            <NotificationBell fetchUrl="/api/agency/notifications" />
             <Link
               href="/agency/trips/new"
               className={`px-8 py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all shadow-xl ${

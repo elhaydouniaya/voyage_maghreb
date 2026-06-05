@@ -14,8 +14,9 @@ const ALLOWED: AgencyStatus[] = [
 
 export async function PATCH(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const session = await getServerSession(authOptions);
   if (!session?.user?.id || session.user.role !== "ADMIN") {
     return NextResponse.json({ error: "Accès réservé aux administrateurs." }, { status: 403 });
@@ -30,7 +31,7 @@ export async function PATCH(
     }
 
     const agency = await AgenciesService.updateVerificationStatus(
-      params.id,
+      id,
       status,
       session.user.id,
       body.note

@@ -39,6 +39,7 @@ export function formatTrip(trip: TripWithAgency) {
     agency: trip.agency
       ? {
           id: trip.agency.id,
+          slug: trip.agency.slug || trip.agency.id,
           name: trip.agency.name,
           email: trip.agency.email,
           phone: trip.agency.phoneNumber,

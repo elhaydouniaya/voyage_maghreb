@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import prisma from "@/lib/prisma";
+import { generateUniqueAgencySlug } from "@/lib/agency-slug";
 
 function isStrongPassword(password: string): boolean {
   return (
@@ -103,6 +104,8 @@ export async function POST(request: Request) {
       where: { email: normalizedEmail },
     });
 
+    const agencySlug = await generateUniqueAgencySlug(agencyName.trim());
+
     if (existingUser) {
       if (existingUser.role === "CLIENT") {
         const passwordHash = await bcrypt.hash(password, 10);
@@ -121,6 +124,7 @@ export async function POST(request: Request) {
             data: {
               userId: existingUser.id,
               name: agencyName.trim(),
+              slug: agencySlug,
               managerName: managerName.trim(),
               email: normalizedEmail,
               phoneNumber: String(phone).trim(),
@@ -191,6 +195,7 @@ export async function POST(request: Request) {
         data: {
           userId: user.id,
           name: agencyName.trim(),
+          slug: agencySlug,
           managerName: managerName.trim(),
           email: normalizedEmail,
           phoneNumber: String(phone).trim(),

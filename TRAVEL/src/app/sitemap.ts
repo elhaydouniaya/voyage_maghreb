@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import prisma from "@/lib/prisma";
 
 function baseUrl() {
   return (
@@ -7,13 +8,17 @@ function baseUrl() {
   );
 }
 
-export default function sitemap(): MetadataRoute.Sitemap {
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base = baseUrl();
   const now = new Date();
-  const publicPaths = [
+
+  const publicPaths: MetadataRoute.Sitemap = [
     "",
     "/voyages",
     "/recherche",
+    "/destinations",
+    "/about",
+    "/reviews",
     "/login",
     "/register",
     "/agency/login",
@@ -22,12 +27,34 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/legal/confidentialite",
     "/legal/cgu",
     "/legal/remboursements",
-  ];
-
-  return publicPaths.map((path) => ({
+  ].map((path) => ({
     url: `${base}${path}`,
     lastModified: now,
-    changeFrequency: path === "" || path === "/voyages" ? "daily" : "weekly",
+    changeFrequency: path === "" || path === "/voyages" ? ("daily" as const) : ("weekly" as const),
     priority: path === "" ? 1 : path === "/recherche" ? 0.9 : 0.7,
   }));
+
+  let tripEntries: MetadataRoute.Sitemap = [];
+  try {
+    const trips = await prisma.groupTrip.findMany({
+      where: {
+        status: { in: ["PUBLISHED", "FULL"] },
+        isPublic: true,
+      },
+      select: { slug: true, updatedAt: true },
+      orderBy: { startDate: "asc" },
+      take: 500,
+    });
+
+    tripEntries = trips.map((t) => ({
+      url: `${base}/trip/${t.slug}`,
+      lastModified: t.updatedAt,
+      changeFrequency: "weekly" as const,
+      priority: 0.85,
+    }));
+  } catch {
+    /* DB unavailable at build time — static paths only */
+  }
+
+  return [...publicPaths, ...tripEntries];
 }

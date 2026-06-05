@@ -36,6 +36,7 @@ export default function SiteFooter({ variant = "light" }: { variant?: "light" | 
             <Link
               key={link.href}
               href={link.href}
+              prefetch={false}
               className={`text-[11px] font-bold uppercase tracking-widest transition-colors ${
                 isDark
                   ? "text-gray-400 hover:text-orange-400"
@@ -47,6 +48,7 @@ export default function SiteFooter({ variant = "light" }: { variant?: "light" | 
           ))}
           <Link
             href="/about"
+            prefetch={false}
             className={`text-[11px] font-bold uppercase tracking-widest transition-colors ${
               isDark ? "text-gray-400 hover:text-orange-400" : "text-gray-400 hover:text-orange-600"
             }`}
@@ -55,6 +57,7 @@ export default function SiteFooter({ variant = "light" }: { variant?: "light" | 
           </Link>
           <Link
             href="/agency/login"
+            prefetch={false}
             className={`text-[11px] font-bold uppercase tracking-widest transition-colors ${
               isDark ? "text-gray-400 hover:text-orange-400" : "text-gray-400 hover:text-orange-600"
             }`}

@@ -1,13 +1,16 @@
 import prisma from "@/lib/prisma";
 import { findOrCreateGuestUser } from "@/lib/guest-user";
 import { sendTravelRequestReceivedEmail } from "@/lib/booking-emails";
-import type { StructuredDemand } from "@/services/ai.service";
+import { buildMatchDisplay } from "@/lib/build-match-display";
+import { AIService, type StructuredDemand } from "@/services/ai.service";
+import { TripsService } from "@/services/trips.service";
 
 export class TravelRequestsService {
   static async createFromMatch(
     body: Record<string, unknown>,
     demand: StructuredDemand,
-    matchCount: number,
+    /** Nombre de voyages avec score IA >= seuil (pas les suggestions fallback). */
+    qualifiedMatchCount: number,
     userId?: string
   ) {
     const clientEmail = String(body.clientEmail || "").trim().toLowerCase();
@@ -51,7 +54,7 @@ export class TravelRequestsService {
         destinationNormalized: demand.destinationNormalized,
         budgetLevel: demand.budgetLevel,
         dominantTripType: demand.dominantTripType,
-        status: matchCount > 0 ? "MATCH_SUGGESTED" : "AI_PROCESSED",
+        status: qualifiedMatchCount > 0 ? "MATCH_SUGGESTED" : "AI_PROCESSED",
       },
     });
 
@@ -62,6 +65,7 @@ export class TravelRequestsService {
           clientName,
           destination: request.destination,
           summary: demand.summary,
+          travelRequestId: request.id,
         });
       } catch (e) {
         console.error("Travel request email E1:", e);
@@ -69,6 +73,134 @@ export class TravelRequestsService {
     }
 
     return request;
+  }
+
+  /** Lie une demande IA récente si le booking n'en a pas encore. */
+  static async resolveRequestIdForUser(
+    userId: string,
+    explicitId?: string
+  ): Promise<string | undefined> {
+    if (explicitId) return explicitId;
+    const latest = await prisma.travelRequest.findFirst({
+      where: {
+        userId,
+        status: { in: ["MATCH_SUGGESTED", "AI_PROCESSED", "CLIENT_CONFIRMED"] },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    return latest?.id;
+  }
+
+  static async markPaymentPending(travelRequestId: string) {
+    await prisma.travelRequest.updateMany({
+      where: {
+        id: travelRequestId,
+        status: {
+          in: ["SUBMITTED", "AI_PROCESSED", "MATCH_SUGGESTED", "CLIENT_CONFIRMED"],
+        },
+      },
+      data: { status: "PAYMENT_PENDING" },
+    });
+  }
+
+  /** Appelé après confirmation de paiement (Stripe ou démo). */
+  static async markPaidForBooking(bookingId: string) {
+    const booking = await prisma.booking.findUnique({
+      where: { id: bookingId },
+      select: { id: true, travelRequestId: true, userId: true },
+    });
+    if (!booking) return;
+
+    const requestId =
+      booking.travelRequestId ||
+      (await this.resolveRequestIdForUser(booking.userId));
+
+    if (!requestId) return;
+
+    await prisma.travelRequest.update({
+      where: { id: requestId },
+      data: { status: "PAID" },
+    });
+
+    if (!booking.travelRequestId) {
+      await prisma.booking.update({
+        where: { id: bookingId },
+        data: { travelRequestId: requestId },
+      });
+    }
+  }
+
+  static demandFromStoredRequest(
+    r: Awaited<ReturnType<typeof prisma.travelRequest.findUnique>>
+  ): StructuredDemand | null {
+    if (!r) return null;
+    const budgetLevel = r.budgetLevel;
+    return {
+      summary: r.aiSummary || `Voyage à ${r.destination} pour ${r.numberOfTravelers} personnes.`,
+      tags: r.aiTags?.length ? r.aiTags : r.tripType.map((t) => t.toLowerCase()),
+      complexity:
+        r.aiComplexity >= 1 && r.aiComplexity <= 5
+          ? (r.aiComplexity as 1 | 2 | 3 | 4 | 5)
+          : 2,
+      destinationNormalized:
+        r.destinationNormalized ||
+        r.destination
+          .toLowerCase()
+          .trim()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, ""),
+      budgetLevel:
+        budgetLevel === "low" ||
+        budgetLevel === "medium" ||
+        budgetLevel === "high" ||
+        budgetLevel === "premium"
+          ? budgetLevel
+          : r.budgetMax < 800
+            ? "low"
+            : r.budgetMax < 1800
+              ? "medium"
+              : r.budgetMax < 3500
+                ? "high"
+                : "premium",
+      dominantTripType: r.dominantTripType || r.tripType[0] || "AVENTURE",
+      targetDuration: r.durationDays || 7,
+      startDate: r.startDate ?? undefined,
+      numberOfSeats: r.numberOfTravelers,
+      budgetMax: r.budgetMax,
+    };
+  }
+
+  /** Recharge les voyages recommandés pour un lien email / voyages?request=… */
+  static async getRecommendationsForRequest(requestId: string) {
+    const request = await prisma.travelRequest.findUnique({
+      where: { id: requestId },
+    });
+    const demand = this.demandFromStoredRequest(request);
+    if (!demand) return null;
+
+    const trips = await TripsService.listPublished();
+    const scored = await AIService.matchTrips(demand, trips);
+    const display = buildMatchDisplay(demand, trips, scored);
+
+    return {
+      ...display,
+      travelRequestId: request!.id,
+      destination: request!.destination,
+    };
+  }
+
+  static statusLabel(status: string): string {
+    const map: Record<string, string> = {
+      SUBMITTED: "Soumise",
+      AI_PROCESSED: "Analysée",
+      MATCH_SUGGESTED: "Correspondances trouvées",
+      CLIENT_CONFIRMED: "Confirmée",
+      PAYMENT_PENDING: "Paiement en cours",
+      PAID: "Acompte payé",
+      CLOSED: "Clôturée",
+      CANCELLED: "Annulée",
+    };
+    return map[status] || status;
   }
 
   static async listForUser(userId: string) {
@@ -80,6 +212,7 @@ export class TravelRequestsService {
 
     return requests.map((r) => ({
       id: r.id,
+      createdAt: r.createdAt.toISOString(),
       date: r.createdAt.toLocaleDateString("fr-FR", {
         day: "numeric",
         month: "short",
@@ -88,6 +221,7 @@ export class TravelRequestsService {
       summary: r.aiSummary || `Voyage ${r.destination}`,
       destination: r.destination,
       status: r.status,
+      statusLabel: TravelRequestsService.statusLabel(r.status),
     }));
   }
 

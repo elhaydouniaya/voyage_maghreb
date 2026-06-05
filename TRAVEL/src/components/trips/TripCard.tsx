@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { useSession } from "next-auth/react";
 import { MapPin, Calendar, Check, Sparkles, Heart, ChevronRight } from "lucide-react";
 import { getFallbackImage } from "@/lib/images";
@@ -19,6 +18,7 @@ interface TripCardProps {
     bookedSpots: number;
     totalSpots: number;
     tripType: string;
+    status?: string;
     coverImage?: string;
     inclusions?: string[];
   };
@@ -27,8 +27,11 @@ interface TripCardProps {
 export default function TripCard({ trip }: TripCardProps) {
   const { data: session } = useSession();
   const [isFavorited, setIsFavorited] = useState(false);
+  const spotsLeft = trip.totalSpots - trip.bookedSpots;
   const fillingPercentage = (trip.bookedSpots / trip.totalSpots) * 100;
-  const isAlmostFull = trip.totalSpots - trip.bookedSpots <= 2;
+  const isSoldOut = spotsLeft <= 0 || trip.status === "FULL";
+  const isAlmostFull =
+    !isSoldOut && spotsLeft > 0 && spotsLeft / trip.totalSpots < 0.2;
 
   useEffect(() => {
     async function loadFavorite() {
@@ -99,6 +102,11 @@ export default function TripCard({ trip }: TripCardProps) {
         <div className="bg-[#0F172A]/80 backdrop-blur-xl text-white px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] shadow-2xl flex items-center gap-2 border border-white/10">
           <Sparkles size={12} className="text-orange-500" /> {trip.tripType}
         </div>
+        {isSoldOut && (
+          <div className="bg-gray-600 text-white px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] shadow-2xl border border-white/10">
+            Complet
+          </div>
+        )}
         {isAlmostFull && (
           <div className="bg-orange-500 text-white px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] shadow-2xl animate-pulse border border-white/10">
             Presque complet
@@ -191,11 +199,18 @@ export default function TripCard({ trip }: TripCardProps) {
           </div>
 
           <Link
-            href={`/trip/${trip.slug}#booking-section`}
-            className="flex-1 xl:flex-none bg-[#0F172A] hover:bg-black text-white px-12 py-6 rounded-full text-xs font-black uppercase tracking-[0.2em] flex items-center justify-center gap-4 transition-all duration-500 active:scale-95 shadow-2xl shadow-gray-200 group/btn"
+            href={isSoldOut ? "#" : `/trip/${trip.slug}#booking-section`}
+            aria-disabled={isSoldOut}
+            className={`flex-1 xl:flex-none px-12 py-6 rounded-full text-xs font-black uppercase tracking-[0.2em] flex items-center justify-center gap-4 transition-all duration-500 shadow-2xl shadow-gray-200 group/btn ${
+              isSoldOut
+                ? "bg-gray-200 text-gray-400 pointer-events-none cursor-not-allowed"
+                : "bg-[#0F172A] hover:bg-black text-white active:scale-95"
+            }`}
           >
-            Voir le voyage{" "}
-            <ChevronRight size={18} className="group-hover/btn:translate-x-1 transition-transform" />
+            {isSoldOut ? "Complet" : "Voir le voyage"}{" "}
+            {!isSoldOut && (
+              <ChevronRight size={18} className="group-hover/btn:translate-x-1 transition-transform" />
+            )}
           </Link>
         </div>
       </div>

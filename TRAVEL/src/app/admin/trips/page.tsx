@@ -3,11 +3,9 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import {
-  ArrowLeft,
   Search,
   CheckCircle2,
   ShieldAlert,
-  Briefcase,
   MapPin,
   Eye,
   Loader2,

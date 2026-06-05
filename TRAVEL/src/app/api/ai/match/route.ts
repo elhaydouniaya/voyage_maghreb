@@ -2,9 +2,16 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 import { getClientIp, rateLimit } from "@/lib/rate-limit";
-import { AIService } from "@/services/ai.service";
+import { buildMatchDisplay } from "@/lib/build-match-display";
+import { logAiCall, withTimeout } from "@/lib/ai-call-log";
+import { buildNextDeparturesScores } from "@/lib/match-fallback";
+import { AIService, type TravelRequestData } from "@/services/ai.service";
 import { TripsService } from "@/services/trips.service";
 import { TravelRequestsService } from "@/services/travel-requests.service";
+import { AiNotifyService } from "@/services/ai-notify.service";
+import { aiMatchSchema, formatZodError } from "@/lib/api-schemas";
+
+const AI_MATCH_TIMEOUT_MS = 5000;
 
 export async function POST(req: Request) {
   const ip = getClientIp(req);
@@ -16,49 +23,157 @@ export async function POST(req: Request) {
     );
   }
 
+  const started = Date.now();
+  let body: Record<string, unknown> = {};
+  let matchBody = {} as TravelRequestData & {
+    clientEmail: string;
+    clientName: string;
+  };
+
   try {
-    const body = await req.json();
+    const raw = await req.json();
+    const parsed = aiMatchSchema.safeParse(raw);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { success: false, error: formatZodError(parsed.error) },
+        { status: 400 }
+      );
+    }
+
+    body = parsed.data as Record<string, unknown>;
     const session = await getServerSession(authOptions);
 
-    const demand = await AIService.structureDemand(body);
+    const clientEmail =
+      String(body.clientEmail || "").trim() ||
+      (session?.user?.role === "CLIENT" ? session.user.email?.trim() : "") ||
+      "";
+    const clientName =
+      String(body.clientName || "").trim() ||
+      (session?.user?.name?.trim() || "Voyageur");
+
+    matchBody = {
+      ...body,
+      clientEmail: clientEmail || String(body.clientEmail || ""),
+      clientName,
+    } as TravelRequestData & { clientEmail: string; clientName: string };
+
     const trips = await TripsService.listPublished();
-    const matches = await AIService.matchTrips(demand, trips);
 
-    const results = matches
-      .map((m) => {
-        const trip = trips.find((t) => t.id === m.tripId);
-        if (!trip) return null;
-        return {
-          ...trip,
-          compatibility: m.compatibility,
-          matchReasons: m.reasons,
-        };
-      })
-      .filter(Boolean);
+    let demand;
+    let scored;
+    let forcedFallback = false;
 
-    if (body.clientEmail) {
+    try {
+      demand = await withTimeout(
+        AIService.structureDemand(matchBody),
+        AI_MATCH_TIMEOUT_MS
+      );
+      scored = await AIService.matchTrips(demand, trips);
+    } catch (structError) {
+      forcedFallback = true;
+      demand = AIService.structureDemandHeuristic(matchBody);
+      scored = buildNextDeparturesScores(trips);
+      await logAiCall({
+        operation: "MATCH",
+        success: false,
+        durationMs: Date.now() - started,
+        error:
+          structError instanceof Error ? structError.message : "structure_failed",
+      });
+    }
+
+    if (!forcedFallback) {
+      await logAiCall({
+        operation: "MATCH",
+        success: true,
+        durationMs: Date.now() - started,
+      });
+    }
+
+    const { results, matchMode, qualifiedCount, summary, fallbackSectionTitle, noExactMatchMessage } =
+      buildMatchDisplay(demand, trips, scored);
+
+    const effectiveMode = forcedFallback ? "fallback" : matchMode;
+    const qualifiedResults = results.filter((r) => !r.isFallback);
+
+    let savedRequestId: string | undefined;
+
+    if (clientEmail) {
       try {
-        await TravelRequestsService.createFromMatch(
-          body,
+        const saved = await TravelRequestsService.createFromMatch(
+          matchBody as unknown as Record<string, unknown>,
           demand,
-          results.length,
+          qualifiedResults.length,
           session?.user?.id
         );
+        savedRequestId = saved.id;
       } catch (e) {
         console.error("TravelRequest save error:", e);
+      }
+
+      if (qualifiedResults.length > 0) {
+        void AiNotifyService.notifyAgenciesForMatches(
+          qualifiedResults.map((r) => ({
+            id: String(r.id),
+            title: String(r.title),
+            destination: String(r.destination),
+            agencyId: String(r.agencyId),
+            compatibility:
+              typeof r.compatibility === "number" ? r.compatibility : undefined,
+          })),
+          demand,
+          {
+            name: clientName,
+            email: clientEmail,
+            travelers: Number(body.numberOfTravelers) || demand.numberOfSeats,
+          },
+          savedRequestId
+        );
       }
     }
 
     return NextResponse.json({
       success: true,
       results,
-      summary: demand.summary,
+      summary,
+      matchMode: effectiveMode,
+      qualifiedCount: qualifiedCount ?? qualifiedResults.length,
+      travelRequestId: savedRequestId,
+      fallbackSectionTitle,
+      noExactMatchMessage,
     });
   } catch (error) {
     console.error("AI Match Error:", error);
-    return NextResponse.json(
-      { success: false, error: "Matching temporairement indisponible." },
-      { status: 500 }
-    );
+    await logAiCall({
+      operation: "MATCH",
+      success: false,
+      durationMs: Date.now() - started,
+      error: error instanceof Error ? error.message : "unknown",
+    });
+
+    try {
+      const trips = await TripsService.listPublished();
+      const fallbackScores = buildNextDeparturesScores(trips);
+      const demand = AIService.structureDemandHeuristic(
+        matchBody as TravelRequestData
+      );
+      const { results, summary, fallbackSectionTitle, noExactMatchMessage } =
+        buildMatchDisplay(demand, trips, fallbackScores);
+
+      return NextResponse.json({
+        success: true,
+        results,
+        summary: summary || "Voici les prochains départs disponibles.",
+        matchMode: "fallback",
+        qualifiedCount: 0,
+        fallbackSectionTitle,
+        noExactMatchMessage,
+      });
+    } catch {
+      return NextResponse.json(
+        { success: false, error: "Matching temporairement indisponible." },
+        { status: 500 }
+      );
+    }
   }
 }

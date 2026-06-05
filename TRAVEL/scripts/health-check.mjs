@@ -6,7 +6,7 @@ const checks = [];
 
 async function run() {
   try {
-    const [users, trips, agencies, bookings, requests, auditLogs] =
+    const [users, trips, agencies, bookings, requests, auditLogs, behaviorEvents, connectAgencies] =
       await Promise.all([
         p.user.count(),
         p.groupTrip.count({ where: { status: "PUBLISHED" } }),
@@ -14,8 +14,21 @@ async function run() {
         p.booking.count(),
         p.travelRequest.count(),
         p.auditLog.count(),
+        p.behaviorEvent.count(),
+        p.agency.count({ where: { stripeConnectChargesEnabled: true } }),
       ]);
-    checks.push({ name: "database", ok: true, users, trips, agencies, bookings, requests, auditLogs });
+    checks.push({
+      name: "database",
+      ok: true,
+      users,
+      trips,
+      agencies,
+      bookings,
+      requests,
+      auditLogs,
+      behaviorEvents,
+      stripeConnectAgencies: connectAgencies,
+    });
 
     const demo = await p.user.findMany({
       where: {
@@ -51,6 +64,7 @@ async function run() {
     "NEXTAUTH_URL",
   ];
   const envOptional = [
+    "GROQ_API_KEY",
     "OPENAI_API_KEY",
     "RESEND_API_KEY",
     "STRIPE_SECRET_KEY",
@@ -59,6 +73,9 @@ async function run() {
     "CRON_SECRET",
     "GOOGLE_CLIENT_ID",
     "GOOGLE_CLIENT_SECRET",
+    "NEXT_PUBLIC_VAPI_PUBLIC_KEY",
+    "VAPI_WEBHOOK_SECRET",
+    "ADMIN_NOTIFY_EMAIL",
   ];
   checks.push({
     name: "env_required",
@@ -102,6 +119,20 @@ async function run() {
       error:
         "GOOGLE_CLIENT_ID et GOOGLE_CLIENT_SECRET doivent être tous les deux renseignés ou vides.",
     });
+  }
+
+  const recommendations = [];
+  if (!process.env.GROQ_API_KEY?.trim()) {
+    recommendations.push("GROQ_API_KEY — recommandé (Llama via Groq, voir PRODUCTION_CHECKLIST.md)");
+  }
+  if (
+    !process.env.NEXT_PUBLIC_VAPI_PUBLIC_KEY?.trim() ||
+    !process.env.VAPI_WEBHOOK_SECRET?.trim()
+  ) {
+    recommendations.push("VAPI — optionnel (guide vocal)");
+  }
+  if (recommendations.length) {
+    checks.push({ name: "recommendations", ok: true, items: recommendations });
   }
 
   console.log(JSON.stringify(checks, null, 2));

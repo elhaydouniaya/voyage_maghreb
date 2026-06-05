@@ -43,15 +43,16 @@ function parseTripBody(body: Record<string, unknown>) {
 
 export async function GET(
   _request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const session = await getServerSession(authOptions);
   if (!session?.user?.id || session.user.role !== "AGENCY") {
     return NextResponse.json({ error: "Non autorisé." }, { status: 401 });
   }
 
   try {
-    const trip = await TripsService.getByIdForAgency(session.user.id, params.id);
+    const trip = await TripsService.getByIdForAgency(session.user.id, id);
     if (!trip) {
       return NextResponse.json({ error: "Voyage introuvable." }, { status: 404 });
     }
@@ -64,8 +65,9 @@ export async function GET(
 
 export async function PATCH(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const session = await getServerSession(authOptions);
   if (!session?.user?.id || session.user.role !== "AGENCY") {
     return NextResponse.json({ error: "Non autorisé." }, { status: 401 });
@@ -77,7 +79,7 @@ export async function PATCH(
     if (body.status && !body.title) {
       const trip = await TripsService.updateStatusForAgency(
         session.user.id,
-        params.id,
+        id,
         body.status as TripStatus,
         body.cancelReason ? String(body.cancelReason) : undefined
       );
@@ -86,7 +88,7 @@ export async function PATCH(
 
     const trip = await TripsService.updateForAgency(
       session.user.id,
-      params.id,
+      id,
       parseTripBody(body)
     );
     return NextResponse.json({ trip });
@@ -99,15 +101,16 @@ export async function PATCH(
 
 export async function DELETE(
   _request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const session = await getServerSession(authOptions);
   if (!session?.user?.id || session.user.role !== "AGENCY") {
     return NextResponse.json({ error: "Non autorisé." }, { status: 401 });
   }
 
   try {
-    await TripsService.deleteForAgency(session.user.id, params.id);
+    await TripsService.deleteForAgency(session.user.id, id);
     return NextResponse.json({ success: true });
   } catch (error) {
     const message =

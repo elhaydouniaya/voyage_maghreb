@@ -92,9 +92,23 @@ export class AdminService {
         const session = await stripe.checkout.sessions.retrieve(
           booking.payment.stripeSessionId
         );
-        const paymentIntent = session.payment_intent;
-        if (typeof paymentIntent === "string") {
-          await stripe.refunds.create({ payment_intent: paymentIntent });
+        const paymentIntent =
+          booking.payment.stripePaymentIntentId ||
+          (typeof session.payment_intent === "string"
+            ? session.payment_intent
+            : null);
+
+        if (paymentIntent) {
+          const isConnect = booking.payment.payoutMode === "connect";
+          await stripe.refunds.create({
+            payment_intent: paymentIntent,
+            ...(isConnect
+              ? {
+                  reverse_transfer: true,
+                  refund_application_fee: true,
+                }
+              : {}),
+          });
           stripeRefundOk = true;
         }
       } catch (e) {
@@ -176,6 +190,51 @@ export class AdminService {
     }));
   }
 
+  static async getStripeConnectOverview() {
+    const agencies = await prisma.agency.findMany({
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        country: true,
+        verificationStatus: true,
+        stripeConnectAccountId: true,
+        stripeConnectChargesEnabled: true,
+        stripeConnectPayoutsEnabled: true,
+        stripeConnectOnboardingComplete: true,
+      },
+      orderBy: { name: "asc" },
+    });
+
+    const withAccount = agencies.filter((a) => a.stripeConnectAccountId);
+    const active = agencies.filter((a) => a.stripeConnectChargesEnabled);
+
+    return {
+      summary: {
+        totalAgencies: agencies.length,
+        withStripeAccount: withAccount.length,
+        payoutsActive: active.length,
+        pendingOnboarding: withAccount.filter(
+          (a) => !a.stripeConnectOnboardingComplete
+        ).length,
+      },
+      agencies: agencies.map((a) => ({
+        id: a.id,
+        name: a.name,
+        email: a.email,
+        country: a.country,
+        verificationStatus: a.verificationStatus,
+        connectStatus: !a.stripeConnectAccountId
+          ? "not_started"
+          : a.stripeConnectChargesEnabled
+            ? "active"
+            : a.stripeConnectOnboardingComplete
+              ? "restricted"
+              : "onboarding",
+      })),
+    };
+  }
+
   static async listPayments() {
     const payments = await prisma.payment.findMany({
       orderBy: { createdAt: "desc" },
@@ -192,6 +251,9 @@ export class AdminService {
       amount: Math.round(Number(p.amount)),
       currency: p.currency,
       status: p.status,
+      payoutMode: p.payoutMode,
+      platformFeeCents: p.platformFeeCents,
+      agencyNetCents: p.agencyNetCents,
       paidAt: p.paidAt?.toISOString() || null,
       createdAt: p.createdAt.toISOString(),
       stripeSessionId: p.stripeSessionId,

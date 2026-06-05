@@ -2,13 +2,29 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { loadTravelRequestId } from "@/lib/ai-match-storage";
 import Image from "next/image";
 import { ArrowLeft, ShieldCheck, CreditCard, Lock, ChevronRight } from "lucide-react";
 import { formatDeposit } from "@/lib/currency";
+import { trackBehaviorEvent } from "@/components/analytics/BehaviorTracker";
+
+type PendingBooking = {
+  tripId: string;
+  tripTitle: string;
+  destination: string;
+  coverImage?: string;
+  numberOfSeats?: number;
+  depositAmount?: number;
+  clientName?: string;
+  clientEmail?: string;
+  clientPhone?: string;
+  acceptCgu?: boolean;
+  acceptRgpd?: boolean;
+};
 
 export default function CheckoutPage() {
   const [step, setStep] = useState(1);
-  const [booking, setBooking] = useState<any>(null);
+  const [booking, setBooking] = useState<PendingBooking | null>(null);
   const [bookingReady, setBookingReady] = useState(false);
   const [traveler, setTraveler] = useState({
     clientName: "",
@@ -22,7 +38,7 @@ export default function CheckoutPage() {
   useEffect(() => {
     const data = localStorage.getItem("pending_booking");
     if (data) {
-      const parsed = JSON.parse(data);
+      const parsed = JSON.parse(data) as PendingBooking;
       setBooking(parsed);
       if (parsed.clientName || parsed.clientEmail) {
         setTraveler((t) => ({
@@ -35,6 +51,7 @@ export default function CheckoutPage() {
       }
     }
     setBookingReady(true);
+    trackBehaviorEvent("CHECKOUT_START");
   }, []);
 
   const handleNext = (e: React.FormEvent<HTMLFormElement>) => {
@@ -55,7 +72,7 @@ export default function CheckoutPage() {
     setError("");
 
     try {
-      const res = await fetch("/api/bookings/initiate", {
+      const res = await fetch("/api/payments/create-checkout-session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -64,6 +81,7 @@ export default function CheckoutPage() {
           numberOfSeats: booking.numberOfSeats || 1,
           acceptCgu: Boolean(booking.acceptCgu ?? true),
           acceptRgpd: Boolean(booking.acceptRgpd ?? true),
+          travelRequestId: loadTravelRequestId() || undefined,
         }),
       });
 

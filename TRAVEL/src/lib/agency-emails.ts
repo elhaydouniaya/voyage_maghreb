@@ -73,6 +73,119 @@ export async function sendTripPublishedEmail(input: {
   });
 }
 
+export async function sendAgencyAiMatchLeadEmail(input: {
+  agencyEmail: string;
+  agencyName: string;
+  managerName: string;
+  clientName: string;
+  clientEmail: string;
+  destination: string;
+  travelers: number;
+  budgetMax: number;
+  summary?: string;
+  matchedTrips: { title: string; compatibility?: number }[];
+  travelRequestId?: string;
+}) {
+  const leadsUrl = input.travelRequestId
+    ? `${baseUrl()}/agency/leads?request=${encodeURIComponent(input.travelRequestId)}`
+    : `${baseUrl()}/agency/leads`;
+
+  const tripsList = input.matchedTrips
+    .map(
+      (t) =>
+        `<li><strong>${t.title}</strong>${t.compatibility != null ? ` — ${t.compatibility}% compatibilité` : ""}</li>`
+    )
+    .join("");
+
+  await sendEmail({
+    to: input.agencyEmail,
+    subject: `Nouveau prospect IA — ${input.destination}`,
+    title: "Prospect configurateur IA",
+    html: `
+      <p>Bonjour ${input.managerName},</p>
+      <p>Un voyageur a utilisé le configurateur IA et correspond à <strong>${input.matchedTrips.length}</strong> de vos voyages :</p>
+      <ul>${tripsList}</ul>
+      <p><strong>Client :</strong> ${input.clientName} (${input.clientEmail})<br/>
+      <strong>Destination recherchée :</strong> ${input.destination}<br/>
+      <strong>Voyageurs :</strong> ${input.travelers}<br/>
+      <strong>Budget max :</strong> ${Math.round(input.budgetMax)}€</p>
+      ${input.summary ? `<p><em>${input.summary}</em></p>` : ""}
+      <p>Le client peut réserver directement sur la plateforme. Retrouvez ce prospect dans votre espace agence.</p>
+      ${emailButton(leadsUrl, "Voir mes prospects IA")}
+      ${emailButton(`${baseUrl()}/agency/bookings`, "Mes réservations")}
+      ${emailButton(`${baseUrl()}/agency/trips`, "Mes voyages")}
+    `,
+  });
+}
+
+export async function sendAgencyConnectPayoutEmail(input: {
+  agencyEmail: string;
+  agencyName: string;
+  tripTitle: string;
+  confirmationCode: string;
+  grossCents: number;
+  platformFeeCents: number;
+  agencyNetCents: number;
+  currency?: string;
+}) {
+  const currency = (input.currency || "EUR").toUpperCase();
+  const fmt = (cents: number) =>
+    `${(cents / 100).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency === "EUR" ? "€" : currency}`;
+
+  await sendEmail({
+    to: input.agencyEmail,
+    subject: `Paiement reçu — ${input.tripTitle}`,
+    title: "Virement Stripe Connect",
+    html: `
+      <p>Bonjour ${input.agencyName},</p>
+      <p>L'acompte pour <strong>${input.tripTitle}</strong> (${input.confirmationCode}) a été encaissé via Stripe Connect.</p>
+      <ul>
+        <li><strong>Montant client :</strong> ${fmt(input.grossCents)}</li>
+        <li><strong>Commission plateforme :</strong> ${fmt(input.platformFeeCents)}</li>
+        <li><strong>Net versé sur votre compte Stripe :</strong> ${fmt(input.agencyNetCents)}</li>
+      </ul>
+      <p>Le virement vers votre compte bancaire suit le calendrier Stripe (générallement 2–7 jours ouvrés).</p>
+      ${emailButton(`${baseUrl()}/agency/bookings`, "Voir mes réservations")}
+    `,
+  });
+}
+
+export async function sendPartnerNewsletterEmail(input: {
+  agencyEmail: string;
+  agencyName: string;
+  managerName: string;
+  digest: {
+    periodDays: number;
+    newTrips: number;
+    confirmedBookings: number;
+    aiLeads: number;
+    publishedTrips: number;
+  };
+}) {
+  const { digest } = input;
+  await sendEmail({
+    to: input.agencyEmail,
+    subject: `MaghrebVoyage partenaires — activité ${digest.periodDays} jours`,
+    title: "Newsletter partenaires",
+    html: `
+      <p>Bonjour ${input.managerName},</p>
+      <p>Voici un récapitulatif de l'activité sur <strong>MaghrebVoyage</strong> ces ${digest.periodDays} derniers jours :</p>
+      <ul>
+        <li><strong>${digest.newTrips}</strong> nouveau(x) voyage(s) publié(s)</li>
+        <li><strong>${digest.confirmedBookings}</strong> réservation(s) confirmée(s)</li>
+        <li><strong>${digest.aiLeads}</strong> prospect(s) IA qualifié(s)</li>
+        <li><strong>${digest.publishedTrips}</strong> départ(s) actuellement en ligne</li>
+      </ul>
+      <p>Publiez vos prochains départs, connectez Stripe Connect et consultez vos leads depuis votre espace agence.</p>
+      ${emailButton(`${baseUrl()}/agency/dashboard`, "Mon tableau de bord")}
+      ${emailButton(`${baseUrl()}/agency/trips/new`, "Publier un voyage")}
+      <p style="font-size:11px;color:#64748b;margin-top:24px">
+        Vous recevez cet email car l'option « Newsletter partenaires » est activée dans vos paramètres agence.
+      </p>
+    `,
+  });
+}
+
 export async function sendAgencyStatusEmail(input: {
   agencyEmail: string;
   agencyName: string;

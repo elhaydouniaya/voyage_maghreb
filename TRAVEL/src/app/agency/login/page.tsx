@@ -34,7 +34,7 @@ export default function AgencyLoginPage() {
       if (!outcome.ok) {
         setError(outcome.error);
       }
-    } catch (err) {
+    } catch {
       setError("Une erreur est survenue.");
     } finally {
       setIsLoading(false);

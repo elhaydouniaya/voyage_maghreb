@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/pre-trip-reminder",
       "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/cron/partner-newsletter",
+      "schedule": "0 8 1 * *"
     }
   ]
 }

@@ -2,10 +2,11 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Plus, MapPin, Calendar, Users, Eye, Pencil, Trash2, Copy, Send, Check, ArrowLeft } from "lucide-react";
+import { Plus, MapPin, Calendar, Eye, Pencil, Trash2, Copy, Send, Check, ArrowLeft } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { getFallbackImage } from "@/lib/images";
+import { openWhatsAppShare } from "@/lib/whatsapp-share";
 
 type AgencyTrip = {
   id: string;
@@ -60,7 +61,7 @@ export default function AgencyTripsPage() {
   const handleWhatsApp = (slug: string, title: string) => {
     const url = `${window.location.origin}/trip/${slug}`;
     const text = `Découvrez notre voyage : ${title}\n\nRéservez ici : ${url}`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+    openWhatsAppShare(text);
   };
 
   const handleCancelTrip = async (id: string, title: string) => {
@@ -249,7 +250,7 @@ export default function AgencyTripsPage() {
                           {(() => {
                             try {
                               return format(new Date(trip.startDate), 'MMM. yyyy', { locale: fr });
-                            } catch (e) {
+                            } catch {
                               return trip.startDate;
                             }
                           })()}
@@ -304,7 +305,7 @@ export default function AgencyTripsPage() {
                         className="flex items-center gap-2 p-3 bg-white border border-gray-100 rounded-2xl text-gray-400 hover:text-orange-600 hover:border-orange-600/20 transition-all shadow-sm group/btn"
                        >
                           <Eye size={18} />
-                          <span className="text-[8px] font-black uppercase tracking-widest hidden group-hover/btn:block">Voir</span>
+                          <span className="text-[8px] font-black uppercase tracking-widest hidden group-hover/btn:block">Prévisualiser</span>
                        </Link>
                        <Link 
                         href={`/agency/trips/${trip.id}/edit`} 

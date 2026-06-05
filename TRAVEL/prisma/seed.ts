@@ -86,10 +86,15 @@ async function main() {
 
   const agency = await prisma.agency.upsert({
     where: { email: "agency@test.com" },
-    update: { verificationStatus: "VERIFIED", verifiedAt: new Date() },
+    update: {
+      verificationStatus: "VERIFIED",
+      verifiedAt: new Date(),
+      slug: "sahara-tours-expert",
+    },
     create: {
       userId: agencyUser.id,
       name: "Sahara Tours Expert",
+      slug: "sahara-tours-expert",
       managerName: "Ahmed Alami",
       email: "agency@test.com",
       phoneNumber: "+212 600 000 000",
@@ -223,6 +228,46 @@ async function main() {
     ];
     for (const r of samples) {
       await prisma.review.create({ data: { ...r, status: "APPROVED" } });
+    }
+  }
+
+  const auditCount = await prisma.auditLog.count();
+  if (auditCount === 0) {
+    const admin = await prisma.user.findUnique({
+      where: { email: "admin@maghrebvoyage.com" },
+      select: { id: true },
+    });
+    if (admin) {
+      const seededAt = Date.now();
+      const agencyTripCount = await prisma.groupTrip.count({
+        where: { agencyId: agency.id },
+      });
+      await prisma.auditLog.createMany({
+        data: [
+          {
+            action: "AGENCY_VERIFIED",
+            userId: admin.id,
+            details: JSON.stringify({
+              agencyId: agency.id,
+              agencyName: agency.name,
+              source: "seed",
+            }),
+            createdAt: new Date(seededAt - 7 * 86400000),
+          },
+          {
+            action: "TRIP_PUBLISHED",
+            userId: admin.id,
+            details: JSON.stringify({ agencyId: agency.id, source: "seed" }),
+            createdAt: new Date(seededAt - 5 * 86400000),
+          },
+          {
+            action: "SYSTEM_SEED_COMPLETE",
+            userId: admin.id,
+            details: JSON.stringify({ trips: agencyTripCount }),
+            createdAt: new Date(),
+          },
+        ],
+      });
     }
   }
 

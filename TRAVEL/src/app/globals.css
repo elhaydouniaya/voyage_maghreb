@@ -124,6 +124,53 @@
   .scrollbar-hide {
     -ms-overflow-style: none;
   }
+
+  @keyframes hero-ken-burns {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.06); }
+  }
+  .hero-ken-burns {
+    animation: hero-ken-burns 45s ease-in-out infinite;
+  }
+
+  @keyframes hero-shimmer {
+    0% { transform: translateX(-50%) rotate(45deg); }
+    100% { transform: translateX(50%) rotate(45deg); }
+  }
+  .hero-shimmer-layer::before {
+    content: "";
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: linear-gradient(
+      to top right,
+      transparent,
+      rgba(255, 255, 255, 0.08),
+      transparent
+    );
+    animation: hero-shimmer 12s linear infinite;
+  }
+
+  @keyframes hero-float-particle {
+    0% { transform: translateY(0) translateX(0); opacity: 0; }
+    20% { opacity: 0.35; }
+    80% { opacity: 0.35; }
+    100% { transform: translateY(-180px) translateX(24px); opacity: 0; }
+  }
+  .hero-particle {
+    animation: hero-float-particle linear infinite;
+  }
+
+  @keyframes hero-sound-bar {
+    from { height: 30%; }
+    to { height: 100%; }
+  }
+  .hero-sound-bar {
+    height: 100%;
+    animation: hero-sound-bar 0.4s ease-in-out infinite alternate;
+  }
 }
 
 @layer base {

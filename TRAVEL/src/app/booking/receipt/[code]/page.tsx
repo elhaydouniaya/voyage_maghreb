@@ -4,19 +4,21 @@ import Link from "next/link";
 import { authOptions } from "@/lib/auth-options";
 import { BookingsService } from "@/services/bookings.service";
 import { PrintReceiptButton } from "./PrintReceiptButton";
+import ReceiptTracker from "@/components/analytics/ReceiptTracker";
 
 export default async function BookingReceiptPage({
   params,
 }: {
-  params: { code: string };
+  params: Promise<{ code: string }>;
 }) {
+  const { code } = await params;
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect("/login");
 
   let invoice;
   try {
     invoice = await BookingsService.getInvoice(
-      params.code,
+      code,
       session.user.id,
       session.user.role || "CLIENT"
     );
@@ -26,6 +28,7 @@ export default async function BookingReceiptPage({
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] py-12 px-6 print:bg-white print:py-0">
+      <ReceiptTracker code={code} />
       <div className="max-w-2xl mx-auto">
         <div className="flex justify-between items-center mb-8 print:hidden">
           <Link

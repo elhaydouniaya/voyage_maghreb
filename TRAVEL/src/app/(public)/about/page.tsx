@@ -60,7 +60,7 @@ export default function AboutPage() {
                    </div>
                    <div>
                       <div className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Téléphone</div>
-                      <div className="font-bold text-[#0F172A]">+213 (0) 555 12 34 56</div>
+                      <div className="font-bold text-[#0F172A]">+212 6 12 34 56 78</div>
                    </div>
                 </div>
                 <div className="flex gap-4">
@@ -69,7 +69,7 @@ export default function AboutPage() {
                    </div>
                    <div>
                       <div className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Bureau</div>
-                      <div className="font-bold text-[#0F172A]">Alger, Algérie</div>
+                      <div className="font-bold text-[#0F172A]">Casablanca, Maroc</div>
                    </div>
                 </div>
              </div>

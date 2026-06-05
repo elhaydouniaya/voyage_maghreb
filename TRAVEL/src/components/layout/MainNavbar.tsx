@@ -22,7 +22,7 @@ export default function MainNavbar() {
   return (
     <>
       <nav className="fixed top-0 w-full bg-white/80 backdrop-blur-md px-6 md:px-12 py-5 flex justify-between items-center z-50 border-b border-gray-50/50">
-        <Link href="/" className="flex items-center gap-2 group">
+        <Link prefetch={false} href="/" className="flex items-center gap-2 group">
           <div className="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center text-white shadow-lg shadow-orange-500/20 group-hover:scale-110 transition-transform">
             <Globe size={18} />
           </div>
@@ -37,6 +37,7 @@ export default function MainNavbar() {
               <Link 
                 key={link.href} 
                 href={link.href} 
+                prefetch={false}
                 className={`hover:text-orange-500 transition-colors ${isActive ? "text-orange-600 font-black" : ""}`}
               >
                 {link.label}
@@ -69,6 +70,7 @@ export default function MainNavbar() {
                 <Link 
                   key={link.href} 
                   href={link.href} 
+                  prefetch={false}
                   onClick={() => setIsMenuOpen(false)}
                   className="text-3xl font-black text-[#0F172A] tracking-tighter"
                 >

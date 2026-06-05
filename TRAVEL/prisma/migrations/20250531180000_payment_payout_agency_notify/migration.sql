@@ -1,0 +1,9 @@
+-- Paiement : répartition Connect
+ALTER TABLE "Payment" ADD COLUMN IF NOT EXISTS "payoutMode" TEXT NOT NULL DEFAULT 'platform';
+ALTER TABLE "Payment" ADD COLUMN IF NOT EXISTS "platformFeeCents" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "Payment" ADD COLUMN IF NOT EXISTS "agencyNetCents" INTEGER NOT NULL DEFAULT 0;
+
+-- Agence : préférences email
+ALTER TABLE "Agency" ADD COLUMN IF NOT EXISTS "notifyBookingsEmail" BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE "Agency" ADD COLUMN IF NOT EXISTS "notifyPaymentsEmail" BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE "Agency" ADD COLUMN IF NOT EXISTS "notifyPartnerNewsletter" BOOLEAN NOT NULL DEFAULT false;

@@ -1,15 +1,25 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { User, LogOut, ChevronDown, LayoutDashboard } from "lucide-react";
+import { User, LogOut, ChevronDown, LayoutDashboard, Bot } from "lucide-react";
 import { signOutToHome } from "@/lib/auth-client";
+import { buildLoginHref } from "@/lib/auth-redirect";
 import { useState, useRef, useEffect } from "react";
 
 export function NavbarAuth() {
   const { data: session, status } = useSession();
+  const pathname = usePathname();
+  const [loginHref, setLoginHref] = useState("/login");
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const search =
+      typeof window !== "undefined" ? window.location.search.replace(/^\?/, "") : "";
+    setLoginHref(buildLoginHref(pathname, search));
+  }, [pathname]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -26,7 +36,7 @@ export function NavbarAuth() {
 
   if (session) {
     const name = session.user?.name || "Mon compte";
-    const role = (session.user as any).role || "CLIENT";
+    const role = (session.user as { role?: string }).role || "CLIENT";
     const initials = name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2);
 
     return (
@@ -52,8 +62,25 @@ export function NavbarAuth() {
               <p className="text-[10px] text-gray-400 font-bold truncate">{session.user?.email}</p>
             </div>
             <div className="py-2">
+              {role === "CLIENT" && (
+                <Link
+                  href="/profile?tab=guide-ia"
+                  prefetch={false}
+                  onClick={() => {
+                    if (typeof window !== "undefined") {
+                      sessionStorage.setItem("profile_tab", "guide-ia");
+                    }
+                    setOpen(false);
+                  }}
+                  className="flex items-center gap-3 px-6 py-3.5 text-xs font-black uppercase tracking-widest text-[#0F172A] hover:bg-[#F8FAFC] transition-colors"
+                >
+                  <Bot size={14} className="text-orange-600" />
+                  Guide IA
+                </Link>
+              )}
               <Link
                 href={role === "AGENCY" ? "/agency/dashboard" : role === "ADMIN" ? "/admin/dashboard" : "/profile"}
+                prefetch={false}
                 onClick={() => setOpen(false)}
                 className="flex items-center gap-3 px-6 py-3.5 text-xs font-black uppercase tracking-widest text-[#0F172A] hover:bg-[#F8FAFC] transition-colors"
               >
@@ -63,6 +90,7 @@ export function NavbarAuth() {
               {role === "AGENCY" && (
                 <Link
                   href="/agency/profile"
+                  prefetch={false}
                   onClick={() => setOpen(false)}
                   className="flex items-center gap-3 px-6 py-3.5 text-xs font-black uppercase tracking-widest text-[#0F172A] hover:bg-[#F8FAFC] transition-colors"
                 >
@@ -86,10 +114,10 @@ export function NavbarAuth() {
 
   return (
     <div className="flex items-center gap-6">
-      <Link href="/agency/login" className="text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-orange-600 transition-colors hidden md:block">
+      <Link prefetch={false} href="/agency/login" className="text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-orange-600 transition-colors hidden md:block">
         Espace Agence
       </Link>
-      <Link href="/login" className="bg-[#0F172A] text-white text-xs font-black uppercase tracking-widest px-8 py-3 rounded-full hover:bg-black transition-all shadow-lg shadow-black/10">
+      <Link prefetch={false} href={loginHref} className="bg-[#0F172A] text-white text-xs font-black uppercase tracking-widest px-8 py-3 rounded-full hover:bg-black transition-all shadow-lg shadow-black/10">
         Se connecter
       </Link>
     </div>

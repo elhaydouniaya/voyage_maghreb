@@ -1,0 +1,137 @@
+{
+  "exportedAt": "2026-06-03T12:59:23.113Z",
+  "trips": [
+    {
+      "title": "Réveillon à Taghit 2025",
+      "slug": "reveillon-taghit-2025",
+      "destination": "Taghit, Algérie",
+      "description": "Passez le nouvel an dans les magnifiques dunes de Taghit.",
+      "tripType": "DESERT",
+      "totalPrice": 1250,
+      "depositAmount": 300,
+      "currency": "EUR",
+      "durationDays": 7,
+      "startDate": "2024-12-27",
+      "inclusions": [
+        "Hébergement",
+        "Repas",
+        "Guide"
+      ],
+      "exclusions": [],
+      "aiTags": [],
+      "agency": "Sahara Tours Expert",
+      "agencyCountry": "Maroc"
+    },
+    {
+      "title": "Réveillon à Taghit 2027",
+      "slug": "reveillon-taghit-2026",
+      "destination": "Taghit, Algérie",
+      "description": "Passez le nouvel an dans les magnifiques dunes de Taghit. Une expérience inoubliable dans le Grand Erg Occidental.",
+      "tripType": "DESERT",
+      "totalPrice": 1250,
+      "depositAmount": 300,
+      "currency": "EUR",
+      "durationDays": 7,
+      "startDate": "2026-12-27",
+      "inclusions": [
+        "Hébergement en bivouac",
+        "Pension complète",
+        "Guide local",
+        "Transferts"
+      ],
+      "exclusions": [
+        "Vols internationaux",
+        "Dépenses personnelles"
+      ],
+      "aiTags": [
+        "sahara",
+        "desert",
+        "aventure",
+        "nouvel an",
+        "dunes"
+      ],
+      "agency": "Sahara Tours Expert",
+      "agencyCountry": "Maroc"
+    },
+    {
+      "title": "Circuit Marrakech & Désert",
+      "slug": "circuit-marrakech-desert-2026",
+      "destination": "Marrakech & Merzouga, Maroc",
+      "description": "De la magie de Marrakech aux dunes de l'Erg Chebbi, vivez un circuit complet à travers le Maroc impérial et saharien.",
+      "tripType": "CULTURE",
+      "totalPrice": 1890,
+      "depositAmount": 450,
+      "currency": "EUR",
+      "durationDays": 10,
+      "startDate": "2026-08-10",
+      "inclusions": [
+        "Hôtels 3-4★",
+        "Demi-pension",
+        "Guide francophone",
+        "Transport privé"
+      ],
+      "exclusions": [
+        "Vols",
+        "Déjeuners",
+        "Entrées musées"
+      ],
+      "aiTags": [
+        "maroc",
+        "marrakech",
+        "desert",
+        "culture",
+        "circuit"
+      ],
+      "agency": "Sahara Tours Expert",
+      "agencyCountry": "Maroc"
+    },
+    {
+      "title": "Trek Atlas — Toubkal Sommet",
+      "slug": "trek-atlas-automne-2026",
+      "destination": "Massif du Toubkal, Maroc",
+      "description": "Ascension du plus haut sommet d'Afrique du Nord (4167m). Trek de 5 jours entre berbères et paysages grandioses.",
+      "tripType": "AVENTURE",
+      "totalPrice": 850,
+      "depositAmount": 200,
+      "currency": "EUR",
+      "durationDays": 5,
+      "startDate": "2026-10-05",
+      "inclusions": [
+        "Guide certifié",
+        "Muletiers",
+        "Hébergement gîtes",
+        "Repas inclus"
+      ],
+      "exclusions": [
+        "Vols",
+        "Assurance",
+        "Équipement personnel"
+      ],
+      "aiTags": [
+        "montagne",
+        "trek",
+        "aventure",
+        "toubkal",
+        "atlas"
+      ],
+      "agency": "Sahara Tours Expert",
+      "agencyCountry": "Maroc"
+    }
+  ],
+  "agencies": [
+    {
+      "name": "Sahara Tours Expert",
+      "country": "Maroc",
+      "city": "Marrakech",
+      "description": "Agence spécialisée dans les treks et circuits dans le désert.",
+      "specialties": [
+        "DESERT",
+        "AVENTURE"
+      ],
+      "coverage": [
+        "Maroc",
+        "Algérie"
+      ]
+    }
+  ]
+}

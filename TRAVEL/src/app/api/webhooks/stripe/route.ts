@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { BookingsService } from "@/services/bookings.service";
+import { StripeConnectService } from "@/services/stripe-connect.service";
 
 export async function POST(request: Request) {
   if (!stripe || !process.env.STRIPE_WEBHOOK_SECRET) {
@@ -26,6 +27,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Signature invalide." }, { status: 400 });
   }
 
+  if (
+    event.type === "account.updated" &&
+    event.data.object &&
+    typeof event.data.object === "object" &&
+    "id" in event.data.object
+  ) {
+    try {
+      await StripeConnectService.syncAccountFromWebhook(
+        String(event.data.object.id)
+      );
+    } catch (error) {
+      console.error("Webhook account.updated:", error);
+    }
+  }
+
   if (event.type === "checkout.session.completed") {
     const session = event.data.object;
     try {
@@ -37,7 +53,11 @@ export async function POST(request: Request) {
         numberOfSeats: session.metadata?.numberOfSeats || "1",
       });
       if (!result.alreadyProcessed && "bookingId" in result && result.bookingId) {
-        void BookingsService.sendConfirmationEmails(result.bookingId);
+        try {
+          await BookingsService.ensureConfirmationEmailsSent(result.bookingId);
+        } catch (error) {
+          console.error("Webhook confirmation email:", error);
+        }
       }
     } catch (error) {
       console.error("Webhook booking confirm error:", error);

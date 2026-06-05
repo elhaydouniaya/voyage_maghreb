@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Save, Sparkles, Map, CreditCard, Settings } from "lucide-react";
+import TripImageUpload from "@/components/trips/TripImageUpload";
 
 export default function EditTripPage() {
   const router = useRouter();
@@ -22,6 +23,7 @@ export default function EditTripPage() {
     depositAmount: 300,
     description: "",
     coverImage: "",
+    images: [] as string[],
     inclusionsText: "",
     exclusionsText: "",
     meetingPoint: "",
@@ -48,7 +50,8 @@ export default function EditTripPage() {
           totalPrice: trip.totalPrice,
           depositAmount: trip.depositAmount,
           description: trip.description,
-          coverImage: trip.coverImage,
+          coverImage: trip.coverImage || "",
+          images: Array.isArray(trip.images) ? trip.images : [],
           inclusionsText: (trip.inclusions || []).join(", "),
           exclusionsText: (trip.exclusions || []).join(", "),
           meetingPoint: trip.meetingPoint || "",
@@ -217,47 +220,17 @@ export default function EditTripPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div className="space-y-3">
-              <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Point de rendez-vous</label>
-              <input type="text" name="meetingPoint" value={formData.meetingPoint} onChange={handleChange} placeholder="Ex: Aéroport d'Alger" className="w-full bg-[#F8FAFC] border border-gray-100 rounded-2xl px-5 py-4 focus:ring-4 focus:ring-primary/10 outline-none font-bold text-[#0F172A] transition-all" />
-            </div>
-            <div className="space-y-4">
-              <div className="space-y-3">
-                <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Image (URL) *</label>
-                <input 
-                  type="url" 
-                  name="coverImage" 
-                  value={formData.coverImage} 
-                  onChange={handleChange} 
-                  required
-                  placeholder="https://images.unsplash.com/..." 
-                  className="w-full bg-[#F8FAFC] border border-gray-100 rounded-2xl px-5 py-4 focus:ring-4 focus:ring-primary/10 outline-none font-bold text-[#0F172A] transition-all" 
-                />
-              </div>
-              
-              {/* Image Preview */}
-              <div className="relative group aspect-video rounded-[2rem] overflow-hidden bg-gray-50 border-2 border-dashed border-gray-100 flex items-center justify-center transition-all">
-                {formData.coverImage ? (
-                  <img 
-                    src={formData.coverImage} 
-                    alt="Preview" 
-                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?q=80&w=2070&auto=format&fit=crop';
-                    }}
-                  />
-                ) : (
-                  <div className="text-center p-10">
-                    <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4 text-gray-300">
-                      <Map size={32} />
-                    </div>
-                    <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Aperçu de l'image s'affichera ici</p>
-                  </div>
-                )}
-              </div>
-            </div>
+          <div className="space-y-3">
+            <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Point de rendez-vous</label>
+            <input type="text" name="meetingPoint" value={formData.meetingPoint} onChange={handleChange} placeholder="Ex: Aéroport d'Alger" className="w-full bg-[#F8FAFC] border border-gray-100 rounded-2xl px-5 py-4 focus:ring-4 focus:ring-primary/10 outline-none font-bold text-[#0F172A] transition-all" />
           </div>
+
+          <TripImageUpload
+            coverImage={formData.coverImage}
+            gallery={formData.images}
+            onCoverChange={(url) => setFormData((prev) => ({ ...prev, coverImage: url }))}
+            onGalleryChange={(images) => setFormData((prev) => ({ ...prev, images }))}
+          />
         </div>
 
         <div className="flex justify-end gap-6 pt-4">

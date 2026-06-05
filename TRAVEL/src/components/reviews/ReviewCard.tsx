@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Star, MapPin, Calendar } from "lucide-react";
 import Image from "next/image";
 
@@ -28,9 +29,32 @@ export default function ReviewCard({
   date,
   helpful = 0,
 }: ReviewCardProps) {
+  const [expanded, setExpanded] = useState(false);
+  const [helpfulCount, setHelpfulCount] = useState(helpful);
+  const [voted, setVoted] = useState(false);
+  const [voting, setVoting] = useState(false);
+
+  const longContent = content.length > 220;
+
+  const handleHelpful = async () => {
+    if (voted || voting) return;
+    setVoting(true);
+    try {
+      const res = await fetch(`/api/reviews/${id}/helpful`, { method: "POST" });
+      const data = await res.json();
+      if (res.ok && typeof data.helpful === "number") {
+        setHelpfulCount(data.helpful);
+        setVoted(true);
+      }
+    } catch {
+      /* ignore */
+    } finally {
+      setVoting(false);
+    }
+  };
+
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-lg transition-shadow">
-      {/* Header */}
       <div className="flex items-start justify-between mb-4">
         <div className="flex items-center gap-4">
           <div className="relative w-12 h-12 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center text-white font-bold">
@@ -65,34 +89,51 @@ export default function ReviewCard({
         </div>
       </div>
 
-      {/* Title */}
       <h4 className="font-bold text-gray-900 mb-2 text-lg">{title}</h4>
 
-      {/* Content */}
-      <p className="text-gray-600 text-sm mb-4 leading-relaxed line-clamp-3">
+      <p
+        className={`text-gray-600 text-sm mb-4 leading-relaxed ${
+          expanded ? "" : "line-clamp-3"
+        }`}
+      >
         {content}
       </p>
 
-      {/* Trip Info */}
       <div className="flex items-center gap-4 mb-4 pb-4 border-b border-gray-100 text-xs text-gray-600">
         <div className="flex items-center gap-1">
           <MapPin size={14} className="text-orange-500" />
           <span>{destination}</span>
         </div>
-        <div className="flex items-center gap-1">
-          <Calendar size={14} className="text-orange-500" />
-          <span>{tripDate}</span>
-        </div>
+        {tripDate && (
+          <div className="flex items-center gap-1">
+            <Calendar size={14} className="text-orange-500" />
+            <span>{tripDate}</span>
+          </div>
+        )}
       </div>
 
-      {/* Footer */}
       <div className="flex items-center justify-between">
-        <button className="text-xs text-gray-500 hover:text-orange-500 transition-colors">
-          👍 Utile ({helpful})
+        <button
+          type="button"
+          onClick={handleHelpful}
+          disabled={voted || voting}
+          className={`text-xs transition-colors ${
+            voted
+              ? "text-orange-600 font-bold"
+              : "text-gray-500 hover:text-orange-500"
+          } disabled:opacity-60`}
+        >
+          👍 Utile ({helpfulCount})
         </button>
-        <button className="text-xs font-bold text-orange-500 hover:text-orange-600 transition-colors">
-          Lire plus →
-        </button>
+        {longContent && (
+          <button
+            type="button"
+            onClick={() => setExpanded(!expanded)}
+            className="text-xs font-bold text-orange-500 hover:text-orange-600 transition-colors"
+          >
+            {expanded ? "Réduire ↑" : "Lire plus →"}
+          </button>
+        )}
       </div>
     </div>
   );

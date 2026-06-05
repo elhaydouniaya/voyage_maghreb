@@ -59,6 +59,7 @@ model User {
   favorites     Favorite[]
   guideProfile  ClientGuideProfile?
   guideMessages GuideChatMessage[]
+  behaviorEvents BehaviorEvent[]
 }
 
 model ClientGuideProfile {
@@ -114,6 +115,7 @@ model Agency {
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   name            String
+  slug            String?  @unique
   managerName     String
   email           String   @unique
   phoneNumber     String
@@ -129,12 +131,22 @@ model Agency {
   verifiedAt         DateTime?
   verifiedByUserId   String?
 
+  stripeConnectAccountId       String?  @unique
+  stripeConnectChargesEnabled  Boolean  @default(false)
+  stripeConnectPayoutsEnabled  Boolean  @default(false)
+  stripeConnectOnboardingComplete Boolean @default(false)
+
+  notifyBookingsEmail       Boolean  @default(true)
+  notifyPaymentsEmail       Boolean  @default(true)
+  notifyPartnerNewsletter   Boolean  @default(false)
+
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
   trips           GroupTrip[]
   bookings        Booking[]
   payments        Payment[]
+  leads           AgencyLead[]
 }
 
 enum AgencyStatus {
@@ -191,6 +203,22 @@ model TravelRequest {
   updatedAt       DateTime @updatedAt
 
   bookings        Booking[]
+  agencyLeads     AgencyLead[]
+}
+
+model AgencyLead {
+  id                String   @id @default(cuid())
+  agencyId          String
+  agency            Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  travelRequestId   String
+  travelRequest     TravelRequest @relation(fields: [travelRequestId], references: [id], onDelete: Cascade)
+  matchedTripIds    String[] @default([])
+  bestCompatibility Int?
+  readAt            DateTime?
+  createdAt         DateTime @default(now())
+
+  @@unique([agencyId, travelRequestId])
+  @@index([agencyId, createdAt])
 }
 
 enum RequestStatus {
@@ -321,6 +349,7 @@ model Booking {
   notes           String?  @db.Text
 
   preTripReminderSentAt DateTime?
+  confirmationEmailSentAt DateTime?
 
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -357,7 +386,11 @@ model Payment {
   amount          Decimal  @db.Decimal(10, 2)
   currency        String   @default("EUR")
   paymentType     String   @default("deposit") // 'deposit' | 'service_fee'
-  
+
+  payoutMode          String   @default("platform") // platform | connect
+  platformFeeCents    Int      @default(0)
+  agencyNetCents      Int      @default(0)
+
   status          PaymentStatus @default(PENDING)
   paidAt          DateTime?
   
@@ -385,6 +418,40 @@ model AuditLog {
   userId          String?
   details         String   @db.Text
   createdAt       DateTime @default(now())
+}
+
+// ==========================================
+// 7b. Analytics comportementales (User Journey)
+// ==========================================
+
+enum JourneyStep {
+  PAGE_VIEW
+  SEARCH_START
+  AI_MATCH_SUBMIT
+  TRIP_VIEW
+  CHECKOUT_START
+  BOOKING_CONFIRMED
+  LOGIN
+  REGISTER
+  GUIDE_CHAT
+}
+
+model BehaviorEvent {
+  id          String      @id @default(cuid())
+  step        JourneyStep
+  path        String?
+  sessionId   String?
+  userId      String?
+  user        User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  role        String?
+  metadata    Json?
+  ipHash      String?
+  durationMs  Int?
+  createdAt   DateTime    @default(now())
+
+  @@index([step, createdAt])
+  @@index([sessionId, createdAt])
+  @@index([userId, createdAt])
 }
 
 // ==========================================
@@ -416,6 +483,17 @@ enum ReviewStatus {
   PENDING
   APPROVED
   REJECTED
+}
+
+// ==========================================
+// 9b. Newsletter
+// ==========================================
+
+model NewsletterSubscriber {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  source    String   @default("homepage")
+  createdAt DateTime @default(now())
 }
 
 // ==========================================

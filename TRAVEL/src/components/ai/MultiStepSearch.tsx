@@ -1,24 +1,24 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { saveAiMatchResults } from "@/lib/ai-match-storage";
+import { trackBehaviorEvent } from "@/components/analytics/BehaviorTracker";
 import { formatPriceShort, formatBudgetMad } from "@/lib/currency";
 import {
   ChevronRight, 
   ChevronLeft, 
   Sparkles, 
-  Check, 
   MapPin, 
-  Users, 
-  Euro, 
   Calendar, 
-  Plane, 
-  Home, 
-  Search,
-  CheckCircle2
 } from "lucide-react";
 import Image from "next/image";
+import AiMatchPipeline from "@/components/ai/AiMatchPipeline";
+import {
+  CDC_FALLBACK_SECTION_TITLE,
+  CDC_NO_EXACT_MATCH_MSG,
+} from "@/lib/match-fallback";
 
 const TRIP_TYPES = [
   { id: "DESERT", label: "Désert", icon: "🌵" },
@@ -31,14 +31,33 @@ const TRIP_TYPES = [
   { id: "HISTORIQUE", label: "Histoire", icon: "🏛️" },
 ];
 
-const TRIP_STYLES = ["Détente", "Sportif", "Gastronomique", "Photographie", "Rencontres"];
 const ACTIVITIES = ["Randonnée", "Sandboard", "Thé traditionnel", "Visite de souk", "Bivouac", "Spa & Hammam", "Quad"];
 
+type MatchResult = {
+  id: string;
+  slug: string;
+  title: string;
+  destination: string;
+  coverImage: string;
+  compatibility: number;
+  isFallback?: boolean;
+  matchScore?: number;
+  matchReasons?: string[];
+  totalPrice: number;
+};
+
 export default function MultiStepSearch() {
+  const { data: session } = useSession();
   const [step, setStep] = useState(1);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [results, setResults] = useState<any[]>([]);
+  const [results, setResults] = useState<MatchResult[]>([]);
   const [summary, setSummary] = useState("");
+  const [matchMode, setMatchMode] = useState<"qualified" | "fallback" | null>(null);
+  const [travelRequestId, setTravelRequestId] = useState<string | null>(null);
+  const [analyzePhase, setAnalyzePhase] = useState(0);
+  const [matchError, setMatchError] = useState("");
+  const [fallbackTitle, setFallbackTitle] = useState(CDC_FALLBACK_SECTION_TITLE);
+  const [noExactMsg, setNoExactMsg] = useState(CDC_NO_EXACT_MATCH_MSG);
 
   const [formData, setFormData] = useState({
     destination: "",
@@ -66,6 +85,16 @@ export default function MultiStepSearch() {
   });
 
   useEffect(() => {
+    const homePrompt = sessionStorage.getItem("home_ai_prompt")?.trim();
+    if (homePrompt) {
+      sessionStorage.removeItem("home_ai_prompt");
+      setFormData((prev) => ({
+        ...prev,
+        constraints: homePrompt,
+        destination: prev.destination || homePrompt.split(/[,.\n]/)[0]?.trim() || "",
+      }));
+    }
+
     const saved = localStorage.getItem("travel_request_draft");
     if (saved) {
       try {
@@ -77,8 +106,31 @@ export default function MultiStepSearch() {
   }, []);
 
   useEffect(() => {
+    if (session?.user?.role !== "CLIENT" || !session.user.email) return;
+    setFormData((prev) => ({
+      ...prev,
+      clientEmail: session.user.email || prev.clientEmail,
+      clientName: session.user.name?.trim() || prev.clientName,
+    }));
+  }, [session?.user?.role, session?.user?.email, session?.user?.name]);
+
+  useEffect(() => {
     localStorage.setItem("travel_request_draft", JSON.stringify(formData));
   }, [formData]);
+
+  useEffect(() => {
+    if (!isAnalyzing) {
+      setAnalyzePhase(0);
+      return;
+    }
+    setAnalyzePhase(1);
+    const t2 = setTimeout(() => setAnalyzePhase(2), 700);
+    const t3 = setTimeout(() => setAnalyzePhase(3), 1400);
+    return () => {
+      clearTimeout(t2);
+      clearTimeout(t3);
+    };
+  }, [isAnalyzing]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
@@ -101,27 +153,58 @@ export default function MultiStepSearch() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!formData.consentRGPD || !formData.acceptCGU) {
+      setMatchError("Veuillez accepter les CGU et le consentement RGPD.");
+      return;
+    }
+    if (!formData.clientEmail?.trim() || !formData.clientName?.trim()) {
+      setMatchError("Email et nom sont obligatoires.");
+      return;
+    }
     setIsAnalyzing(true);
-    setStep(6); // Analysis step
+    setMatchError("");
+    setStep(6);
+
+    const minAnalyzeMs = 1200;
+    const started = Date.now();
 
     try {
       const response = await fetch("/api/ai/match", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(formData),
       });
       const data = await response.json();
-      if (data.success) {
-        setResults(data.results);
-        setSummary(data.summary);
-        saveAiMatchResults(data.results, data.summary);
+
+      if (!response.ok || !data.success) {
+        setMatchError(data.error || "Analyse impossible. Réessayez.");
+        setResults([]);
+        setSummary("");
+        setMatchMode(null);
+        return;
       }
+
+      setResults(data.results || []);
+      setSummary(data.summary || "");
+      setTravelRequestId(data.travelRequestId || null);
+      setMatchMode(data.matchMode === "fallback" ? "fallback" : "qualified");
+      if (data.fallbackSectionTitle) setFallbackTitle(data.fallbackSectionTitle);
+      if (data.noExactMatchMessage) setNoExactMsg(data.noExactMatchMessage);
+      trackBehaviorEvent("AI_MATCH_SUBMIT", {
+        matchMode: data.matchMode,
+        resultsCount: (data.results || []).length,
+      });
+      saveAiMatchResults(data.results, data.summary, {
+        matchMode: data.matchMode,
+        travelRequestId: data.travelRequestId,
+      });
     } catch (err) {
       console.error("Match error", err);
+      setMatchError("Erreur réseau. Vérifiez votre connexion.");
     } finally {
-      setTimeout(() => {
-        setIsAnalyzing(false);
-      }, 3000); // Simulate AI processing for "wow" factor as requested in PRD
+      const elapsed = Date.now() - started;
+      const wait = Math.max(0, minAnalyzeMs - elapsed);
+      setTimeout(() => setIsAnalyzing(false), wait);
     }
   };
 
@@ -131,38 +214,61 @@ export default function MultiStepSearch() {
     return (
       <div className="bg-white rounded-[4rem] shadow-2xl border border-gray-100 p-12 md:p-20 text-center space-y-12">
         {isAnalyzing ? (
-          <div className="space-y-8 animate-in fade-in duration-1000">
-            <div className="relative w-32 h-32 mx-auto">
-               <div className="absolute inset-0 bg-orange-500/20 rounded-full animate-ping" />
-               <div className="relative bg-orange-600 w-32 h-32 rounded-full flex items-center justify-center text-white shadow-2xl">
-                  <Sparkles size={48} className="animate-pulse" />
-               </div>
+          <div className="space-y-10 animate-in fade-in duration-1000 max-w-3xl mx-auto">
+            <div className="text-center space-y-3">
+              <h2 className="text-3xl font-black text-[#0F172A] tracking-tight">
+                Chaîne IA → matching
+              </h2>
+              <p className="text-gray-400 font-bold uppercase tracking-widest text-[10px]">
+                {analyzePhase === 1 && "Étape 1 — Structuration LLM"}
+                {analyzePhase === 2 && "Étape 2 — Score sur le catalogue (/18)"}
+                {analyzePhase >= 3 && "Étape 3 — Sélection des correspondances"}
+              </p>
             </div>
-            <div>
-               <h2 className="text-3xl font-black text-[#0F172A] tracking-tight mb-2">Analyse en cours...</h2>
-               <p className="text-gray-400 font-bold uppercase tracking-widest text-[10px]">Notre IA explore les meilleures opportunités pour vous</p>
-            </div>
-            <div className="max-w-xs mx-auto space-y-4">
-               <div className="h-1.5 bg-gray-50 rounded-full overflow-hidden">
-                  <div className="h-full bg-orange-600 animate-progress w-full" />
-               </div>
-               <p className="text-xs text-gray-400 italic">"Génération du profil voyageur..."</p>
-            </div>
+            <AiMatchPipeline activeStep={analyzePhase} />
+          </div>
+        ) : matchError ? (
+          <div className="space-y-6 py-8">
+            <p className="text-red-600 font-bold">{matchError}</p>
+            <button
+              type="button"
+              onClick={() => setStep(5)}
+              className="text-orange-600 font-black text-xs uppercase tracking-widest"
+            >
+              ← Retour au formulaire
+            </button>
           </div>
         ) : (
           <div className="space-y-12 animate-in slide-in-from-bottom-8 duration-700">
+            <AiMatchPipeline
+              activeStep={4}
+              compact
+              matchMode={matchMode}
+              qualifiedCount={results.filter((r) => !r.isFallback).length}
+            />
             <div className="space-y-4">
-              <h2 className="text-4xl font-black text-[#0F172A] tracking-tight">Nous avons trouvé vos <span className="text-orange-500">pépites.</span></h2>
+              <h2 className="text-4xl font-black text-[#0F172A] tracking-tight">
+                {matchMode === "fallback"
+                  ? fallbackTitle
+                  : <>Nous avons trouvé vos <span className="text-orange-500">pépites.</span></>}
+              </h2>
               <p className="text-gray-500 font-medium max-w-lg mx-auto">{summary}</p>
+              {matchMode === "fallback" && (
+                <p className="text-xs text-orange-700 font-bold bg-orange-50 border border-orange-100 rounded-2xl px-4 py-3 max-w-lg mx-auto">
+                  {noExactMsg} Voici les prochains départs disponibles — élargissez budget ou dates pour un match plus précis.
+                </p>
+              )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-               {results.length > 0 ? results.map((trip, i) => (
+               {results.length > 0 ? results.map((trip) => (
                  <div key={trip.id} className="bg-[#F8FAFC] rounded-[3rem] overflow-hidden border border-gray-100 group hover:shadow-2xl transition-all duration-500">
                     <div className="h-48 relative">
                        <Image src={trip.coverImage} alt={trip.title} fill className="object-cover transition-transform duration-700 group-hover:scale-110" />
-                       <div className="absolute top-6 left-6 bg-orange-600 text-white text-[10px] font-black px-4 py-1.5 rounded-full shadow-lg">
-                          {trip.compatibility}% COMPATIBLE
+                       <div className={`absolute top-6 left-6 text-white text-[10px] font-black px-4 py-1.5 rounded-full shadow-lg ${
+                         trip.isFallback ? "bg-gray-600" : "bg-orange-600"
+                       }`}>
+                          {trip.isFallback ? "SUGGESTION" : `${trip.compatibility}% COMPATIBLE`}
                        </div>
                     </div>
                     <div className="p-8 text-left space-y-6">
@@ -171,6 +277,20 @@ export default function MultiStepSearch() {
                           <div className="flex items-center gap-2 text-[10px] font-black text-gray-400 uppercase tracking-widest">
                              <MapPin size={12} className="text-orange-500" /> {trip.destination}
                           </div>
+                          {trip.matchScore != null && (
+                            <p className="text-[10px] font-bold text-orange-600 mt-2">
+                              Score IA : {trip.matchScore}/18
+                            </p>
+                          )}
+                          {trip.matchReasons && trip.matchReasons.length > 0 && (
+                            <ul className="mt-2 space-y-1">
+                              {trip.matchReasons.slice(0, 3).map((reason) => (
+                                <li key={reason} className="text-[10px] text-gray-500 font-medium">
+                                  · {reason}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
                        </div>
                        <div className="flex justify-between items-center pt-6 border-t border-gray-200/50">
                           <div className="text-2xl font-black text-[#0F172A]">{formatPriceShort(trip.totalPrice)}</div>
@@ -187,7 +307,11 @@ export default function MultiStepSearch() {
             
             <div className="pt-8 flex flex-col sm:flex-row gap-4 justify-center items-center">
                <Link
-                 href="/voyages?matched=true"
+                 href={
+                   travelRequestId
+                     ? `/voyages?matched=true&request=${encodeURIComponent(travelRequestId)}`
+                     : "/voyages?matched=true"
+                 }
                  className="bg-orange-600 text-white px-10 py-4 rounded-full text-xs font-black uppercase tracking-widest hover:bg-orange-700 transition-all"
                >
                  Voir sur la page Voyages →

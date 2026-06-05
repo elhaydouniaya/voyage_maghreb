@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 
 type BookingSummary = {
+  id?: string;
   confirmationCode: string;
   tripTitle: string;
   destination: string;
@@ -41,6 +42,11 @@ function formatFrDate(iso: string) {
 function BookingSuccessContent() {
   const searchParams = useSearchParams();
   const [booking, setBooking] = useState<BookingSummary | null>(null);
+  const [emailInfo, setEmailInfo] = useState<{
+    sent: boolean;
+    to?: string;
+    mode?: string;
+  } | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -60,6 +66,13 @@ function BookingSuccessContent() {
       .then((data) => {
         if (data.booking) {
           setBooking(data.booking);
+          if (data.emailSent) {
+            setEmailInfo({
+              sent: true,
+              to: data.emailTo,
+              mode: data.emailMode,
+            });
+          }
         } else {
           setError(data.error || "Réservation introuvable.");
         }
@@ -112,6 +125,23 @@ function BookingSuccessContent() {
               <p className="text-orange-100 font-black uppercase tracking-[0.2em] text-[10px]">
                 Votre place est désormais garantie
               </p>
+              {emailInfo?.sent && (
+                <p className="text-orange-50 text-sm font-medium mt-4 max-w-md mx-auto">
+                  {emailInfo.mode === "console" ? (
+                    <>
+                      Confirmation enregistrée — consultez la{" "}
+                      <strong>console du serveur</strong> (mode dev sans Resend) ou
+                      configurez <code className="text-orange-100">RESEND_DEV_TO</code> dans
+                      .env.
+                    </>
+                  ) : (
+                    <>
+                      Un email de confirmation a été envoyé à{" "}
+                      <strong>{emailInfo.to || "votre adresse"}</strong>.
+                    </>
+                  )}
+                </p>
+              )}
             </div>
           </div>
 

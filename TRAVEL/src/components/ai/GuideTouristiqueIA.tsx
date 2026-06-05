@@ -1,32 +1,40 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useSession } from "next-auth/react";
 import { saveAiMatchResults } from "@/lib/ai-match-storage";
 import { formatPriceShort, formatBudgetMad } from "@/lib/currency";
 import {
   Sparkles, 
-  MapPin, 
-  Users, 
-  Calendar, 
   Compass,
   ArrowRight,
-  ChevronRight,
   Bot,
-  Send,
   RefreshCcw,
-  CheckCircle2,
   Heart
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import Toast, { useToast } from "@/components/ui/Toast";
 import SkeletonTripCard from "@/components/ui/SkeletonLoaders";
+import { LoginLink } from "@/components/auth/LoginLink";
 
 interface Message {
   role: "bot" | "user";
   content: string | React.ReactNode;
   type?: "text" | "options" | "results" | "loading" | "options_retry";
 }
+
+type MatchTrip = {
+  id: string;
+  slug: string;
+  title: string;
+  coverImage: string;
+  totalPrice?: number;
+  price?: number;
+  compatibility?: number;
+  isFallback?: boolean;
+  [key: string]: unknown;
+};
 
 const TRIP_TYPES = [
   { id: "DESERT", label: "Désert", icon: "🌵" },
@@ -38,6 +46,8 @@ const TRIP_TYPES = [
 ];
 
 export default function GuideTouristiqueIA() {
+  const { data: session } = useSession();
+  const isClient = session?.user?.role === "CLIENT";
   const [messages, setMessages] = useState<Message[]>([]);
   const [step, setStep] = useState(0);
   const [isTyping, setIsTyping] = useState(false);
@@ -47,11 +57,11 @@ export default function GuideTouristiqueIA() {
     budgetMax: 1500,
     tripType: [] as string[],
     startDate: "",
+    constraints: "",
   });
-  const [results, setResults] = useState<any[]>([]);
+  const [results, setResults] = useState<MatchTrip[]>([]);
   const [budgetDraft, setBudgetDraft] = useState(1500);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const initializedRef = useRef(false);
   const { toast, showToast, hideToast } = useToast();
 
   const BUDGET_MIN = 200;
@@ -71,24 +81,54 @@ export default function GuideTouristiqueIA() {
     }
   }, [messages, isTyping]);
 
-  // Initial greeting
   useEffect(() => {
-    if (initializedRef.current) return;
-    initializedRef.current = true;
-    
-    addBotMessage("Bonjour ! Je suis votre guide MaghrebVoyage. 🌵 Je vais vous aider à configurer votre voyage idéal en quelques instants.");
-    setTimeout(() => {
-      addBotMessage("Pour commencer, quelle destination vous fait rêver ? (Ex: Sahara, Marrakech, Djerba...)");
-      setStep(1);
-    }, 1500);
+    setMessages([
+      {
+        role: "bot",
+        content:
+          "Bonjour ! Je suis votre guide MaghrebVoyage. 🌵 Je vais vous aider à configurer votre voyage idéal en quelques instants.",
+        type: "text",
+      },
+      {
+        role: "bot",
+        content:
+          "Pour commencer, quelle destination vous fait rêver ? (Ex: Sahara, Marrakech, Djerba...)",
+        type: "text",
+      },
+    ]);
+    setStep(1);
+    setIsTyping(false);
+  }, []);
+
+  useEffect(() => {
+    const prompt = sessionStorage.getItem("home_ai_prompt")?.trim();
+    if (!prompt) return;
+    sessionStorage.removeItem("home_ai_prompt");
+
+    setFormData((prev) => ({
+      ...prev,
+      destination: prompt,
+      constraints: prompt,
+    }));
+    setMessages((prev) => [
+      ...prev,
+      { role: "user", content: prompt, type: "text" },
+      {
+        role: "bot",
+        content:
+          "Merci ! Indiquez votre destination si besoin, puis continuez le parcours (voyageurs, style, budget).",
+        type: "text",
+      },
+    ]);
+    setStep(1);
   }, []);
 
   const addBotMessage = (content: string | React.ReactNode, type: Message["type"] = "text") => {
     setIsTyping(true);
     setTimeout(() => {
-      setMessages(prev => [...prev, { role: "bot", content, type }]);
+      setMessages((prev) => [...prev, { role: "bot", content, type }]);
       setIsTyping(false);
-    }, 1000);
+    }, 700);
   };
 
   const addUserMessage = (content: string) => {
@@ -145,17 +185,39 @@ export default function GuideTouristiqueIA() {
     const recap = `C'est noté ! Un voyage ${formData.tripType[0]?.toLowerCase()} à ${formData.destination} pour ${formData.numberOfTravelers} personnes. J'adore cette destination, surtout pour ${cityHighlights}. Laissez-moi analyser nos 52 voyages pour vous...`;
     
     addBotMessage(recap);
-    setStep(5);
-    performMatch(b);
+
+    if (isClient && session?.user?.email) {
+      setStep(5);
+      performMatch(b, session.user.email, session.user.name || "Voyageur");
+      return;
+    }
+
+    setStep(6);
+    setTimeout(() => {
+      addBotMessage(
+        "Pour enregistrer votre demande et permettre aux agences de vous recontacter, indiquez votre email ci-dessous."
+      );
+    }, 1200);
   };
 
-  const toggleFavorite = (trip: any) => {
+  const handleEmailSubmit = (email: string) => {
+    const trimmed = email.trim().toLowerCase();
+    if (!trimmed || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+      showToast("Veuillez saisir une adresse email valide.", "info");
+      return;
+    }
+    addUserMessage(trimmed);
+    setStep(5);
+    performMatch(formData.budgetMax, trimmed, "Voyageur");
+  };
+
+  const toggleFavorite = (trip: MatchTrip) => {
     try {
-      const favs = JSON.parse(localStorage.getItem("mv_favorites") || "[]");
-      const exists = favs.find((f: any) => f.id === trip.id);
+      const favs = JSON.parse(localStorage.getItem("mv_favorites") || "[]") as MatchTrip[];
+      const exists = favs.find((f) => f.id === trip.id);
       let updated;
       if (exists) {
-        updated = favs.filter((f: any) => f.id !== trip.id);
+        updated = favs.filter((f) => f.id !== trip.id);
       } else {
         updated = [trip, ...favs];
       }
@@ -166,7 +228,7 @@ export default function GuideTouristiqueIA() {
     }
   };
 
-  const saveToHistory = (results: any[], summary: string) => {
+  const saveToHistory = (results: MatchTrip[], summary: string) => {
     try {
       const history = JSON.parse(localStorage.getItem("travel_ai_history") || "[]");
       const newEntry = {
@@ -192,37 +254,81 @@ export default function GuideTouristiqueIA() {
       budgetMax: 1500,
       tripType: [] as string[],
       startDate: "",
+      constraints: "",
     });
     setResults([]);
     setStep(1);
     addBotMessage("C'est reparti ! 🚀 Quelle nouvelle destination vous tente ? (Ex: Libye, Mauritanie, Marrakech, Djerba...)");
   };
 
-  const performMatch = async (budget: number) => {
+  const performMatch = async (
+    budget: number,
+    clientEmail?: string,
+    clientName?: string
+  ) => {
     setIsTyping(true);
     try {
       const response = await fetch("/api/ai/match", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...formData, budgetMax: budget })
+        body: JSON.stringify({
+          ...formData,
+          budgetMax: budget,
+          clientEmail: clientEmail || undefined,
+          clientName: clientName || undefined,
+        }),
       });
       const data = await response.json();
-      
-      if (data.success) {
-        setTimeout(() => {
-          setResults(data.results);
-          saveAiMatchResults(data.results, data.summary || "");
-          if (data.results && data.results.length > 0) {
-            addBotMessage("J'ai trouvé des correspondances exceptionnelles pour vous ! Voici mes recommandations personnalisées :", "results");
-            saveToHistory(data.results, data.summary);
-          } else {
-            addBotMessage("Malheureusement, je n'ai trouvé aucun voyage correspondant exactement à vos critères pour le moment. 🌵");
-            setTimeout(() => {
-              addBotMessage("Souhaitez-vous élargir vos critères ou recommencer la recherche ?", "options_retry");
-            }, 1000);
-          }
-        }, 2000);
+
+      if (!response.ok || !data.success) {
+        addBotMessage(
+          data.error ||
+            "Le moteur de matching est indisponible. Essayez le formulaire complet sur /recherche avec votre email."
+        );
+        return;
       }
+
+      setTimeout(() => {
+        const list = data.results || [];
+        const mode = data.matchMode === "fallback" ? "fallback" : "qualified";
+        setResults(list as MatchTrip[]);
+        saveAiMatchResults(list, data.summary || "", {
+          matchMode: mode,
+          travelRequestId: data.travelRequestId,
+        });
+
+        if (data.travelRequestId) {
+          showToast(
+            isClient
+              ? "Demande enregistrée sur votre compte."
+              : "Demande enregistrée — vérifiez votre email.",
+            "success"
+          );
+        }
+
+        if (list.length > 0 && mode === "qualified") {
+          addBotMessage(
+            "J'ai trouvé des voyages qui correspondent vraiment à votre profil (score IA) :",
+            "results"
+          );
+          saveToHistory(list, data.summary);
+        } else if (list.length > 0) {
+          addBotMessage(
+            "Pas de match parfait, mais voici les prochains départs les plus proches de votre projet :",
+            "results"
+          );
+        } else {
+          addBotMessage(
+            "Aucun voyage publié ne correspond pour le moment. 🌵"
+          );
+          setTimeout(() => {
+            addBotMessage(
+              "Élargissez le budget ou essayez /recherche avec vos coordonnées.",
+              "options_retry"
+            );
+          }, 1000);
+        }
+      }, 1500);
     } catch (err) {
       console.error(err);
       addBotMessage("Oups, j'ai eu un petit souci technique. Voulez-vous réessayer ?");
@@ -243,13 +349,11 @@ export default function GuideTouristiqueIA() {
               <h3 className="font-black text-lg tracking-tight">Guide Touristique IA</h3>
               <div className="flex items-center gap-2">
                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                 <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Expert Destinations Maghreb</span>
+                 <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+                   {isClient ? "Compte connecté · demande sauvegardée" : "Matching voyages publiés"}
+                 </span>
               </div>
            </div>
-        </div>
-        <div className="hidden md:flex items-center gap-3 bg-white/5 px-4 py-2 rounded-full border border-white/10">
-           <Sparkles size={14} className="text-orange-500" />
-           <span className="text-[10px] font-black uppercase tracking-widest">Analyse en temps réel</span>
         </div>
       </div>
 
@@ -307,12 +411,14 @@ export default function GuideTouristiqueIA() {
 
               {msg.type === "results" && results.length > 0 && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-3xl">
-                   {results.map((trip, idx) => (
+                   {results.map((trip) => (
                      <div key={trip.id} className="bg-white rounded-[2.5rem] overflow-hidden border border-gray-100 shadow-xl group hover:border-orange-500/30 transition-all duration-500 animate-in zoom-in-95 delay-150">
                         <div className="h-40 relative">
                            <Image src={trip.coverImage} alt={trip.title} fill className="object-cover" />
-                           <div className="absolute top-4 left-4 bg-orange-600 text-white text-[9px] font-black px-3 py-1 rounded-full shadow-lg">
-                              {trip.compatibility}% MATCH
+                           <div className={`absolute top-4 left-4 text-white text-[9px] font-black px-3 py-1 rounded-full shadow-lg ${
+                              trip.isFallback ? "bg-slate-600" : "bg-orange-600"
+                           }`}>
+                              {trip.isFallback ? "SUGGESTION" : `${trip.compatibility}% COMPATIBLE`}
                            </div>
                            <button 
                              onClick={() => toggleFavorite(trip)}
@@ -329,7 +435,7 @@ export default function GuideTouristiqueIA() {
                                  <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">À partir de</span>
                                  <span className="text-xl font-black text-[#0F172A]">{formatPriceShort(trip.totalPrice || trip.price || 0)}</span>
                               </div>
-                              <Link href={`/trip/${trip.slug}`} className="bg-[#0F172A] text-white text-[9px] font-black px-6 py-3 rounded-full hover:bg-orange-600 transition-all uppercase tracking-widest shadow-lg shadow-black/5">
+                              <Link prefetch={false} href={`/trip/${trip.slug}`} className="bg-[#0F172A] text-white text-[9px] font-black px-6 py-3 rounded-full hover:bg-orange-600 transition-all uppercase tracking-widest shadow-lg shadow-black/5">
                                  Découvrir
                               </Link>
                            </div>
@@ -474,6 +580,43 @@ export default function GuideTouristiqueIA() {
               >
                 Confirmer · {formatBudgetMad(budgetDraft)} / personne
               </button>
+            </div>
+          ) : step === 6 ? (
+            <div className="space-y-4 animate-in slide-in-from-bottom-4">
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">
+                Email pour enregistrer votre demande
+              </p>
+              <input
+                type="email"
+                placeholder="vous@exemple.com"
+                title="Votre email"
+                className="w-full bg-[#F8FAFC] border border-gray-100 rounded-2xl px-6 py-5 text-sm font-bold outline-none focus:ring-4 focus:ring-orange-500/10"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    handleEmailSubmit((e.target as HTMLInputElement).value);
+                    (e.target as HTMLInputElement).value = "";
+                  }
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const input = document.querySelector(
+                    'input[title="Votre email"]'
+                  ) as HTMLInputElement;
+                  handleEmailSubmit(input?.value || "");
+                }}
+                className="w-full bg-orange-600 text-white py-4 rounded-full text-xs font-black uppercase tracking-widest hover:bg-[#0F172A] transition-all shadow-xl shadow-orange-600/20"
+              >
+                Lancer l&apos;analyse IA
+              </button>
+              <p className="text-[9px] text-gray-400 text-center font-medium">
+                Déjà inscrit ?{" "}
+                <LoginLink className="text-orange-600 font-bold hover:underline">
+                  Connectez-vous
+                </LoginLink>{" "}
+                pour sauter cette étape.
+              </p>
             </div>
           ) : step === 5 ? (
             <div className="text-center py-4">

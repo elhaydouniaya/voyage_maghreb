@@ -1,5 +1,6 @@
 import { sendEmail } from "@/lib/email";
 import { emailButton } from "@/lib/email-template";
+import { resolveAdminNotifyEmail } from "@/lib/email-config";
 
 const baseUrl = () => process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
@@ -30,7 +31,12 @@ export async function sendTravelRequestReceivedEmail(input: {
   clientName: string;
   destination: string;
   summary?: string;
+  travelRequestId?: string;
 }) {
+  const voyagesUrl = input.travelRequestId
+    ? `${baseUrl()}/voyages?matched=true&request=${encodeURIComponent(input.travelRequestId)}`
+    : `${baseUrl()}/voyages?matched=true`;
+
   await sendEmail({
     to: input.to,
     subject: "Votre demande est bien reçue — MaghrebVoyage",
@@ -40,7 +46,7 @@ export async function sendTravelRequestReceivedEmail(input: {
       <p>Nous avons bien reçu votre demande de voyage${input.destination ? ` vers <strong>${input.destination}</strong>` : ""}.</p>
       ${input.summary ? `<p><em>${input.summary}</em></p>` : ""}
       <p>Notre moteur IA a analysé vos critères.</p>
-      ${emailButton(`${baseUrl()}/voyages?matched=true`, "Voir les voyages recommandés")}
+      ${emailButton(voyagesUrl, "Voir les voyages recommandés")}
     `,
   });
 }
@@ -63,6 +69,7 @@ export async function sendBookingConfirmationEmail(input: {
   cancellationToken: string;
 }) {
   const cancelUrl = `${baseUrl()}/booking/cancel?token=${encodeURIComponent(input.cancellationToken)}`;
+  const receiptUrl = `${baseUrl()}/booking/receipt/${encodeURIComponent(input.confirmationCode)}`;
 
   await sendEmail({
     to: input.to,
@@ -83,6 +90,7 @@ export async function sendBookingConfirmationEmail(input: {
       <p><strong>Agence :</strong> ${input.agencyName}<br/>
       Email : ${input.agencyEmail}<br/>
       Tél : ${input.agencyPhone}</p>
+      ${emailButton(receiptUrl, "Voir mon reçu")}
       <p><a href="${cancelUrl}" style="color:#f97316">Annuler ma réservation</a></p>
     `,
   });
@@ -195,6 +203,56 @@ export async function sendPreTripReminderEmail(input: {
       <p><strong>Organisateur :</strong> ${input.agencyName} — ${input.agencyPhone}</p>
       <p>Pensez à régler le solde restant sur place selon les conditions de l'agence.</p>
       <p>Bon voyage !</p>
+    `,
+  });
+}
+
+/** E10 — Admin : remboursement à traiter après annulation client. */
+export async function sendAdminRefundPendingEmail(input: {
+  tripTitle: string;
+  clientName: string;
+  confirmationCode: string;
+  amount: number;
+}) {
+  const adminEmail = await resolveAdminNotifyEmail();
+  if (!adminEmail) return;
+
+  await sendEmail({
+    to: adminEmail,
+    subject: `Remboursement à traiter — ${input.confirmationCode}`,
+    title: "Remboursement en attente",
+    html: `
+      <p>Un client a annulé sa réservation. Traitez le remboursement Stripe puis marquez la réservation comme remboursée.</p>
+      <ul>
+        <li><strong>Voyage :</strong> ${input.tripTitle}</li>
+        <li><strong>Client :</strong> ${input.clientName}</li>
+        <li><strong>Code :</strong> ${input.confirmationCode}</li>
+        <li><strong>Acompte :</strong> ${input.amount}€</li>
+      </ul>
+      ${emailButton(`${baseUrl()}/admin/bookings`, "Ouvrir les réservations")}
+    `,
+  });
+}
+
+/** E12 — Admin : voyage annulé par l'agence (liste clients à rembourser). */
+export async function sendAdminTripCancelledEmail(input: {
+  tripTitle: string;
+  agencyName: string;
+  cancelReason: string;
+  clientCount: number;
+}) {
+  const adminEmail = await resolveAdminNotifyEmail();
+  if (!adminEmail) return;
+
+  await sendEmail({
+    to: adminEmail,
+    subject: `Voyage annulé — ${input.tripTitle}`,
+    title: "Annulation voyage agence",
+    html: `
+      <p>L'agence <strong>${input.agencyName}</strong> a annulé le voyage <strong>${input.tripTitle}</strong>.</p>
+      <p><strong>Motif :</strong> ${input.cancelReason}</p>
+      <p><strong>${input.clientCount}</strong> réservation(s) confirmée(s) à rembourser.</p>
+      ${emailButton(`${baseUrl()}/admin/bookings`, "Gérer les remboursements")}
     `,
   });
 }

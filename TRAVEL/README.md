@@ -1,6 +1,6 @@
 # MaghrebVoyage
 
-Plateforme de réservation de voyages de groupe au Maghreb (Next.js 14, Prisma, Stripe, OpenAI).
+Plateforme de réservation de voyages de groupe au Maghreb (Next.js 16, Prisma, Stripe, Groq/OpenAI).
 
 ## Prérequis
 
@@ -31,7 +31,9 @@ Application : [http://localhost:3000](http://localhost:3000)
 | `NEXT_PUBLIC_APP_URL` | URL pour liens email et Stripe |
 | `RESEND_API_KEY` / `RESEND_FROM` | Emails transactionnels |
 | `ADMIN_NOTIFY_EMAIL` | Alertes nouvelles agences |
-| `OPENAI_API_KEY` | Matching IA (optionnel, fallback local) |
+| `OPENAI_API_KEY` / `LLM_*` | Guide IA + matching (Groq/Ollama via `LLM_BASE_URL`) |
+| `RESEND_API_KEY` | Emails (réservations, agences, newsletter) |
+| `NEXT_PUBLIC_VAPI_*` + `VAPI_WEBHOOK_SECRET` | Guide vocal VAPI (optionnel) |
 | `CRON_SECRET` | Sécurisation cron rappel J-7 |
 
 Sans Stripe : réservations en **mode démo** (confirmation immédiate).
@@ -88,6 +90,11 @@ Sur Vercel : configuré dans `vercel.json` (8h UTC).
 | `npm run db:baseline` | Marquer la migration initiale si la DB existe déjà |
 | `npm run seed` | Données de démo |
 | `npm run typecheck` | Vérification TypeScript |
+| `npm run setup:full` | Migrations + seed + analytics + export + prod:ready |
+| `npm run prod:ready` | Rapport préparation production |
+| `npm run audit:all` | Audit HTTP + auth + health (dev server requis) |
+| `npm run analytics:seed` | Données démo tableau décisionnel |
+| `npm run data:export` | Export `data/maghreb-catalog.json` |
 
 ## Structure
 

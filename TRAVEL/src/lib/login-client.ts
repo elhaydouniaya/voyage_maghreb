@@ -1,4 +1,5 @@
 import { getSession, signIn, signOut } from "next-auth/react";
+import { sanitizeCallbackUrl } from "@/lib/auth-redirect";
 
 export type UserRole = "CLIENT" | "AGENCY" | "ADMIN";
 
@@ -20,7 +21,7 @@ function readRole(session: Awaited<ReturnType<typeof getSession>>): UserRole | n
 export async function loginWithFreshSession(
   email: string,
   password: string,
-  options?: { requiredRole?: UserRole }
+  options?: { requiredRole?: UserRole; openGuide?: boolean; callbackUrl?: string }
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   await signOut({ redirect: false });
   await new Promise((r) => setTimeout(r, 150));
@@ -97,9 +98,20 @@ export async function loginWithFreshSession(
     return { ok: false, error: "Type de compte non autorisé sur cette page." };
   }
 
-  const destination = options?.requiredRole
-    ? ROLE_HOME[options.requiredRole]
-    : ROLE_HOME[role];
+  const roleHome = options?.requiredRole ? ROLE_HOME[options.requiredRole] : ROLE_HOME[role];
+  const guideDest = "/profile?tab=guide-ia";
+  const destination = options?.callbackUrl
+    ? sanitizeCallbackUrl(options.callbackUrl, roleHome)
+    : options?.requiredRole === "CLIENT" && options.openGuide
+      ? guideDest
+      : roleHome;
+
+  if (destination.includes("tab=guide-ia") && typeof window !== "undefined") {
+    sessionStorage.setItem("profile_tab", "guide-ia");
+  } else if (options?.openGuide && typeof window !== "undefined") {
+    sessionStorage.setItem("profile_tab", "guide-ia");
+  }
+
   window.location.href = destination;
   return { ok: true };
 }

@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import Link from "next/link";
-import { ArrowLeft, Search, Globe, Loader2 } from "lucide-react";
+import { Search, Loader2 } from "lucide-react";
 
 type AdminBooking = {
   id: string;
@@ -46,6 +45,7 @@ export default function AdminBookingsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [refundingId, setRefundingId] = useState<string | null>(null);
+  const [resendingId, setResendingId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState("ALL");
 
   useEffect(() => {
@@ -91,6 +91,27 @@ export default function AdminBookingsPage() {
       b.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
+
+  const handleResendEmail = async (id: string) => {
+    setResendingId(id);
+    try {
+      const res = await fetch(`/api/admin/bookings/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "resend_confirmation" }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "Renvoi impossible.");
+        return;
+      }
+      alert(data.message || "Emails renvoyés au client et à l'agence.");
+    } catch {
+      alert("Erreur réseau.");
+    } finally {
+      setResendingId(null);
+    }
+  };
 
   const handleRefund = async (id: string) => {
     if (!confirm("Confirmer le remboursement de l'acompte pour cette réservation ?")) {
@@ -247,16 +268,28 @@ export default function AdminBookingsPage() {
                       </span>
                     </td>
                     <td className="px-8 py-8">
-                      {booking.canRefund && (
-                        <button
-                          type="button"
-                          disabled={refundingId === booking.id}
-                          onClick={() => handleRefund(booking.id)}
-                          className="px-4 py-2 bg-purple-600 text-white rounded-full text-[9px] font-black uppercase tracking-widest hover:bg-purple-700 disabled:opacity-50"
-                        >
-                          {refundingId === booking.id ? "..." : "Rembourser"}
-                        </button>
-                      )}
+                      <div className="flex flex-wrap gap-2">
+                        {booking.status === "CONFIRMED" && (
+                          <button
+                            type="button"
+                            disabled={resendingId === booking.id}
+                            onClick={() => handleResendEmail(booking.id)}
+                            className="px-4 py-2 bg-orange-600 text-white rounded-full text-[9px] font-black uppercase tracking-widest hover:bg-orange-700 disabled:opacity-50"
+                          >
+                            {resendingId === booking.id ? "..." : "Renvoyer email"}
+                          </button>
+                        )}
+                        {booking.canRefund && (
+                          <button
+                            type="button"
+                            disabled={refundingId === booking.id}
+                            onClick={() => handleRefund(booking.id)}
+                            className="px-4 py-2 bg-purple-600 text-white rounded-full text-[9px] font-black uppercase tracking-widest hover:bg-purple-700 disabled:opacity-50"
+                          >
+                            {refundingId === booking.id ? "..." : "Rembourser"}
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

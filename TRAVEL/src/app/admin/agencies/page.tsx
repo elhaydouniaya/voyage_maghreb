@@ -3,11 +3,9 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import {
-  ArrowLeft,
   Search,
   CheckCircle2,
   XCircle,
-  ShieldCheck,
   ShieldAlert,
   Mail,
   Phone,
@@ -24,6 +22,11 @@ type AgencyRow = {
   status: string;
   siret: string;
   trips: number;
+  stripeConnect?: {
+    accountId: string | null;
+    chargesEnabled: boolean;
+    onboardingComplete: boolean;
+  };
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -167,6 +170,9 @@ export default function AdminAgenciesPage() {
                     Statut
                   </th>
                   <th className="px-8 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                    Stripe
+                  </th>
+                  <th className="px-8 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">
                     Modérer
                   </th>
                   <th className="px-8 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">
@@ -222,6 +228,23 @@ export default function AdminAgenciesPage() {
                         }`}
                       >
                         {STATUS_LABELS[agency.status] || agency.status}
+                      </span>
+                    </td>
+                    <td className="px-8 py-8">
+                      <span
+                        className={`text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full ${
+                          agency.stripeConnect?.chargesEnabled
+                            ? "bg-emerald-50 text-emerald-700"
+                            : agency.stripeConnect?.accountId
+                              ? "bg-orange-50 text-orange-700"
+                              : "bg-gray-100 text-gray-500"
+                        }`}
+                      >
+                        {agency.stripeConnect?.chargesEnabled
+                          ? "Connect actif"
+                          : agency.stripeConnect?.accountId
+                            ? "Onboarding"
+                            : "—"}
                       </span>
                     </td>
                     <td className="px-8 py-8">

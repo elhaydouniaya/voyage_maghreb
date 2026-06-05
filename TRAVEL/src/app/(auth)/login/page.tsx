@@ -3,20 +3,36 @@
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 import { Globe, X, Mail, Lock, Eye, EyeOff, CheckCircle2 } from "lucide-react";
 import { loginWithFreshSession } from "@/lib/login-client";
+import { sanitizeCallbackUrl } from "@/lib/auth-redirect";
 import { DemoAccountsBox } from "@/components/auth/DemoAccountsBox";
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 
 function ClientLoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { data: session, status } = useSession();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  const callbackUrl = sanitizeCallbackUrl(
+    searchParams.get("callbackUrl"),
+    searchParams.get("guide") === "1" ? "/profile?tab=guide-ia" : "/"
+  );
+  const openGuideAfterLogin =
+    !searchParams.get("callbackUrl") && searchParams.get("guide") === "1";
+
+  useEffect(() => {
+    if (status === "authenticated" && session?.user?.role === "CLIENT") {
+      window.location.href = callbackUrl;
+    }
+  }, [status, session, callbackUrl]);
 
   useEffect(() => {
     if (searchParams.get("registered") === "true") {
@@ -47,11 +63,13 @@ function ClientLoginForm() {
     try {
       const outcome = await loginWithFreshSession(email, password, {
         requiredRole: "CLIENT",
+        openGuide: openGuideAfterLogin,
+        callbackUrl: searchParams.get("callbackUrl") || undefined,
       });
       if (!outcome.ok) {
         setError(outcome.error);
       }
-    } catch (err) {
+    } catch {
       setError("Une erreur est survenue.");
     } finally {
       setIsLoading(false);
@@ -62,7 +80,7 @@ function ClientLoginForm() {
     // Only close if clicking on the backdrop container, not on the modal
     const target = e.target as HTMLElement;
     if (target.id === "backdrop-container") {
-      router.push("/");
+      router.push(callbackUrl);
     }
   };
 
@@ -100,7 +118,7 @@ function ClientLoginForm() {
       >
         {/* Close Button */}
         <button
-          onClick={() => router.push("/")}
+          onClick={() => router.push(callbackUrl)}
           className="absolute top-6 right-6 z-10 p-2 hover:bg-gray-100 rounded-full transition-colors"
           title="Fermer"
         >
@@ -218,7 +236,7 @@ function ClientLoginForm() {
               <span className="text-xs text-gray-400 font-bold">OU</span>
               <div className="flex-1 h-px bg-gray-200" />
             </div>
-            <GoogleSignInButton callbackUrl="/profile" />
+            <GoogleSignInButton callbackUrl={callbackUrl} />
           </div>
 
           {/* Sign Up Link */}

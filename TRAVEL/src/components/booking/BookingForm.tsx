@@ -7,6 +7,17 @@ import { CreditCard, ShieldCheck, User, Mail, Phone, ArrowRight } from "lucide-r
 import { formatPriceShort, formatDeposit } from "@/lib/currency";
 import { useSession } from "next-auth/react";
 
+const COUNTRIES = [
+  "France",
+  "Belgique",
+  "Canada",
+  "Suisse",
+  "Maroc",
+  "Algérie",
+  "Tunisie",
+  "Autre",
+];
+
 interface BookingFormProps {
   tripId: string;
   tripTitle: string;
@@ -15,6 +26,8 @@ interface BookingFormProps {
   destination: string;
   startDate: string;
   coverImage: string;
+  spotsLeft?: number;
+  isSoldOut?: boolean;
 }
 
 export default function BookingForm({
@@ -25,18 +38,27 @@ export default function BookingForm({
   destination,
   startDate,
   coverImage,
+  spotsLeft,
+  isSoldOut = false,
 }: BookingFormProps) {
   const { data: session } = useSession();
   const [step, setStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
+  const fullName = session?.user?.name || "";
+  const nameParts = fullName.trim().split(/\s+/);
   const [formData, setFormData] = useState({
-    clientName: session?.user?.name || "",
+    clientFirstName: nameParts[0] || "",
+    clientLastName: nameParts.slice(1).join(" ") || "",
     clientEmail: session?.user?.email || "",
     clientPhone: "",
+    clientCountry: "France",
     numberOfSeats: 1,
+    notes: "",
     acceptCgu: false,
     acceptRgpd: false,
   });
+
+  const soldOut = isSoldOut || (spotsLeft !== undefined && spotsLeft <= 0);
 
   const handleNextStep = (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,14 +67,21 @@ export default function BookingForm({
 
   const handleBooking = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (soldOut) return;
     if (!formData.acceptCgu || !formData.acceptRgpd) {
       alert("Veuillez accepter les CGU et la politique RGPD.");
+      return;
+    }
+    const clientName = `${formData.clientFirstName.trim()} ${formData.clientLastName.trim()}`.trim();
+    if (formData.clientFirstName.trim().length < 2 || formData.clientLastName.trim().length < 2) {
+      alert("Prénom et nom sont obligatoires (min. 2 caractères chacun).");
       return;
     }
     setIsLoading(true);
 
     const bookingData = {
       ...formData,
+      clientName,
       tripId,
       tripTitle,
       totalPrice,
@@ -65,6 +94,25 @@ export default function BookingForm({
     localStorage.setItem("pending_booking", JSON.stringify(bookingData));
     window.location.href = `/booking/checkout?id=${tripId}`;
   };
+
+  if (soldOut) {
+    return (
+      <div className="bg-white p-8 rounded-[3.5rem] border border-gray-100 shadow-2xl space-y-6 text-center">
+        <span className="inline-block bg-gray-600 text-white text-[10px] font-black uppercase tracking-widest px-6 py-2 rounded-full">
+          Complet
+        </span>
+        <p className="text-gray-500 font-bold text-sm">
+          Toutes les places sont réservées pour ce départ.
+        </p>
+        <Link
+          href="/voyages"
+          className="inline-block bg-orange-600 text-white px-8 py-3 rounded-full text-[10px] font-black uppercase tracking-widest"
+        >
+          Voir d&apos;autres voyages
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white p-8 rounded-[3.5rem] border border-gray-100 shadow-2xl shadow-orange-500/5 space-y-8">
@@ -148,17 +196,31 @@ export default function BookingForm({
         ) : (
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="space-y-4">
-              <div className="relative">
-                <User className="absolute left-4 top-4 text-gray-300" size={18} />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="relative">
+                  <User className="absolute left-4 top-4 text-gray-300" size={18} />
+                  <input
+                    type="text"
+                    required
+                    minLength={2}
+                    placeholder="Prénom"
+                    value={formData.clientFirstName}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, clientFirstName: e.target.value }))
+                    }
+                    className="w-full bg-[#F8FAFC] border border-gray-100 rounded-2xl pl-12 pr-6 py-4 focus:ring-4 focus:ring-orange-500/10 outline-none font-bold text-[#0F172A] transition-all"
+                  />
+                </div>
                 <input
                   type="text"
                   required
-                  placeholder="Votre Nom & Prénom"
-                  value={formData.clientName}
+                  minLength={2}
+                  placeholder="Nom"
+                  value={formData.clientLastName}
                   onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, clientName: e.target.value }))
+                    setFormData((prev) => ({ ...prev, clientLastName: e.target.value }))
                   }
-                  className="w-full bg-[#F8FAFC] border border-gray-100 rounded-2xl pl-12 pr-6 py-4 focus:ring-4 focus:ring-orange-500/10 outline-none font-bold text-[#0F172A] transition-all"
+                  className="w-full bg-[#F8FAFC] border border-gray-100 rounded-2xl px-6 py-4 focus:ring-4 focus:ring-orange-500/10 outline-none font-bold text-[#0F172A] transition-all"
                 />
               </div>
               <div className="relative">
@@ -186,6 +248,37 @@ export default function BookingForm({
                   className="w-full bg-[#F8FAFC] border border-gray-100 rounded-2xl pl-12 pr-6 py-4 focus:ring-4 focus:ring-orange-500/10 outline-none font-bold text-[#0F172A] transition-all"
                 />
               </div>
+              <div>
+                <label
+                  htmlFor="clientCountry"
+                  className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 block mb-2"
+                >
+                  Pays de résidence
+                </label>
+                <select
+                  id="clientCountry"
+                  value={formData.clientCountry}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, clientCountry: e.target.value }))
+                  }
+                  className="w-full bg-[#F8FAFC] border border-gray-100 rounded-2xl px-6 py-4 focus:ring-4 focus:ring-orange-500/10 outline-none font-bold text-[#0F172A]"
+                >
+                  {COUNTRIES.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <textarea
+                placeholder="Message / notes (facultatif)"
+                value={formData.notes}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, notes: e.target.value }))
+                }
+                rows={2}
+                className="w-full bg-[#F8FAFC] border border-gray-100 rounded-2xl px-6 py-4 focus:ring-4 focus:ring-orange-500/10 outline-none font-medium text-[#0F172A] resize-none text-sm"
+              />
             </div>
 
             <div className="space-y-3 text-sm">

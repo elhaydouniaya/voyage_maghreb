@@ -4,7 +4,6 @@ import { signOut, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import AIChatWidget from "@/components/ai/AIChatWidget";
 import { formatPriceShort } from "@/lib/currency";
 import {
   User,
@@ -18,6 +17,7 @@ import {
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import Toast, { useToast } from "@/components/ui/Toast";
 import TripCard from "@/components/trips/TripCard";
+import ClientGuidePanel from "@/components/ai/ClientGuidePanel";
 
 type ClientBooking = {
   id: string;
@@ -32,6 +32,30 @@ type ClientBooking = {
   status: string;
   agency: string;
   bookedAt: string;
+};
+
+type FavoriteTrip = {
+  id: string;
+  slug: string;
+  title: string;
+  destination: string;
+  startDate: string;
+  totalPrice: number;
+  bookedSpots: number;
+  totalSpots: number;
+  tripType: string;
+  coverImage?: string;
+  inclusions?: string[];
+};
+
+type SearchHistoryItem = {
+  id: string;
+  destination?: string;
+  summary?: string;
+  createdAt?: string;
+  date?: string;
+  statusLabel?: string;
+  status?: string;
 };
 
 function formatFrDate(iso: string) {
@@ -59,7 +83,7 @@ export default function ClientProfilePage() {
   const role = (session?.user as { role?: string })?.role || "CLIENT";
 
   const [activeTab, setActiveTab] = useState("bookings");
-  const [favorites, setFavorites] = useState<any[]>([]);
+  const [favorites, setFavorites] = useState<FavoriteTrip[]>([]);
   const [formData, setFormData] = useState({
     name: sessionName,
     email: sessionEmail,
@@ -79,12 +103,25 @@ export default function ClientProfilePage() {
   const [gdprMessage, setGdprMessage] = useState("");
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
-  const [aiHistory, setAiHistory] = useState<any[]>([]);
-  const [guideMessages, setGuideMessages] = useState<any[]>([]);
+  const [aiHistory, setAiHistory] = useState<SearchHistoryItem[]>([]);
   const [bookings, setBookings] = useState<ClientBooking[]>([]);
   const [bookingsLoading, setBookingsLoading] = useState(true);
   const [cancelTarget, setCancelTarget] = useState<{ id: string; title: string } | null>(null);
   const { toast, showToast, hideToast } = useToast();
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("tab") === "guide-ia") {
+      setActiveTab("guide-ia");
+      return;
+    }
+    const tab = sessionStorage.getItem("profile_tab");
+    if (tab === "guide-ia") {
+      setActiveTab("guide-ia");
+      sessionStorage.removeItem("profile_tab");
+    }
+  }, []);
 
   useEffect(() => {
     if (status !== "authenticated") return;
@@ -132,7 +169,7 @@ export default function ClientProfilePage() {
   }, [status, role]);
 
   useEffect(() => {
-    if (activeTab !== "favorites" && activeTab !== "searches" && activeTab !== "guide-ia") return;
+    if (activeTab !== "favorites" && activeTab !== "searches") return;
     if (status !== "authenticated") return;
 
     async function loadTabData() {
@@ -149,19 +186,6 @@ export default function ClientProfilePage() {
         }
         const stored = JSON.parse(localStorage.getItem("mv_favorites") || "[]");
         setFavorites(stored);
-      }
-      if (activeTab === "guide-ia") {
-        try {
-          const res = await fetch("/api/ai/guide-chat", { cache: "no-store" });
-          if (res.ok) {
-            const data = await res.json();
-            setGuideMessages(data.messages || []);
-            return;
-          }
-        } catch {
-          /* ignore */
-        }
-        setGuideMessages([]);
       }
       if (activeTab === "searches") {
         try {
@@ -456,42 +480,8 @@ export default function ClientProfilePage() {
 
 
           {activeTab === "guide-ia" && (
-            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-               <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 bg-orange-600 rounded-xl flex items-center justify-center text-white shadow-lg">
-                     <Sparkles size={20} />
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-black text-[#0F172A]">Conversations avec votre guide</h2>
-                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Chat personnel (widget en bas à droite)</p>
-                  </div>
-               </div>
-               {guideMessages.length > 0 ? (
-                 <div className="bg-white rounded-[2.5rem] border border-gray-100 p-8 space-y-4 max-h-[480px] overflow-y-auto">
-                    {guideMessages.map((msg, i) => (
-                      <div
-                        key={i}
-                        className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-                      >
-                        <div
-                          className={`max-w-[85%] px-4 py-3 rounded-2xl text-xs font-medium leading-relaxed whitespace-pre-wrap ${
-                            msg.role === "user"
-                              ? "bg-[#0F172A] text-white rounded-tr-none"
-                              : "bg-[#F8FAFC] text-[#0F172A] border border-gray-100 rounded-tl-none"
-                          }`}
-                        >
-                          {msg.content}
-                        </div>
-                      </div>
-                    ))}
-                 </div>
-               ) : (
-                 <div className="py-20 text-center bg-white rounded-[3rem] border border-dashed border-gray-200">
-                    <Sparkles size={48} className="text-gray-200 mx-auto mb-4" />
-                    <p className="text-gray-400 font-bold uppercase tracking-widest text-xs">Aucune conversation enregistrée</p>
-                    <p className="text-gray-400 text-sm mt-2">Ouvrez le guide (icône chat) pour commencer</p>
-                 </div>
-               )}
+            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <ClientGuidePanel />
             </div>
           )}
 
@@ -512,14 +502,18 @@ export default function ClientProfilePage() {
                       <div key={item.id} className="bg-white rounded-[2.5rem] border border-gray-100 p-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 group hover:border-orange-500/30 transition-all">
                          <div className="space-y-2">
                             <div className="flex items-center gap-3">
-                               <span className="text-[10px] font-black text-orange-600 uppercase tracking-widest">{new Date(item.date).toLocaleDateString('fr-FR')}</span>
+                               <span className="text-[10px] font-black text-orange-600 uppercase tracking-widest">
+                                 {item.createdAt
+                                   ? new Date(item.createdAt).toLocaleDateString("fr-FR")
+                                   : item.date}
+                               </span>
                                <span className="w-1 h-1 bg-gray-200 rounded-full" />
                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{item.destination}</span>
                             </div>
                             <h3 className="text-lg font-black text-[#0F172A]">{item.summary}</h3>
-                            {item.status && (
+                            {(item.statusLabel || item.status) && (
                               <span className="text-[9px] font-bold text-gray-400 bg-gray-50 px-3 py-1 rounded-full uppercase tracking-widest">
-                                {item.status}
+                                {item.statusLabel || item.status}
                               </span>
                             )}
                          </div>
@@ -692,8 +686,6 @@ export default function ClientProfilePage() {
           )}
         </div>
       </div>
-
-      {role === "CLIENT" && <AIChatWidget />}
 
       <ConfirmDialog
         open={!!cancelTarget}

@@ -101,6 +101,24 @@ export class ReviewsService {
     }));
   }
 
+  static async incrementHelpful(id: string) {
+    const review = await prisma.review.findUnique({
+      where: { id },
+      select: { id: true, status: true },
+    });
+    if (!review || review.status !== "APPROVED") {
+      throw new Error("Avis introuvable.");
+    }
+
+    const updated = await prisma.review.update({
+      where: { id },
+      data: { helpfulCount: { increment: 1 } },
+      select: { helpfulCount: true },
+    });
+
+    return updated.helpfulCount;
+  }
+
   static async updateStatus(id: string, status: ReviewStatus) {
     return prisma.review.update({
       where: { id },

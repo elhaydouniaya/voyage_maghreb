@@ -41,6 +41,9 @@ function validateTripInput(input: CreateTripInput) {
   if (input.title.trim().length < 10) {
     throw new Error("Le titre doit contenir au moins 10 caractères.");
   }
+  if (input.title.trim().length > 100) {
+    throw new Error("Le titre ne peut pas dépasser 100 caractères.");
+  }
   if (input.description.trim().length < 200) {
     throw new Error("La description doit contenir au moins 200 caractères.");
   }
@@ -75,7 +78,7 @@ export class TripsService {
     try {
       trips = await prisma.groupTrip.findMany({
       where: {
-        status: { in: ["PUBLISHED", "FULL"] },
+        status: "PUBLISHED",
         isPublic: true,
         startDate: { gt: now },
       },
@@ -87,7 +90,7 @@ export class TripsService {
       return [];
     }
 
-    let filtered = trips;
+    let filtered = trips.filter((t) => t.bookedSpots < t.totalSpots);
 
     if (filters?.destination && filters.destination !== "Toutes les destinations") {
       filtered = filtered.filter((t) =>
@@ -366,6 +369,20 @@ export class TripsService {
         });
       } catch (e) {
         console.error("Trip cancel email:", e);
+      }
+    }
+
+    if (confirmedBookings.length > 0) {
+      try {
+        const { sendAdminTripCancelledEmail } = await import("@/lib/booking-emails");
+        await sendAdminTripCancelledEmail({
+          tripTitle: trip.title,
+          agencyName: agency.name,
+          cancelReason: reason,
+          clientCount: confirmedBookings.length,
+        });
+      } catch (e) {
+        console.error("Admin trip cancel email:", e);
       }
     }
 

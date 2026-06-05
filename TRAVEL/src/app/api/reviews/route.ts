@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
+import { getClientIp, rateLimit } from "@/lib/rate-limit";
 import { ReviewsService } from "@/services/reviews.service";
 
 export const dynamic = "force-dynamic";
@@ -19,6 +20,15 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const ip = getClientIp(request);
+  const limited = rateLimit(`reviews-post:${ip}`, 5, 60 * 60 * 1000);
+  if (!limited.ok) {
+    return NextResponse.json(
+      { error: "Trop d'avis soumis. Réessayez plus tard." },
+      { status: 429 }
+    );
+  }
+
   try {
     const body = await request.json();
     const session = await getServerSession(authOptions);

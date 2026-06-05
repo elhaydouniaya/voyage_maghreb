@@ -1,5 +1,6 @@
 # Dependencies & build
 node_modules/
+/package-lock.json
 .next/
 out/
 build/
@@ -22,11 +23,6 @@ Thumbs.db
 .turbo/
 *.tsbuildinfo
 next-env.d.ts
-
-# Python backend (optional)
-__pycache__/
-.venv/
-venv/
 
 # Local databases
 *.db

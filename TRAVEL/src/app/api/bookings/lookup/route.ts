@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
+import { isEmailConfigured } from "@/lib/email-config";
 import { BookingsService } from "@/services/bookings.service";
 
 export async function GET(request: Request) {
@@ -11,7 +12,15 @@ export async function GET(request: Request) {
   try {
     if (sessionId) {
       const booking = await BookingsService.getPublicByStripeSession(sessionId);
-      return NextResponse.json({ booking });
+      const email = await BookingsService.ensureConfirmationEmailsSent(booking.id!).catch(
+        () => ({ sent: false, alreadySent: true, to: "" })
+      );
+      return NextResponse.json({
+        booking,
+        emailSent: email.sent || email.alreadySent,
+        emailTo: email.to || undefined,
+        emailMode: isEmailConfigured() ? "resend" : "console",
+      });
     }
 
     if (bookingId) {
@@ -22,13 +31,29 @@ export async function GET(request: Request) {
           session.user.id
         );
         if (booking) {
-          return NextResponse.json({ booking });
+          const email = await BookingsService.ensureConfirmationEmailsSent(bookingId).catch(
+            () => ({ sent: false, alreadySent: true, to: "" })
+          );
+          return NextResponse.json({
+            booking,
+            emailSent: email.sent || email.alreadySent,
+            emailTo: email.to || undefined,
+            emailMode: isEmailConfigured() ? "resend" : "console",
+          });
         }
       }
 
       const publicBooking = await BookingsService.getByIdPublic(bookingId);
       if (publicBooking) {
-        return NextResponse.json({ booking: publicBooking });
+        const email = await BookingsService.ensureConfirmationEmailsSent(bookingId).catch(
+          () => ({ sent: false, alreadySent: true, to: "" })
+        );
+        return NextResponse.json({
+          booking: publicBooking,
+          emailSent: email.sent || email.alreadySent,
+          emailTo: email.to || undefined,
+          emailMode: isEmailConfigured() ? "resend" : "console",
+        });
       }
 
       return NextResponse.json(
