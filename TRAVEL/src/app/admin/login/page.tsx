@@ -73,12 +73,14 @@ export default function AdminLoginPage() {
             <X size={24} className="text-gray-400 hover:text-white" />
           </button>
 
-          <div className="w-16 h-16 bg-orange-600 rounded-2xl flex items-center justify-center text-white mx-auto mb-6 shadow-xl shadow-orange-600/30">
-            <Shield size={32} />
-          </div>
-          <h1 className="text-3xl font-black tracking-tight mb-2">
-            Maghreb<span className="text-orange-500">Voyage</span>
-          </h1>
+          <Link href="/" className="group cursor-pointer inline-block">
+            <div className="w-16 h-16 bg-orange-600 rounded-2xl flex items-center justify-center text-white mx-auto mb-6 shadow-xl shadow-orange-600/30 group-hover:scale-105 transition-transform">
+              <Shield size={32} />
+            </div>
+            <h1 className="text-3xl font-black tracking-tight mb-2 text-white">
+              Maghreb<span className="text-orange-500">Voyage</span>
+            </h1>
+          </Link>
           <p className="text-gray-400 text-xs font-bold uppercase tracking-widest text-orange-500">
             Espace Administration
           </p>

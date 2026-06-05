@@ -24,6 +24,9 @@ import TrustStrip from "@/components/public/TrustStrip";
 import ProductPaths from "@/components/public/ProductPaths";
 import SectionHeader from "@/components/ui/SectionHeader";
 import HomeAiLauncher from "@/components/public/HomeAiLauncher";
+import TripsGroupedBySeason from "@/components/trips/TripsGroupedBySeason";
+import { groupTripsBySeason, SEASON_ORDER } from "@/lib/seasons";
+import type { Season } from "@/lib/seasons";
 
 const HeroAnimatedWidget = dynamic(
   () => import("@/components/public/HeroAnimatedWidget"),
@@ -49,34 +52,51 @@ const TRIP_TYPE_LABELS: Record<string, string> = {
 };
 
 function FeaturedTrips() {
-  type FeaturedTrip = {
-    id: string;
-    title: string;
-    slug: string;
-    destination: string;
-    status: string;
-    coverImage: string | null;
-    tripType: string;
-    totalPrice: number;
-    totalSpots: number;
-    bookedSpots: number;
-  };
-
-  const [trips, setTrips] = useState<FeaturedTrip[]>([]);
+  const [groupedTrips, setGroupedTrips] = useState<{ season: Season; trips: any[] }[]>([]);
+  const [selectedSeason, setSelectedSeason] = useState<Season | null>(null);
+  const [currentSeason, setCurrentSeason] = useState<Season>("SUMMER");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetch("/api/trips")
       .then((res) => res.json())
       .then((data) => {
-        const list = (data.trips || [])
-          .filter((t: FeaturedTrip) => t.status === "PUBLISHED")
-          .slice(0, 4);
-        setTrips(list as FeaturedTrip[]);
+        const published = (data.trips || []).filter((t: any) => t.status === "PUBLISHED");
+        const grouped = groupTripsBySeason(published);
+        const seasonList = SEASON_ORDER;
+        const result = (Object.keys(seasonList) as Season[])
+          .sort((a, b) => seasonList[a] - seasonList[b])
+          .map((season) => ({
+            season,
+            trips: grouped[season] || [],
+          }))
+          .filter((g) => g.trips.length > 0);
+        setGroupedTrips(result);
+
+        const today = new Date();
+        const month = today.getMonth() + 1;
+        if (month >= 3 && month <= 5) setCurrentSeason("SPRING");
+        else if (month >= 6 && month <= 8) setCurrentSeason("SUMMER");
+        else if (month >= 9 && month <= 11) setCurrentSeason("AUTUMN");
+        else setCurrentSeason("WINTER");
+
+        setSelectedSeason(result.length > 0 ? result[0].season : null);
       })
-      .catch(() => setTrips([]))
+      .catch(() => setGroupedTrips([]))
       .finally(() => setLoading(false));
   }, []);
+
+  const seasonOptionsList = [
+    { key: 'SPRING' as Season, label: '🌸 Printemps', dates: 'Mars à Mai' },
+    { key: 'SUMMER' as Season, label: '☀️ Été', dates: 'Juin à Août' },
+    { key: 'AUTUMN' as Season, label: '🍂 Automne', dates: 'Septembre à Novembre' },
+    { key: 'WINTER' as Season, label: '❄️ Hiver', dates: 'Décembre à Février' },
+  ];
+
+  const filteredTrips = groupedTrips.filter((g) => {
+    if (selectedSeason) return g.season === selectedSeason;
+    return true;
+  });
 
   if (loading) {
     return (
@@ -94,7 +114,7 @@ function FeaturedTrips() {
     );
   }
 
-  if (trips.length === 0) {
+  if (groupedTrips.length === 0) {
     return (
       <p className="text-center text-gray-400 font-bold uppercase tracking-widest text-xs py-12">
         Aucun voyage publié pour le moment — revenez bientôt.
@@ -103,44 +123,54 @@ function FeaturedTrips() {
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-      {trips.map((trip) => {
-        const spotsLeft = Math.max(0, (trip.totalSpots || 0) - (trip.bookedSpots || 0));
-        const tagColor = TRIP_TAG_COLORS[trip.tripType] || "bg-orange-500";
-        const tagLabel = TRIP_TYPE_LABELS[trip.tripType] || trip.tripType;
-        const cover = sanitizeImageUrl(trip.coverImage ?? undefined, trip.destination);
+    <div className="space-y-12">
+      <div className="space-y-6">
+        <div className="inline-flex items-center gap-3 bg-orange-50 border border-orange-200 px-6 py-3 rounded-full">
+          <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Saison actuelle :</span>
+          <span className="text-lg font-black text-orange-600">
+            {seasonOptionsList.find(s => s.key === currentSeason)?.label}
+          </span>
+        </div>
 
-        return (
-          <div key={trip.id} className="group bg-white rounded-[3rem] overflow-hidden border border-gray-100 shadow-sm hover:shadow-2xl transition-all duration-700">
-            <div className="relative aspect-[4/5] overflow-hidden">
-              <SafeImage src={cover} alt={trip.title} fill sizes="(max-width: 768px) 100vw, 25vw" destination={trip.destination} className="object-cover transition-transform duration-[2000ms] group-hover:scale-110" />
-              <div className={`absolute top-6 left-6 ${tagColor} text-white text-[10px] font-black uppercase tracking-widest px-4 py-1.5 rounded-full shadow-2xl`}>
-                {tagLabel}
-              </div>
-            </div>
-            <div className="p-8 space-y-6">
-              <div>
-                <h4 className="font-black text-[#0F172A] text-xl mb-1 tracking-tight group-hover:text-orange-600 transition-colors">{trip.title}</h4>
-                <div className="flex items-center gap-2 text-gray-400 font-bold text-[10px] uppercase tracking-widest">
-                  <MapPin size={10} /> {trip.destination}
+        <div className="flex flex-wrap gap-3">
+          {seasonOptionsList.map((option) => {
+            const seasonTrips = groupedTrips.find(g => g.season === option.key);
+            const tripCount = seasonTrips?.trips.length || 0;
+            const isSelected = selectedSeason === option.key;
+
+            return (
+              <button
+                key={option.key}
+                onClick={() => setSelectedSeason(option.key)}
+                className={`px-6 py-3 rounded-2xl font-black text-sm uppercase tracking-widest transition-all duration-300 border-2 flex items-center gap-3 ${
+                  isSelected
+                    ? "bg-orange-600 text-white border-orange-600 shadow-lg shadow-orange-600/30"
+                    : tripCount > 0
+                      ? "bg-white text-[#0F172A] border-gray-200 hover:border-orange-500 hover:shadow-md"
+                      : "bg-gray-50 text-gray-400 border-gray-100 opacity-50 cursor-not-allowed"
+                }`}
+                disabled={tripCount === 0}
+              >
+                <span className="text-lg">{option.label.split(" ")[0]}</span>
+                <div className="flex flex-col items-start">
+                  <span className="text-xs">{option.label.split(" ").slice(1).join(" ")}</span>
+                  <span className="text-[10px] opacity-75">{option.dates}</span>
                 </div>
-              </div>
-              <div className="flex items-center justify-between pt-6 border-t border-gray-50">
-                <div>
-                  <div className="text-2xl font-black text-[#0F172A]">{formatPriceShort(trip.totalPrice)}</div>
-                  <div className="text-[9px] text-gray-400 font-bold">(~{Math.round(trip.totalPrice)} €)</div>
-                  {spotsLeft > 0 && (
-                    <div className="text-[10px] text-orange-600 font-black uppercase tracking-widest mt-1">{spotsLeft} places restantes</div>
-                  )}
-                </div>
-                <Link href={`/trip/${trip.slug}`} className="w-12 h-12 bg-[#F8FAFC] rounded-2xl flex items-center justify-center text-[#0F172A] hover:bg-orange-600 hover:text-white transition-all shadow-sm">
-                  <ArrowRight size={18} />
-                </Link>
-              </div>
-            </div>
-          </div>
-        );
-      })}
+                {tripCount > 0 && <span className="ml-2 text-[10px] opacity-75">({tripCount})</span>}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Trips Display */}
+      {filteredTrips.length > 0 ? (
+        <TripsGroupedBySeason groupedTrips={filteredTrips} />
+      ) : (
+        <p className="text-center text-gray-400 font-bold uppercase tracking-widest text-xs py-12">
+          Aucun voyage pour cette saison.
+        </p>
+      )}
     </div>
   );
 }
@@ -305,7 +335,7 @@ export default function Home() {
 
           <div className="space-y-6">
             {[
-              { q: "Comment fonctionne l'assistant IA ?", a: "Notre assistant IA analyse vos préférences pour vous proposer les voyages les plus adaptés. Ce n'est pas un chat ouvert, mais un guide structuré vers votre réservation." },
+              { q: "Comment le chatbot collecte vos données ?", a: "Le chatbot recueille vos informations uniquement pour mieux personnaliser vos recommandations. Il vous pose quelques questions (préférences de destination, budget, dates, nombre de voyageurs, intérêts, style de voyage) et vous permet de sélectionner vos choix. Ces réponses servent à générer un guide de voyages adapté et à préparer votre réservation. Vous pouvez aussi modifier vos préférences à tout moment." },
               { q: "Les agences sont-elles vérifiées ?", a: "Oui, chaque agence sur MaghrebVoyage passe par un processus de vérification rigoureux (SIRET, licences, avis clients) avant de pouvoir publier." },
               { q: "Le paiement est-il sécurisé ?", a: "Absolument. Nous utilisons Stripe, le leader mondial du paiement, pour sécuriser vos transactions. Nous ne stockons jamais vos coordonnées bancaires." },
               { q: "Puis-je annuler ma réservation ?", a: "Chaque voyage a ses propres conditions d'annulation définies par l'agence. Vous pouvez les consulter sur la page détaillée du voyage." },

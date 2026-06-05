@@ -52,7 +52,7 @@ authProviders.push(
                 name: user.name,
                 email: user.email,
                 role: user.role,
-              };
+              } as any;
             }
           }
 
@@ -64,7 +64,7 @@ authProviders.push(
                 name: user.name,
                 email: user.email,
                 role: user.role,
-              };
+              } as any;
             }
           }
         } catch (error) {
@@ -176,11 +176,14 @@ export const authOptions: NextAuthOptions = {
       return true;
     },
     async jwt({ token, user, account, trigger, session }) {
+      // When user first logs in via credentials
       if (user) {
         token.id = user.id;
-        token.role = (user as { role?: string }).role || "CLIENT";
+        const userRole = (user as { role?: string }).role as "CLIENT" | "AGENCY" | "ADMIN" | undefined;
+        token.role = userRole || "CLIENT";
         token.email = user.email;
         if (user.name) token.name = user.name;
+        if (token.role) return token; // Exit early with populated token
       }
 
       if (trigger === "update" && session?.name) {
@@ -204,8 +207,9 @@ export const authOptions: NextAuthOptions = {
         token.id = token.sub;
       }
 
+      // Ensure role is always set from database
       const userId = (token.sub || token.id) as string | undefined;
-      if (userId) {
+      if (userId && !token.role) {
         try {
           const dbUser = await prisma.user.findUnique({
             where: { id: userId },
@@ -226,7 +230,8 @@ export const authOptions: NextAuthOptions = {
     async session({ session, token }) {
       if (session?.user) {
         session.user.id = (token.id as string) || token.sub || "";
-        session.user.role = (token.role as string) || "CLIENT";
+        const tokenRole = token.role as "CLIENT" | "AGENCY" | "ADMIN" | undefined;
+        session.user.role = tokenRole || "CLIENT";
         if (token.name) session.user.name = token.name as string;
         if (token.email) session.user.email = token.email as string;
       }

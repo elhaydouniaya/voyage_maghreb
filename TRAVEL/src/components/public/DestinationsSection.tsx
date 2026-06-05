@@ -6,31 +6,31 @@ const destinations = [
   {
     name: "Maroc",
     count: "10 voyages",
-    image: COUNTRY_IMAGES.MAROC[0],
+    image: "/maroc.jpg",
     slug: "maroc",
   },
   {
     name: "Algérie",
     count: "8 voyages",
-    image: COUNTRY_IMAGES.ALGERIE[0],
+    image: "/alger.jpg",
     slug: "algerie",
   },
   {
     name: "Tunisie",
     count: "6 voyages",
-    image: COUNTRY_IMAGES.TUNISIE[0],
+    image: "/tunisie.jpg",
     slug: "tunisie",
   },
   {
     name: "Libye",
     count: "4 voyages",
-    image: COUNTRY_IMAGES.LIBYE[0],
+    image: "/libye_capi.jpg",
     slug: "libye",
   },
   {
     name: "Mauritanie",
     count: "5 voyages",
-    image: COUNTRY_IMAGES.MAURITANIE[0],
+    image: "/chinguetti_libye.jpg",
     slug: "mauritanie",
   },
 ];

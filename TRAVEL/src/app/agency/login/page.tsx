@@ -79,13 +79,12 @@ export default function AgencyLoginPage() {
             <X size={24} className="text-gray-400 hover:text-white" />
           </button>
 
-          <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/10 rounded-full blur-3xl pointer-events-none" />
-          <Link href="/" className="inline-block">
-            <div className="w-16 h-16 bg-orange-600 rounded-2xl flex items-center justify-center text-white mx-auto mb-6 shadow-xl shadow-orange-600/30 hover:scale-105 transition-transform cursor-pointer">
+          <Link href="/" className="group cursor-pointer inline-block">
+            <div className="w-16 h-16 bg-orange-600 rounded-2xl flex items-center justify-center text-white mx-auto mb-6 shadow-xl shadow-orange-600/30 group-hover:scale-105 transition-transform">
               <Globe size={32} />
             </div>
+            <h1 className="text-3xl font-black tracking-tight mb-2 text-white">Maghreb<span className="text-orange-500">Voyage</span></h1>
           </Link>
-          <h1 className="text-3xl font-black tracking-tight mb-2">Maghreb<span className="text-orange-500">Voyage</span></h1>
           <p className="text-gray-400 text-xs font-bold uppercase tracking-widest text-orange-500">Espace Professionnel Agences</p>
         </div>
 
