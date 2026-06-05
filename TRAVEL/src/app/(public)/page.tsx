@@ -4,14 +4,10 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import MaghrebCarousel from "@/components/public/MaghrebCarousel";
-import SafeImage from "@/components/ui/SafeImage";
-import { formatPriceShort } from "@/lib/currency";
-import { sanitizeImageUrl } from "@/lib/images";
-import { 
-  ArrowRight, 
-  MapPin, 
-  ShieldCheck, 
-  Star, 
+import {
+  ArrowRight,
+  ShieldCheck,
+  Star,
   CheckCircle2,
   ChevronDown,
   Sparkles,
@@ -35,24 +31,22 @@ const HeroAnimatedWidget = dynamic(
   ) }
 );
 
-const TRIP_TAG_COLORS: Record<string, string> = {
-  DESERT: "bg-orange-500",
-  CULTURE: "bg-[#0F172A]",
-  ADVENTURE: "bg-orange-600",
-  RELAXATION: "bg-[#10B981]",
-  NATURE: "bg-emerald-600",
-};
-
-const TRIP_TYPE_LABELS: Record<string, string> = {
-  DESERT: "Désert",
-  CULTURE: "Culture",
-  ADVENTURE: "Aventure",
-  RELAXATION: "Détente",
-  NATURE: "Nature",
+type FeaturedTrip = {
+  id: string;
+  slug: string;
+  title: string;
+  destination: string;
+  status: string;
+  tripType: string;
+  totalPrice: number;
+  coverImage: string;
+  totalSpots: number;
+  bookedSpots: number;
+  season?: Season;
 };
 
 function FeaturedTrips() {
-  const [groupedTrips, setGroupedTrips] = useState<{ season: Season; trips: any[] }[]>([]);
+  const [groupedTrips, setGroupedTrips] = useState<{ season: Season; trips: FeaturedTrip[] }[]>([]);
   const [selectedSeason, setSelectedSeason] = useState<Season | null>(null);
   const [currentSeason, setCurrentSeason] = useState<Season>("SUMMER");
   const [loading, setLoading] = useState(true);
@@ -61,7 +55,9 @@ function FeaturedTrips() {
     fetch("/api/trips")
       .then((res) => res.json())
       .then((data) => {
-        const published = (data.trips || []).filter((t: any) => t.status === "PUBLISHED");
+        const published = (data.trips || []).filter(
+          (t: FeaturedTrip) => t.status === "PUBLISHED"
+        ) as FeaturedTrip[];
         const grouped = groupTripsBySeason(published);
         const seasonList = SEASON_ORDER;
         const result = (Object.keys(seasonList) as Season[])

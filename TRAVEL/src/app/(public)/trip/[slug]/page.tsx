@@ -12,7 +12,6 @@ import {
   Check,
   Users,
   Star,
-  Globe,
   Lightbulb,
   Sparkles,
   CloudSun,
@@ -22,7 +21,6 @@ import BookingForm from "@/components/booking/BookingForm";
 import Breadcrumbs from "@/components/ui/Breadcrumbs";
 import SafeImage from "@/components/ui/SafeImage";
 import { formatPriceShort } from "@/lib/currency";
-import { openWhatsAppShare } from "@/lib/whatsapp-share";
 
 type AgencyInfo = {
   id?: string;

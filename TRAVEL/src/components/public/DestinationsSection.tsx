@@ -1,6 +1,5 @@
 import LinkNext from "next/link";
 import { MapPin, ArrowRight } from "lucide-react";
-import { COUNTRY_IMAGES } from "@/lib/images";
 
 const destinations = [
   {
