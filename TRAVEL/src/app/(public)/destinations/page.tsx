@@ -49,16 +49,21 @@ const DEST_META = [
 ];
 
 async function loadTripCounts() {
-  const now = new Date();
-  const trips = await prisma.groupTrip.findMany({
-    where: {
-      status: "PUBLISHED",
-      isPublic: true,
-      startDate: { gt: now },
-    },
-    select: { destination: true, bookedSpots: true, totalSpots: true },
-  });
-  return trips.filter((t) => t.bookedSpots < t.totalSpots);
+  try {
+    const now = new Date();
+    const trips = await prisma.groupTrip.findMany({
+      where: {
+        status: "PUBLISHED",
+        isPublic: true,
+        startDate: { gt: now },
+      },
+      select: { destination: true, bookedSpots: true, totalSpots: true },
+    });
+    return trips.filter((t) => t.bookedSpots < t.totalSpots);
+  } catch {
+    /* DB unavailable at build time (CI) — show static destination cards */
+    return [];
+  }
 }
 
 export default async function DestinationsPage() {
