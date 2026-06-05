@@ -53,3 +53,9 @@ Carte test : `4242 4242 4242 4242`
 | Admin | `/admin/login` |
 
 Comptes démo (dev) : voir `TRAVEL/README.md`.
+
+## Dernière sync GitHub
+
+Branche **`feature/enhanced-platform-sync`** — fusion de la version locale enrichie + les mises à jour déjà sur `main` (tri par saison, partage social, logos auth, scripts admin).
+
+→ Détail complet : [`SYNC_CHANGELOG.md`](SYNC_CHANGELOG.md)
