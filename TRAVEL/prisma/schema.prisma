@@ -231,6 +231,7 @@ model GroupTrip {
   
   totalSpots      Int
   bookedSpots     Int      @default(0)
+  reservedSpots   Int      @default(0) // seats held by active PENDING_PAYMENT bookings
   
   tripType        TripType
   season          Season   @default(OTHER)
@@ -323,6 +324,7 @@ model Booking {
   cancellationToken String @unique @default(uuid())
   
   status          BookingStatus @default(PENDING_PAYMENT)
+  expiresAt       DateTime?    // PENDING_PAYMENT expires after 30 min; null = no expiry
   cancellationReason String?
   cancelledAt     DateTime?
   
@@ -342,6 +344,7 @@ enum BookingStatus {
   CANCELLED
   REFUNDED
   NO_SHOW
+  EXPIRED
 }
 
 // ==========================================

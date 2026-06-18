@@ -19,6 +19,22 @@ function generateConfirmationCode(): string {
   return `MV-${randomInt(100000, 999999)}`;
 }
 
+// Raw row shape returned by SELECT FOR UPDATE
+type TripRow = {
+  id: string;
+  totalSpots: number;
+  bookedSpots: number;
+  reservedSpots: number;
+  status: string;
+  agencyId: string;
+  depositAmount: string; // Decimal comes back as string from raw query
+  totalPrice: string;
+  currency: string;
+};
+
+/** Window within which a PENDING_PAYMENT booking holds its reserved seats. */
+const RESERVATION_TTL_MS = 30 * 60 * 1000; // 30 minutes
+
 export interface InitiateBookingInput {
   groupTripId: string;
   userId: string;
@@ -34,57 +50,96 @@ export interface InitiateBookingInput {
 }
 
 export class BookingsService {
+  /**
+   * FIX #1 — Seat reservation with SELECT FOR UPDATE.
+   *
+   * All concurrent calls are serialised at the PostgreSQL row level:
+   *   1. Lock GroupTrip row
+   *   2. Read available = totalSpots - bookedSpots - reservedSpots
+   *   3. If enough → reservedSpots += numberOfSeats
+   *   4. Create Booking (PENDING_PAYMENT, expiresAt = now + 30 min)
+   *
+   * No two transactions can allocate the same seats simultaneously.
+   */
   static async initiate(input: InitiateBookingInput) {
     if (!input.acceptCgu || !input.acceptRgpd) {
       throw new Error("Vous devez accepter les CGU et la politique RGPD.");
     }
-
     if (input.clientName.trim().length < 2) {
       throw new Error("Le nom est requis.");
     }
 
-    const trip = await prisma.groupTrip.findUnique({
-      where: { id: input.groupTripId },
-      include: { agency: true },
-    });
+    return prisma.$transaction(
+      async (tx) => {
+        // ── Lock the trip row ──────────────────────────────────────────────
+        const rows = await tx.$queryRaw<TripRow[]>`
+          SELECT id, "totalSpots", "bookedSpots", "reservedSpots",
+                 status, "agencyId",
+                 "depositAmount"::text AS "depositAmount",
+                 "totalPrice"::text   AS "totalPrice",
+                 currency
+          FROM   "GroupTrip"
+          WHERE  id = ${input.groupTripId}
+          FOR UPDATE
+        `;
 
-    if (!trip) throw new Error("Voyage introuvable.");
-    if (trip.status !== "PUBLISHED") {
-      throw new Error("Ce voyage n'est pas disponible à la réservation.");
-    }
+        if (rows.length === 0) throw new Error("Voyage introuvable.");
+        const trip = rows[0];
 
-    const spotsLeft = trip.totalSpots - trip.bookedSpots;
-    if (spotsLeft < input.numberOfSeats) {
-      throw new Error("Places insuffisantes pour cette réservation.");
-    }
+        if (trip.status !== "PUBLISHED") {
+          throw new Error("Ce voyage n'est pas disponible à la réservation.");
+        }
 
-    const depositPerSeat = Number(trip.depositAmount);
-    const totalPerSeat = Number(trip.totalPrice);
+        // ── Availability check (accounts for concurrent pending bookings) ──
+        const availableSpots =
+          trip.totalSpots - trip.bookedSpots - trip.reservedSpots;
 
-    const booking = await prisma.booking.create({
-      data: {
-        groupTripId: trip.id,
-        agencyId: trip.agencyId,
-        userId: input.userId,
-        travelRequestId: input.travelRequestId,
-        clientName: input.clientName.trim(),
-        clientEmail: input.clientEmail.trim().toLowerCase(),
-        clientPhone: input.clientPhone,
-        clientCountry: input.clientCountry,
-        numberOfSeats: input.numberOfSeats,
-        depositPaid: depositPerSeat * input.numberOfSeats,
-        totalAmount: totalPerSeat * input.numberOfSeats,
-        confirmationCode: generateConfirmationCode(),
-        status: "PENDING_PAYMENT",
-        notes: input.notes,
+        if (availableSpots < input.numberOfSeats) {
+          throw new Error(
+            `Places insuffisantes. Il reste ${availableSpots} place(s) disponible(s).`
+          );
+        }
+
+        // ── Reserve the seats ──────────────────────────────────────────────
+        await tx.groupTrip.update({
+          where: { id: trip.id },
+          data: { reservedSpots: { increment: input.numberOfSeats } },
+        });
+
+        const depositPerSeat = Number(trip.depositAmount);
+        const totalPerSeat = Number(trip.totalPrice);
+        const expiresAt = new Date(Date.now() + RESERVATION_TTL_MS);
+
+        const booking = await tx.booking.create({
+          data: {
+            groupTripId: trip.id,
+            agencyId: trip.agencyId,
+            userId: input.userId,
+            travelRequestId: input.travelRequestId,
+            clientName: input.clientName.trim(),
+            clientEmail: input.clientEmail.trim().toLowerCase(),
+            clientPhone: input.clientPhone,
+            clientCountry: input.clientCountry,
+            numberOfSeats: input.numberOfSeats,
+            depositPaid: depositPerSeat * input.numberOfSeats,
+            totalAmount: totalPerSeat * input.numberOfSeats,
+            confirmationCode: generateConfirmationCode(),
+            status: "PENDING_PAYMENT",
+            expiresAt,
+            notes: input.notes,
+          },
+          include: { groupTrip: true },
+        });
+
+        return booking;
       },
-      include: {
-        groupTrip: true,
-      },
-    });
-
-    return booking;
+      { timeout: 10_000, maxWait: 5_000 }
+    );
   }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Cancellation helpers
+  // ───────────────────────────────────────────────────────────────────────────
 
   static async cancelByIdForUser(
     bookingId: string,
@@ -116,9 +171,7 @@ export class BookingsService {
 
       const trip = await tx.groupTrip.update({
         where: { id: booking.groupTripId },
-        data: {
-          bookedSpots: { decrement: booking.numberOfSeats },
-        },
+        data: { bookedSpots: { decrement: booking.numberOfSeats } },
       });
 
       if (trip.status === "FULL" && trip.bookedSpots < trip.totalSpots) {
@@ -152,17 +205,12 @@ export class BookingsService {
     const result = await prisma.$transaction(async (tx) => {
       const updatedBooking = await tx.booking.update({
         where: { id: booking.id },
-        data: {
-          status: "CANCELLED",
-          cancelledAt: new Date(),
-        },
+        data: { status: "CANCELLED", cancelledAt: new Date() },
       });
 
       const trip = await tx.groupTrip.update({
         where: { id: booking.groupTripId },
-        data: {
-          bookedSpots: { decrement: booking.numberOfSeats },
-        },
+        data: { bookedSpots: { decrement: booking.numberOfSeats } },
       });
 
       let tripStatus = trip.status;
@@ -180,6 +228,247 @@ export class BookingsService {
     await this.notifyCancellationEmails(booking.id);
     return result;
   }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // FIX #2 — Stripe confirmation (atomic claim + row lock + idempotency)
+  // ───────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Called by the Stripe webhook (checkout.session.completed).
+   *
+   * Race-condition safety:
+   *   • The `updateMany(..., status: PENDING_PAYMENT → CONFIRMED)` acts as an
+   *     atomic compare-and-swap. PostgreSQL serialises concurrent updates on
+   *     the same row: the second concurrent attempt sees `count = 0` and exits.
+   *   • The GroupTrip row is then locked (FOR UPDATE) before incrementing
+   *     bookedSpots, preventing double-counting.
+   *   • The unique constraint on Payment.stripeSessionId is a final safety net
+   *     against duplicate webhook deliveries that somehow bypass the booking
+   *     status check.
+   */
+  static async confirmFromStripeSession(
+    stripeSessionId: string,
+    metadata: Record<string, string>
+  ) {
+    const bookingId = metadata.bookingId;
+    if (!bookingId) throw new Error("bookingId manquant dans metadata Stripe.");
+
+    return prisma.$transaction(
+      async (tx) => {
+        // ── Atomic claim: succeeds exactly once ────────────────────────────
+        const claimed = await tx.booking.updateMany({
+          where: { id: bookingId, status: "PENDING_PAYMENT" },
+          data: { status: "CONFIRMED" },
+        });
+
+        if (claimed.count === 0) {
+          // Could be CONFIRMED already (idempotent retry) or EXPIRED
+          const existing = await tx.booking.findUnique({
+            where: { id: bookingId },
+            select: { status: true },
+          });
+          if (existing?.status === "CONFIRMED") {
+            return { alreadyProcessed: true as const };
+          }
+          if (existing?.status === "EXPIRED") {
+            throw new Error(
+              "La réservation a expiré. Le client doit recommencer la réservation."
+            );
+          }
+          return { alreadyProcessed: true as const };
+        }
+
+        // ── Reload booking (we need the full record now) ───────────────────
+        const booking = await tx.booking.findUnique({
+          where: { id: bookingId },
+          include: { groupTrip: true },
+        });
+        if (!booking) throw new Error("Booking introuvable après update.");
+
+        // ── Lock GroupTrip row before mutating spots ───────────────────────
+        await tx.$queryRaw`
+          SELECT id FROM "GroupTrip"
+          WHERE id = ${booking.groupTripId}
+          FOR UPDATE
+        `;
+
+        const updatedTrip = await tx.groupTrip.update({
+          where: { id: booking.groupTripId },
+          data: {
+            bookedSpots:   { increment: booking.numberOfSeats },
+            reservedSpots: { decrement: booking.numberOfSeats },
+          },
+        });
+
+        if (updatedTrip.bookedSpots >= updatedTrip.totalSpots) {
+          await tx.groupTrip.update({
+            where: { id: booking.groupTripId },
+            data: { status: "FULL" },
+          });
+        }
+
+        // ── Create payment record ──────────────────────────────────────────
+        // Unique constraint on stripeSessionId is the final safety net
+        const payment = await tx.payment.create({
+          data: {
+            bookingId:           booking.id,
+            groupTripId:         booking.groupTripId,
+            agencyId:            booking.agencyId,
+            stripeSessionId,
+            stripeCustomerEmail: metadata.clientEmail || booking.clientEmail,
+            amount:              booking.depositPaid,
+            currency:            booking.groupTrip.currency,
+            status:              "SUCCEEDED",
+            paidAt:              new Date(),
+          },
+        });
+
+        return {
+          alreadyProcessed:  false as const,
+          bookingId:         booking.id,
+          booking,
+          payment,
+          confirmationCode:  booking.confirmationCode,
+        };
+      },
+      { timeout: 15_000, maxWait: 5_000 }
+    );
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // FIX #3 — Expire stale PENDING_PAYMENT bookings (called by cron)
+  // ───────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Finds all PENDING_PAYMENT bookings whose `expiresAt` has passed and
+   * atomically transitions them to EXPIRED, releasing reserved seats back
+   * to the pool.
+   *
+   * Safe to call concurrently (each booking is updated with a status-guard
+   * to prevent double-processing).
+   */
+  static async expireStaleBookings(): Promise<{ expired: number; errors: number }> {
+    const stale = await prisma.booking.findMany({
+      where: {
+        status: "PENDING_PAYMENT",
+        expiresAt: { not: null, lt: new Date() },
+      },
+      select: { id: true, groupTripId: true, numberOfSeats: true },
+    });
+
+    let expired = 0;
+    let errors = 0;
+
+    for (const b of stale) {
+      try {
+        await prisma.$transaction(async (tx) => {
+          // Guard: only proceed if still PENDING_PAYMENT
+          const result = await tx.booking.updateMany({
+            where: { id: b.id, status: "PENDING_PAYMENT" },
+            data:  { status: "EXPIRED" },
+          });
+
+          if (result.count > 0) {
+            // Release the reserved seats
+            await tx.groupTrip.update({
+              where: { id: b.groupTripId },
+              data:  { reservedSpots: { decrement: b.numberOfSeats } },
+            });
+
+            // Reopen trip if it was FULL
+            await tx.groupTrip.updateMany({
+              where: { id: b.groupTripId, status: "FULL" },
+              data:  { status: "PUBLISHED" },
+            });
+          }
+        });
+        expired++;
+      } catch (e) {
+        errors++;
+        console.error(`[expireStale] booking ${b.id}:`, e);
+      }
+    }
+
+    return { expired, errors };
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Demo payment (dev/staging only) — same atomic pattern as Stripe
+  // ───────────────────────────────────────────────────────────────────────────
+
+  static async confirmDemoPayment(bookingId: string, _userId?: string) {
+    const { isDemoPaymentsAllowed } = await import("@/lib/payments-config");
+    if (!isDemoPaymentsAllowed()) {
+      throw new Error(
+        "Paiement démo désactivé en production. Configurez Stripe ou ALLOW_DEMO_PAYMENTS."
+      );
+    }
+
+    return prisma.$transaction(
+      async (tx) => {
+        // Atomic claim — same pattern as Stripe webhook
+        const claimed = await tx.booking.updateMany({
+          where: { id: bookingId, status: "PENDING_PAYMENT" },
+          data:  { status: "CONFIRMED" },
+        });
+
+        if (claimed.count === 0) {
+          const b = await tx.booking.findFirst({
+            where: { id: bookingId },
+            include: { groupTrip: true, agency: true },
+          });
+          if (!b) throw new Error("Réservation introuvable.");
+          if (b.status === "CONFIRMED") return this.formatBookingSummary(b);
+          throw new Error("Réservation non disponible (expirée ou annulée).");
+        }
+
+        const booking = await tx.booking.findUnique({
+          where: { id: bookingId },
+          include: { groupTrip: true, agency: true },
+        });
+        if (!booking) throw new Error("Réservation introuvable.");
+
+        // Lock trip, update spots
+        await tx.$queryRaw`
+          SELECT id FROM "GroupTrip"
+          WHERE id = ${booking.groupTripId}
+          FOR UPDATE
+        `;
+
+        const updatedTrip = await tx.groupTrip.update({
+          where: { id: booking.groupTripId },
+          data: {
+            bookedSpots:   { increment: booking.numberOfSeats },
+            reservedSpots: { decrement: booking.numberOfSeats },
+          },
+        });
+
+        if (updatedTrip.bookedSpots >= updatedTrip.totalSpots) {
+          await tx.groupTrip.update({
+            where: { id: booking.groupTripId },
+            data: { status: "FULL" },
+          });
+        }
+
+        const summary = this.formatBookingSummary(booking);
+        await this.sendConfirmationEmails(booking.id);
+
+        const { AuditLogService } = await import("@/services/audit-log.service");
+        await AuditLogService.record(
+          "BOOKING_CONFIRMED",
+          { bookingId: booking.id, confirmationCode: booking.confirmationCode, source: "demo" },
+          _userId
+        );
+
+        return summary;
+      },
+      { timeout: 15_000, maxWait: 5_000 }
+    );
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Email helpers
+  // ───────────────────────────────────────────────────────────────────────────
 
   static async notifyCancellationEmails(bookingId: string) {
     try {
@@ -215,7 +504,7 @@ export class BookingsService {
     if (!b || b.status !== "CONFIRMED") return;
 
     const deposit = Math.round(Number(b.depositPaid));
-    const total = Math.round(Number(b.totalAmount));
+    const total   = Math.round(Number(b.totalAmount));
 
     try {
       await sendBookingConfirmationEmail({
@@ -251,83 +540,9 @@ export class BookingsService {
     }
   }
 
-  static async confirmFromStripeSession(
-    stripeSessionId: string,
-    metadata: Record<string, string>
-  ) {
-    const existing = await prisma.payment.findUnique({
-      where: { stripeSessionId },
-    });
-    if (existing) return { alreadyProcessed: true as const };
-
-    const bookingId = metadata.bookingId;
-    if (!bookingId) throw new Error("bookingId manquant dans metadata Stripe.");
-
-    return prisma.$transaction(async (tx) => {
-      const booking = await tx.booking.findUnique({
-        where: { id: bookingId },
-        include: { groupTrip: true },
-      });
-      if (!booking) throw new Error("Booking introuvable.");
-      if (booking.status === "CONFIRMED") {
-        return { alreadyProcessed: true as const };
-      }
-
-      const trip = await tx.groupTrip.findUnique({
-        where: { id: booking.groupTripId },
-      });
-      if (!trip) throw new Error("Voyage introuvable.");
-
-      const spotsLeft = trip.totalSpots - trip.bookedSpots;
-      if (spotsLeft < booking.numberOfSeats) {
-        throw new Error("Plus de places disponibles.");
-      }
-
-      const updatedTrip = await tx.groupTrip.update({
-        where: { id: trip.id },
-        data: {
-          bookedSpots: { increment: booking.numberOfSeats },
-        },
-      });
-
-      const newStatus =
-        updatedTrip.bookedSpots >= updatedTrip.totalSpots ? "FULL" : trip.status;
-
-      if (newStatus === "FULL") {
-        await tx.groupTrip.update({
-          where: { id: trip.id },
-          data: { status: "FULL" },
-        });
-      }
-
-      const payment = await tx.payment.create({
-        data: {
-          bookingId: booking.id,
-          groupTripId: booking.groupTripId,
-          agencyId: booking.agencyId,
-          stripeSessionId,
-          stripeCustomerEmail: metadata.clientEmail || booking.clientEmail,
-          amount: booking.depositPaid,
-          currency: trip.currency,
-          status: "SUCCEEDED",
-          paidAt: new Date(),
-        },
-      });
-
-      await tx.booking.update({
-        where: { id: booking.id },
-        data: { status: "CONFIRMED" },
-      });
-
-      return {
-        alreadyProcessed: false as const,
-        bookingId: booking.id,
-        booking,
-        payment,
-        confirmationCode: booking.confirmationCode,
-      };
-    });
-  }
+  // ───────────────────────────────────────────────────────────────────────────
+  // Public read helpers
+  // ───────────────────────────────────────────────────────────────────────────
 
   static async getPublicByStripeSession(stripeSessionId: string) {
     if (!stripeSessionId) throw new Error("Session Stripe manquante.");
@@ -352,10 +567,10 @@ export class BookingsService {
     }
 
     const result = await this.confirmFromStripeSession(stripeSessionId, {
-      bookingId: session.metadata?.bookingId || "",
-      groupTripId: session.metadata?.groupTripId || "",
-      agencyId: session.metadata?.agencyId || "",
-      clientEmail: session.metadata?.clientEmail || session.customer_email || "",
+      bookingId:    session.metadata?.bookingId    || "",
+      groupTripId:  session.metadata?.groupTripId  || "",
+      agencyId:     session.metadata?.agencyId     || "",
+      clientEmail:  session.metadata?.clientEmail  || session.customer_email || "",
       numberOfSeats: session.metadata?.numberOfSeats || "1",
     });
 
@@ -400,33 +615,30 @@ export class BookingsService {
     }
   ) {
     const deposit = Number(booking.depositPaid);
-    const total = Number(booking.totalAmount);
+    const total   = Number(booking.totalAmount);
     return {
-      id: booking.id,
+      id:               booking.id,
       confirmationCode: booking.confirmationCode,
-      tripTitle: booking.groupTrip.title,
-      destination: booking.groupTrip.destination,
-      startDate: booking.groupTrip.startDate.toISOString(),
-      endDate: booking.groupTrip.endDate.toISOString(),
-      coverImage: booking.groupTrip.coverImage,
-      depositAmount: deposit,
-      totalPrice: total,
-      numberOfSeats: booking.numberOfSeats,
-      status: booking.status,
-      agencyName: booking.agency.name,
-      agencyEmail: booking.agency.email,
-      agencyPhone: booking.agency.phoneNumber,
-      tripSlug: booking.groupTrip.slug,
+      tripTitle:        booking.groupTrip.title,
+      destination:      booking.groupTrip.destination,
+      startDate:        booking.groupTrip.startDate.toISOString(),
+      endDate:          booking.groupTrip.endDate.toISOString(),
+      coverImage:       booking.groupTrip.coverImage,
+      depositAmount:    deposit,
+      totalPrice:       total,
+      numberOfSeats:    booking.numberOfSeats,
+      status:           booking.status,
+      agencyName:       booking.agency.name,
+      agencyEmail:      booking.agency.email,
+      agencyPhone:      booking.agency.phoneNumber,
+      tripSlug:         booking.groupTrip.slug,
     };
   }
 
   static async getByIdForUser(bookingId: string, userId: string) {
     const booking = await prisma.booking.findFirst({
       where: { id: bookingId, userId },
-      include: {
-        groupTrip: true,
-        agency: true,
-      },
+      include: { groupTrip: true, agency: true },
     });
     if (!booking) return null;
     return this.formatBookingSummary(booking);
@@ -441,67 +653,7 @@ export class BookingsService {
     return this.formatBookingSummary(booking);
   }
 
-  static async confirmDemoPayment(bookingId: string, _userId?: string) {
-    const { isDemoPaymentsAllowed } = await import("@/lib/payments-config");
-    if (!isDemoPaymentsAllowed()) {
-      throw new Error(
-        "Paiement démo désactivé en production. Configurez Stripe ou ALLOW_DEMO_PAYMENTS."
-      );
-    }
-
-    return prisma.$transaction(async (tx) => {
-      const booking = await tx.booking.findFirst({
-        where: { id: bookingId },
-        include: { groupTrip: true, agency: true },
-      });
-      if (!booking) throw new Error("Réservation introuvable.");
-      if (booking.status === "CONFIRMED") {
-        return this.formatBookingSummary(booking);
-      }
-
-      const trip = booking.groupTrip;
-      const spotsLeft = trip.totalSpots - trip.bookedSpots;
-      if (spotsLeft < booking.numberOfSeats) {
-        throw new Error("Plus de places disponibles.");
-      }
-
-      const updatedTrip = await tx.groupTrip.update({
-        where: { id: trip.id },
-        data: { bookedSpots: { increment: booking.numberOfSeats } },
-      });
-
-      if (updatedTrip.bookedSpots >= updatedTrip.totalSpots) {
-        await tx.groupTrip.update({
-          where: { id: trip.id },
-          data: { status: "FULL" },
-        });
-      }
-
-      const confirmed = await tx.booking.update({
-        where: { id: booking.id },
-        data: { status: "CONFIRMED" },
-        include: { groupTrip: true, agency: true },
-      });
-
-      const summary = this.formatBookingSummary(confirmed);
-      await this.sendConfirmationEmails(confirmed.id);
-
-      const { AuditLogService } = await import("@/services/audit-log.service");
-      await AuditLogService.record(
-        "BOOKING_CONFIRMED",
-        {
-          bookingId: confirmed.id,
-          confirmationCode: confirmed.confirmationCode,
-          source: "demo",
-        },
-        _userId
-      );
-
-      return summary;
-    });
-  }
-
-  static async finalizeFromStripeSession(stripeSessionId: string, userId: string) {
+  static async finalizeFromStripeSession(stripeSessionId: string, _userId: string) {
     return this.getPublicByStripeSession(stripeSessionId);
   }
 
@@ -512,10 +664,7 @@ export class BookingsService {
       include: {
         groupTrip: {
           select: {
-            title: true,
-            destination: true,
-            startDate: true,
-            endDate: true,
+            title: true, destination: true, startDate: true, endDate: true,
           },
         },
         agency: { select: { name: true } },
@@ -523,33 +672,25 @@ export class BookingsService {
     });
 
     return bookings.map((b) => ({
-      id: b.id,
+      id:               b.id,
       confirmationCode: b.confirmationCode,
-      tripTitle: b.groupTrip.title,
-      destination: b.groupTrip.destination,
-      startDate: b.groupTrip.startDate.toISOString(),
-      endDate: b.groupTrip.endDate.toISOString(),
-      seats: b.numberOfSeats,
-      depositPaid: Number(b.depositPaid),
-      totalAmount: Number(b.totalAmount),
-      status: b.status,
-      agency: b.agency.name,
-      bookedAt: b.createdAt.toISOString(),
+      tripTitle:        b.groupTrip.title,
+      destination:      b.groupTrip.destination,
+      startDate:        b.groupTrip.startDate.toISOString(),
+      endDate:          b.groupTrip.endDate.toISOString(),
+      seats:            b.numberOfSeats,
+      depositPaid:      Number(b.depositPaid),
+      totalAmount:      Number(b.totalAmount),
+      status:           b.status,
+      agency:           b.agency.name,
+      bookedAt:         b.createdAt.toISOString(),
     }));
   }
 
-  static async getInvoice(
-    confirmationCode: string,
-    userId: string,
-    role: string
-  ) {
+  static async getInvoice(confirmationCode: string, userId: string, role: string) {
     const booking = await prisma.booking.findUnique({
       where: { confirmationCode },
-      include: {
-        groupTrip: true,
-        agency: true,
-        payment: true,
-      },
+      include: { groupTrip: true, agency: true, payment: true },
     });
 
     if (!booking) throw new Error("Réservation introuvable.");
@@ -563,7 +704,7 @@ export class BookingsService {
     const statusLabels: Record<string, string> = {
       CONFIRMED: "Confirmée",
       CANCELLED: "Annulée",
-      REFUNDED: "Remboursée",
+      REFUNDED:  "Remboursée",
     };
 
     const fmt = (n: number) =>
@@ -571,20 +712,20 @@ export class BookingsService {
 
     return {
       confirmationCode: booking.confirmationCode,
-      issuedAt: formatFrDate(new Date()),
-      tripTitle: booking.groupTrip.title,
-      destination: booking.groupTrip.destination,
-      dates: `${formatFrDate(booking.groupTrip.startDate)} → ${formatFrDate(booking.groupTrip.endDate)}`,
-      clientName: booking.clientName,
-      clientEmail: booking.clientEmail,
-      agencyName: booking.agency.name,
-      seats: booking.numberOfSeats,
-      depositPaid: fmt(Number(booking.depositPaid)),
-      totalAmount: fmt(Number(booking.totalAmount)),
-      statusLabel: statusLabels[booking.status] || booking.status,
-      paidAt: booking.payment?.paidAt
-        ? formatFrDate(booking.payment.paidAt)
-        : formatFrDate(booking.createdAt),
+      issuedAt:         formatFrDate(new Date()),
+      tripTitle:        booking.groupTrip.title,
+      destination:      booking.groupTrip.destination,
+      dates:            `${formatFrDate(booking.groupTrip.startDate)} → ${formatFrDate(booking.groupTrip.endDate)}`,
+      clientName:       booking.clientName,
+      clientEmail:      booking.clientEmail,
+      agencyName:       booking.agency.name,
+      seats:            booking.numberOfSeats,
+      depositPaid:      fmt(Number(booking.depositPaid)),
+      totalAmount:      fmt(Number(booking.totalAmount)),
+      statusLabel:      statusLabels[booking.status] || booking.status,
+      paidAt:           booking.payment?.paidAt
+                          ? formatFrDate(booking.payment.paidAt)
+                          : formatFrDate(booking.createdAt),
     };
   }
 }
