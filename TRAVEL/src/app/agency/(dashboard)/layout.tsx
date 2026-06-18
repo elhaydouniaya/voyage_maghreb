@@ -12,9 +12,9 @@ import {
   User,
   Settings,
   LogOut,
-  Globe,
   Shield,
 } from "lucide-react";
+import AnimatedLogo from "@/components/brand/AnimatedLogo";
 import NotificationBell from "@/components/ui/NotificationBell";
 
 type AgencyMe = {
@@ -93,12 +93,7 @@ export default function AgencyDashboardLayout({
     <div className="flex min-h-screen bg-[#F8FAFC]">
       <aside className="w-72 bg-[#0F172A] text-white flex flex-col fixed h-full z-20">
         <div className="p-8">
-          <Link href="/" className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-orange-500 rounded-xl flex items-center justify-center text-white">
-              <Globe size={20} />
-            </div>
-            <span className="text-xl font-bold tracking-tight">MaghrebVoyage</span>
-          </Link>
+          <AnimatedLogo variant="full" theme="dark" size="md" />
         </div>
 
         <nav className="flex-1 px-4 py-4 space-y-2">
@@ -135,7 +130,7 @@ export default function AgencyDashboardLayout({
 
         <div className="p-6 mt-auto">
           <button
-            onClick={() => signOutToHome()}
+            onClick={() => void signOutToHome()}
             className="w-full flex items-center gap-4 px-6 py-4 text-gray-400 hover:text-white hover:bg-white/5 rounded-2xl transition-all"
           >
             <LogOut size={20} />

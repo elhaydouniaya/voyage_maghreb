@@ -18,8 +18,10 @@ import {
   Settings,
   ShieldCheck,
   BarChart3,
+  ScrollText,
 } from "lucide-react";
 import NotificationBell from "@/components/ui/NotificationBell";
+import AnimatedLogo from "@/components/brand/AnimatedLogo";
 
 type AdminMe = {
   name: string;
@@ -91,6 +93,7 @@ export default function AdminPortalLayout({
     { icon: Wallet, label: "Paiements", href: "/admin/payments", badge: null },
     { icon: Star, label: "Avis clients", href: "/admin/reviews", badge: null },
     { icon: Sparkles, label: "Demandes IA", href: "/admin/ai-requests", badge: null },
+    { icon: ScrollText, label: "Audit logs", href: "/admin/audit-logs", badge: null },
     { icon: User, label: "Mon profil", href: "/admin/profile", badge: null },
     { icon: Settings, label: "Paramètres", href: "/admin/settings", badge: null },
   ];
@@ -122,14 +125,7 @@ export default function AdminPortalLayout({
     <div className="flex min-h-screen bg-[#F8FAFC] font-outfit">
       <aside className="w-72 bg-[#0F172A] text-white flex flex-col fixed h-full z-20">
         <div className="p-8">
-          <Link href="/admin/dashboard" className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-orange-500 rounded-xl flex items-center justify-center text-white">
-              <Globe size={20} />
-            </div>
-            <span className="text-xl font-bold tracking-tight">
-              Maghreb<span className="text-orange-500">Voyage</span>
-            </span>
-          </Link>
+          <AnimatedLogo variant="full" theme="dark" size="md" href="/admin/dashboard" />
           <p className="text-[9px] font-black text-gray-500 uppercase tracking-[0.2em] mt-4 ml-1">
             Espace administrateur
           </p>
@@ -181,7 +177,7 @@ export default function AdminPortalLayout({
           </div>
           <button
             type="button"
-            onClick={() => signOutToHome()}
+            onClick={() => void signOutToHome()}
             className="w-full flex items-center gap-3 px-6 py-3 bg-orange-600 text-white hover:bg-orange-700 font-bold rounded-2xl transition-all shadow-lg shadow-orange-600/20 hover:shadow-orange-600/40"
           >
             <LogOut size={18} />

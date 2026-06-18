@@ -8,6 +8,10 @@ function redirectToLogin(req: NextRequest, loginPath: string) {
   return NextResponse.redirect(new URL(url, req.url));
 }
 
+const ADMIN_LOGIN = "/admin/login";
+const AGENCY_LOGIN = "/agency/login";
+const CLIENT_LOGIN = "/login";
+
 export default withAuth(
   function proxy(req) {
     const token = req.nextauth.token;
@@ -15,35 +19,75 @@ export default withAuth(
 
     if (!token) {
       if (path.startsWith("/admin")) {
-        return redirectToLogin(req, "/admin/login");
+        return redirectToLogin(req, ADMIN_LOGIN);
       }
-      if (path.startsWith("/agency")) {
-        return redirectToLogin(req, "/agency/login");
+      if (
+        path.startsWith("/agency") &&
+        !path.startsWith("/agency/login") &&
+        !path.startsWith("/agency/register")
+      ) {
+        return redirectToLogin(req, AGENCY_LOGIN);
       }
-      return redirectToLogin(req, "/login");
+      return redirectToLogin(req, CLIENT_LOGIN);
     }
 
-    if (path.startsWith("/admin") && !path.startsWith("/admin/login") && token.role !== "ADMIN") {
-      return redirectToLogin(req, "/admin/login");
+    const role = token.role as string;
+
+    if (path.startsWith("/admin") && !path.startsWith("/admin/login")) {
+      if (role !== "ADMIN") {
+        if (role === "AGENCY") {
+          return NextResponse.redirect(new URL("/agency/dashboard", req.url));
+        }
+        if (role === "CLIENT") {
+          return NextResponse.redirect(new URL("/", req.url));
+        }
+        return redirectToLogin(req, ADMIN_LOGIN);
+      }
     }
 
     if (
       path.startsWith("/agency") &&
       !path.startsWith("/agency/login") &&
-      !path.startsWith("/agency/register") &&
-      token.role !== "AGENCY"
+      !path.startsWith("/agency/register")
     ) {
-      return redirectToLogin(req, "/agency/login");
+      if (role !== "AGENCY") {
+        if (role === "ADMIN") {
+          return NextResponse.redirect(new URL("/admin/dashboard", req.url));
+        }
+        if (role === "CLIENT") {
+          return NextResponse.redirect(new URL("/", req.url));
+        }
+        return redirectToLogin(req, AGENCY_LOGIN);
+      }
     }
 
-    if (path.startsWith("/profile") && token.role !== "CLIENT") {
-      if (token.role === "AGENCY") {
+    if (path.startsWith("/profile")) {
+      if (role === "AGENCY") {
         return NextResponse.redirect(new URL("/agency/dashboard", req.url));
       }
-      if (token.role === "ADMIN") {
+      if (role === "ADMIN") {
         return NextResponse.redirect(new URL("/admin/dashboard", req.url));
       }
-      return redirectToLogin(req, "/login");
+    }
+
+    if (
+      path.startsWith("/booking") ||
+      path.startsWith("/favorites") ||
+      path.startsWith("/ai")
+    ) {
+      if (role !== "CLIENT") {
+        if (role === "AGENCY") {
+          return NextResponse.redirect(new URL("/agency/dashboard", req.url));
+        }
+        if (role === "ADMIN") {
+          return NextResponse.redirect(new URL("/admin/dashboard", req.url));
+        }
+        return redirectToLogin(req, CLIENT_LOGIN);
+      }
+    }
+
+    if (path === "/reviews/new" && role !== "CLIENT") {
+      return redirectToLogin(req, CLIENT_LOGIN);
     }
 
     return NextResponse.next();
@@ -57,42 +101,25 @@ export default withAuth(
 
 export const config = {
   matcher: [
-    "/admin/dashboard",
     "/admin/dashboard/:path*",
-    "/admin/trips",
     "/admin/trips/:path*",
-    "/admin/bookings",
     "/admin/bookings/:path*",
-    "/admin/payments",
     "/admin/payments/:path*",
-    "/admin/ai-requests",
     "/admin/ai-requests/:path*",
-    "/admin/agencies",
     "/admin/agencies/:path*",
-    "/admin/clients",
     "/admin/clients/:path*",
-    "/admin/reviews",
     "/admin/reviews/:path*",
-    "/admin/profile",
     "/admin/profile/:path*",
-    "/admin/settings",
     "/admin/settings/:path*",
     "/admin/decision-dashboard",
     "/admin/decision-dashboard/:path*",
-    "/agency",
-    "/agency/dashboard",
-    "/agency/dashboard/:path*",
-    "/agency/trips",
-    "/agency/trips/:path*",
-    "/agency/bookings",
-    "/agency/bookings/:path*",
-    "/agency/leads",
-    "/agency/leads/:path*",
-    "/agency/profile",
-    "/agency/profile/:path*",
-    "/agency/settings",
-    "/agency/settings/:path*",
-    "/profile",
+    "/admin/audit-logs",
+    "/admin/audit-logs/:path*",
+    "/agency/((?!login|register).*)",
     "/profile/:path*",
+    "/booking/:path*",
+    "/favorites/:path*",
+    "/ai/:path*",
+    "/reviews/new",
   ],
 };

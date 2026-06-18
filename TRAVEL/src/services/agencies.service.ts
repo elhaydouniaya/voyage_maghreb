@@ -97,25 +97,42 @@ export class AgenciesService {
       },
     });
 
-    return agencies.map((a) => ({
-      id: a.id,
-      name: a.name,
-      manager: a.managerName,
-      email: a.email,
-      phone: a.phoneNumber,
-      status: a.verificationStatus,
-      siret: a.siret,
-      trips: a._count.trips,
-      country: a.country,
-      city: a.city,
-      createdAt: a.createdAt.toISOString(),
-      stripeConnect: {
-        accountId: a.stripeConnectAccountId,
-        chargesEnabled: a.stripeConnectChargesEnabled,
-        payoutsEnabled: a.stripeConnectPayoutsEnabled,
-        onboardingComplete: a.stripeConnectOnboardingComplete,
-      },
-    }));
+    let reviewStats = new Map<string, { count: number; average: number | null }>();
+    try {
+      const { ExternalReviewsService } = await import(
+        "@/services/external-reviews.service"
+      );
+      reviewStats = await ExternalReviewsService.getStatsForAgencies(
+        agencies.map((a) => a.id)
+      );
+    } catch (e) {
+      console.error("External review stats unavailable:", e);
+    }
+
+    return agencies.map((a) => {
+      const stats = reviewStats.get(a.id);
+      return {
+        id: a.id,
+        name: a.name,
+        manager: a.managerName,
+        email: a.email,
+        phone: a.phoneNumber,
+        status: a.verificationStatus,
+        siret: a.siret,
+        trips: a._count.trips,
+        reviewCount: stats?.count ?? 0,
+        reviewAverage: stats?.average ?? null,
+        country: a.country,
+        city: a.city,
+        createdAt: a.createdAt.toISOString(),
+        stripeConnect: {
+          accountId: a.stripeConnectAccountId,
+          chargesEnabled: a.stripeConnectChargesEnabled,
+          payoutsEnabled: a.stripeConnectPayoutsEnabled,
+          onboardingComplete: a.stripeConnectOnboardingComplete,
+        },
+      };
+    });
   }
 
   static async updateVerificationStatus(

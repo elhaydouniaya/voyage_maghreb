@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { CreditCard, ShieldCheck, User, Mail, Phone, ArrowRight } from "lucide-react";
+import { CreditCard, ShieldCheck, User, Mail, Phone, ArrowRight, LogIn, Lock } from "lucide-react";
 import { formatPriceShort, formatDeposit } from "@/lib/currency";
 import { useSession } from "next-auth/react";
 
@@ -41,7 +41,7 @@ export default function BookingForm({
   spotsLeft,
   isSoldOut = false,
 }: BookingFormProps) {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const [step, setStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const fullName = session?.user?.name || "";
@@ -110,6 +110,39 @@ export default function BookingForm({
         >
           Voir d&apos;autres voyages
         </Link>
+      </div>
+    );
+  }
+
+  if (status !== "loading" && (!session?.user || session.user.role !== "CLIENT")) {
+    const callbackUrl = typeof window !== "undefined"
+      ? window.location.pathname + window.location.search
+      : `/trip/${tripId}`;
+    return (
+      <div className="bg-white p-8 rounded-[3.5rem] border border-gray-100 shadow-2xl shadow-orange-500/5 space-y-8">
+        <div className="flex flex-col items-center gap-6 py-6 text-center">
+          <div className="w-20 h-20 rounded-full bg-orange-50 flex items-center justify-center">
+            <Lock size={36} className="text-orange-500" />
+          </div>
+          <div className="space-y-2">
+            <h3 className="text-xl font-black text-[#0F172A]">Réservation réservée aux voyageurs</h3>
+            <p className="text-sm text-gray-500 max-w-xs mx-auto">
+              Connectez-vous à votre compte voyageur pour réserver ce voyage et procéder au paiement.
+            </p>
+          </div>
+          <Link
+            href={`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`}
+            className="inline-flex items-center gap-3 bg-orange-600 text-white px-10 py-4 rounded-full font-black text-sm uppercase tracking-widest shadow-xl shadow-orange-500/20 hover:bg-orange-700 transition-all"
+          >
+            <LogIn size={18} /> Se connecter
+          </Link>
+          <Link
+            href={`/register?callbackUrl=${encodeURIComponent(callbackUrl)}`}
+            className="text-sm text-orange-600 hover:text-orange-800 font-semibold underline"
+          >
+            Pas encore de compte ? S&apos;inscrire gratuitement
+          </Link>
+        </div>
       </div>
     );
   }

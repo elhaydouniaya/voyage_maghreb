@@ -147,6 +147,7 @@ model Agency {
   bookings        Booking[]
   payments        Payment[]
   leads           AgencyLead[]
+  externalReviews ExternalReview[]
 }
 
 enum AgencyStatus {
@@ -258,8 +259,10 @@ model GroupTrip {
   
   totalSpots      Int
   bookedSpots     Int      @default(0)
+  reservedSpots   Int      @default(0) // seats held by active PENDING_PAYMENT bookings
   
   tripType        TripType
+  season          Season   @default(OTHER)
   inclusions      String[]
   exclusions      String[]
   meetingPoint    String?
@@ -292,6 +295,14 @@ enum TripType {
   NATURE
   RELIGIEUX
   HISTORIQUE
+}
+
+enum Season {
+  SPRING
+  SUMMER
+  AUTUMN
+  WINTER
+  OTHER
 }
 
 enum TripStatus {
@@ -341,6 +352,7 @@ model Booking {
   cancellationToken String @unique @default(uuid())
   
   status          BookingStatus @default(PENDING_PAYMENT)
+  expiresAt       DateTime?    // PENDING_PAYMENT expires after 30 min; null = no expiry
   cancellationReason String?
   cancelledAt     DateTime?
   
@@ -361,6 +373,7 @@ enum BookingStatus {
   CANCELLED
   REFUNDED
   NO_SHOW
+  EXPIRED
 }
 
 // ==========================================
@@ -483,6 +496,37 @@ enum ReviewStatus {
   PENDING
   APPROVED
   REJECTED
+}
+
+// ==========================================
+// 8b. Avis externes (plateformes tierces)
+// ==========================================
+
+enum ExternalReviewPlatform {
+  GOOGLE
+  TRIPADVISOR
+  FACEBOOK
+  TRUSTPILOT
+  VIATOR
+}
+
+model ExternalReview {
+  id         String                 @id @default(cuid())
+  agencyId   String
+  agency     Agency                 @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  platform   ExternalReviewPlatform
+  authorName String
+  rating     Int
+  title      String?
+  content    String                 @db.Text
+  reviewDate DateTime
+  sourceUrl  String?
+  location   String?
+
+  fetchedAt  DateTime               @default(now())
+
+  @@index([agencyId])
 }
 
 // ==========================================

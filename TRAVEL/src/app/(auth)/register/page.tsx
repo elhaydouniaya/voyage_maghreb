@@ -3,12 +3,14 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Globe, X, Mail, Lock, User, Eye, EyeOff, CheckCircle2, Phone } from "lucide-react";
+import { Globe, Eye, EyeOff, AlertCircle, CheckCircle2, User, Mail, Phone } from "lucide-react";
 import { loginWithFreshSession } from "@/lib/login-client";
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
+import { AnimatedBackground } from "@/components/auth/AnimatedBackground";
 
 export default function ClientRegisterPage() {
   const router = useRouter();
+
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -21,34 +23,18 @@ export default function ClientRegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
+  const passwordsMatch =
+    formData.password && formData.confirmPassword && formData.password === formData.confirmPassword;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError("");
 
-    if (!formData.name.trim()) {
-      setError("Le nom est requis.");
-      setIsLoading(false);
-      return;
-    }
-
-    if (!formData.email.trim()) {
-      setError("L'email est requis.");
-      setIsLoading(false);
-      return;
-    }
-
-    if (formData.password.length < 8) {
-      setError("Le mot de passe doit contenir au moins 8 caractères.");
-      setIsLoading(false);
-      return;
-    }
-
-    if (formData.password !== formData.confirmPassword) {
-      setError("Les mots de passe ne correspondent pas.");
-      setIsLoading(false);
-      return;
-    }
+    if (!formData.name.trim()) { setError("Le nom est requis."); setIsLoading(false); return; }
+    if (!formData.email.trim()) { setError("L'email est requis."); setIsLoading(false); return; }
+    if (formData.password.length < 8) { setError("Le mot de passe doit contenir au moins 8 caractères."); setIsLoading(false); return; }
+    if (formData.password !== formData.confirmPassword) { setError("Les mots de passe ne correspondent pas."); setIsLoading(false); return; }
 
     try {
       const res = await fetch("/api/auth/register", {
@@ -61,293 +47,186 @@ export default function ClientRegisterPage() {
           password: formData.password,
         }),
       });
-
       const data = await res.json();
+      if (!res.ok) { setError(data.error || "Inscription impossible."); setIsLoading(false); return; }
 
-      if (!res.ok) {
-        setError(data.error || "Inscription impossible.");
-        setIsLoading(false);
-        return;
-      }
-
-      const loginOutcome = await loginWithFreshSession(
-        formData.email.trim(),
-        formData.password,
-        { requiredRole: "CLIENT", openGuide: true }
-      );
-
+      const loginOutcome = await loginWithFreshSession(formData.email.trim(), formData.password, { requiredRole: "CLIENT" });
       if (!loginOutcome.ok) {
-        router.push(
-          `/login?registered=true&email=${encodeURIComponent(formData.email.trim())}`
-        );
+        router.push(`/login?registered=true&email=${encodeURIComponent(formData.email.trim())}`);
       }
-      /* succès : redirection automatique vers /profile */
     } catch {
       setError("Impossible de contacter le serveur. Réessayez.");
       setIsLoading(false);
     }
   };
 
-  const handleBackdropClick = (e: React.MouseEvent) => {
-    // Only close if clicking on the backdrop container, not on the modal
-    const target = e.target as HTMLElement;
-    if (target.id === "backdrop-container") {
-      router.push("/");
-    }
-  };
-
-  const passwordsMatch = formData.password && formData.confirmPassword && formData.password === formData.confirmPassword;
-
   return (
     <div
-      id="backdrop-container"
-      className="fixed inset-0 bg-white flex items-center justify-center p-4 font-outfit min-h-screen overflow-hidden"
-      onClick={handleBackdropClick}
+      className="min-h-screen w-full relative overflow-hidden bg-[#fef3e2] font-outfit"
+      onClick={() => router.push("/")}
     >
-      {/* Animated Blurred Background - Similar to Home Page */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        {/* Gradient Overlay */}
-        <div className="absolute inset-0 bg-gradient-to-br from-white via-orange-50/40 to-white" />
+      <AnimatedBackground />
 
-        {/* Animated Blur Shapes */}
-        <div className="absolute top-20 -left-40 w-96 h-96 bg-orange-200/20 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute top-1/3 -right-32 w-80 h-80 bg-blue-100/20 rounded-full blur-3xl animate-pulse delay-1000" />
-        <div className="absolute -bottom-32 left-1/2 w-96 h-96 bg-orange-100/20 rounded-full blur-3xl animate-pulse delay-500" />
+      <div className="relative z-10 min-h-screen flex items-center justify-center p-4 py-8">
+        <div className="w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white/80 backdrop-blur-xl border border-orange-200 rounded-2xl shadow-2xl p-8">
 
-        {/* Animated Lines */}
-        <svg className="absolute inset-0 w-full h-full opacity-10" preserveAspectRatio="none">
-          <defs>
-            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="currentColor" strokeWidth="0.5" />
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#grid)" />
-        </svg>
-      </div>
-
-      {/* Modal Card */}
-      <div 
-        className="bg-white rounded-3xl shadow-2xl w-full max-w-md relative overflow-hidden animate-in fade-in zoom-in-95 duration-300 z-10 border border-white/80 backdrop-blur-xl max-h-[90vh] flex flex-col"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Close Button */}
-        <button
-          onClick={() => router.push("/")}
-          className="absolute top-6 right-6 z-10 p-2 hover:bg-gray-100 rounded-full transition-colors"
-          title="Fermer"
-        >
-          <X size={24} className="text-gray-600" />
-        </button>
-
-        {/* Header with Gradient */}
-        <div className="bg-gradient-to-br from-orange-600 to-orange-700 px-8 py-12 text-white text-center relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-full blur-3xl pointer-events-none" />
-          <div className="absolute bottom-0 left-0 w-32 h-32 bg-orange-500/20 rounded-full blur-3xl pointer-events-none" />
-
-          <div className="relative z-10">
-            <Link href="/" className="group cursor-pointer inline-block">
-              <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-orange-600 mx-auto mb-6 shadow-xl group-hover:scale-105 transition-transform">
-                <Globe size={32} />
-              </div>
-              <h1 className="text-3xl font-black tracking-tight mb-1 text-white">
-                Maghreb<span className="text-orange-200">Voyage</span>
+            {/* En-tête */}
+            <div className="flex flex-col items-center mb-8">
+              <Link href="/" className="group">
+                <div className="w-16 h-16 bg-orange-600 rounded-2xl flex items-center justify-center mb-4 shadow-lg group-hover:scale-105 transition-transform duration-200">
+                  <Globe className="w-8 h-8 text-white" />
+                </div>
+              </Link>
+              <h1 className="text-2xl font-bold text-orange-900 mb-1">
+                Maghreb<span className="text-orange-600">Voyage</span>
               </h1>
-            </Link>
-            <p className="text-orange-100 text-xs font-bold uppercase tracking-widest mt-2">Créer un compte</p>
-          </div>
-        </div>
-
-        {/* Form Content */}
-        <div className="p-8 md:p-10 max-h-[80vh] overflow-y-auto">
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-4 mb-6 text-sm font-bold flex items-center gap-3 animate-in slide-in-from-top">
-              <span className="w-6 h-6 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
-                !
-              </span>
-              {error}
+              <p className="text-orange-700 text-sm">Créer un compte Voyageur</p>
             </div>
-          )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Name Field */}
-            <div>
-              <label className="text-xs font-black text-gray-500 uppercase tracking-widest mb-2 block">
-                Nom complet
-              </label>
-              <div className="relative">
-                <User
-                  size={18}
-                  className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"
-                />
-                <input
-                  type="text"
-                  required
-                  placeholder="Jean Dupont"
-                  value={formData.name}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, name: e.target.value }))
-                  }
-                  className="w-full bg-gray-50 border-2 border-gray-200 rounded-xl pl-12 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent font-semibold text-gray-900 transition-all"
-                />
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-3.5 mb-5 text-sm font-medium flex items-start gap-2.5">
+                <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                {error}
               </div>
-            </div>
+            )}
 
-            {/* Email Field */}
-            <div>
-              <label className="text-xs font-black text-gray-500 uppercase tracking-widest mb-2 block">
-                Email
-              </label>
-              <div className="relative">
-                <Mail
-                  size={18}
-                  className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"
-                />
-                <input
-                  type="email"
-                  required
-                  placeholder="jean@email.com"
-                  value={formData.email}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, email: e.target.value }))
-                  }
-                  className="w-full bg-gray-50 border-2 border-gray-200 rounded-xl pl-12 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent font-semibold text-gray-900 transition-all"
-                />
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Nom */}
+              <div className="space-y-1.5">
+                <label htmlFor="name" className="text-sm font-medium text-orange-900">Nom complet</label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-orange-400" />
+                  <input
+                    id="name"
+                    type="text"
+                    placeholder="Votre nom complet"
+                    value={formData.name}
+                    onChange={(e) => setFormData((p) => ({ ...p, name: e.target.value }))}
+                    required
+                    className="flex h-9 w-full rounded-lg border border-orange-200 bg-white pl-9 pr-3 py-2 text-sm text-orange-900 shadow-xs placeholder:text-orange-300 focus-visible:border-orange-500 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-orange-500/20 transition-shadow"
+                  />
+                </div>
               </div>
-            </div>
 
-            {/* Phone Field */}
-            <div>
-              <label className="text-xs font-black text-gray-500 uppercase tracking-widest mb-2 block">
-                Téléphone <span className="text-gray-400 font-bold normal-case">(optionnel)</span>
-              </label>
-              <div className="relative">
-                <Phone
-                  size={18}
-                  className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"
-                />
-                <input
-                  type="tel"
-                  placeholder="+33 6 12 34 56 78"
-                  value={formData.phone}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, phone: e.target.value }))
-                  }
-                  className="w-full bg-gray-50 border-2 border-gray-200 rounded-xl pl-12 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent font-semibold text-gray-900 transition-all"
-                />
+              {/* Email */}
+              <div className="space-y-1.5">
+                <label htmlFor="email" className="text-sm font-medium text-orange-900">Email</label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-orange-400" />
+                  <input
+                    id="email"
+                    type="email"
+                    placeholder="vous@exemple.com"
+                    value={formData.email}
+                    onChange={(e) => setFormData((p) => ({ ...p, email: e.target.value }))}
+                    autoComplete="email"
+                    required
+                    className="flex h-9 w-full rounded-lg border border-orange-200 bg-white pl-9 pr-3 py-2 text-sm text-orange-900 shadow-xs placeholder:text-orange-300 focus-visible:border-orange-500 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-orange-500/20 transition-shadow"
+                  />
+                </div>
               </div>
-            </div>
 
-            {/* Password Field */}
-            <div>
-              <label className="text-xs font-black text-gray-500 uppercase tracking-widest mb-2 block">
-                Mot de passe
-              </label>
-              <div className="relative">
-                <Lock
-                  size={18}
-                  className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"
-                />
-                <input
-                  type={showPassword ? "text" : "password"}
-                  required
-                  placeholder="••••••••"
-                  value={formData.password}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, password: e.target.value }))
-                  }
-                  className="w-full bg-gray-50 border-2 border-gray-200 rounded-xl pl-12 pr-12 py-3 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent font-semibold text-gray-900 transition-all"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                >
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
+              {/* Téléphone */}
+              <div className="space-y-1.5">
+                <label htmlFor="phone" className="text-sm font-medium text-orange-900">
+                  Téléphone <span className="text-orange-400 font-normal text-xs">(optionnel)</span>
+                </label>
+                <div className="relative">
+                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-orange-400" />
+                  <input
+                    id="phone"
+                    type="tel"
+                    placeholder="+212 6 00 00 00 00"
+                    value={formData.phone}
+                    onChange={(e) => setFormData((p) => ({ ...p, phone: e.target.value }))}
+                    className="flex h-9 w-full rounded-lg border border-orange-200 bg-white pl-9 pr-3 py-2 text-sm text-orange-900 shadow-xs placeholder:text-orange-300 focus-visible:border-orange-500 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-orange-500/20 transition-shadow"
+                  />
+                </div>
               </div>
-              <p className="text-xs text-gray-500 mt-1">Au moins 8 caractères</p>
-            </div>
 
-            {/* Confirm Password Field */}
-            <div>
-              <label className="text-xs font-black text-gray-500 uppercase tracking-widest mb-2 block">
-                Confirmer le mot de passe
-              </label>
-              <div className="relative">
-                <Lock
-                  size={18}
-                  className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"
-                />
-                <input
-                  type={showConfirmPassword ? "text" : "password"}
-                  required
-                  placeholder="••••••••"
-                  value={formData.confirmPassword}
-                  onChange={(e) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      confirmPassword: e.target.value,
-                    }))
-                  }
-                  className={`w-full bg-gray-50 border-2 rounded-xl pl-12 pr-12 py-3 focus:outline-none focus:ring-2 focus:border-transparent font-semibold text-gray-900 transition-all ${
-                    formData.confirmPassword
-                      ? passwordsMatch
-                        ? "border-green-200 focus:ring-green-500"
-                        : "border-red-200 focus:ring-red-500"
-                      : "border-gray-200 focus:ring-orange-500"
-                  }`}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                >
-                  {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
-                {formData.confirmPassword && passwordsMatch && (
-                  <CheckCircle2 className="absolute right-12 top-1/2 transform -translate-y-1/2 text-green-500" size={18} />
-                )}
+              {/* Mot de passe */}
+              <div className="space-y-1.5">
+                <label htmlFor="password" className="text-sm font-medium text-orange-900">Mot de passe</label>
+                <div className="relative">
+                  <input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="••••••••"
+                    value={formData.password}
+                    onChange={(e) => setFormData((p) => ({ ...p, password: e.target.value }))}
+                    required
+                    className="flex h-9 w-full rounded-lg border border-orange-200 bg-white px-3 py-2 pr-10 text-sm text-orange-900 shadow-xs placeholder:text-orange-300 focus-visible:border-orange-500 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-orange-500/20 transition-shadow"
+                  />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-orange-500 hover:text-orange-700 transition-colors">
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                <p className="text-xs text-orange-400">Au moins 8 caractères</p>
               </div>
-            </div>
 
-            {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full bg-gradient-to-r from-orange-600 to-orange-700 text-white font-black py-3 rounded-xl shadow-lg shadow-orange-600/30 hover:shadow-xl hover:shadow-orange-600/40 hover:scale-105 transition-all disabled:opacity-50 disabled:scale-100 mt-6 uppercase tracking-widest text-sm"
-            >
-              {isLoading ? "Inscription..." : "Créer mon compte"}
-            </button>
-          </form>
+              {/* Confirmer */}
+              <div className="space-y-1.5">
+                <label htmlFor="confirmPassword" className="text-sm font-medium text-orange-900">Confirmer le mot de passe</label>
+                <div className="relative">
+                  <input
+                    id="confirmPassword"
+                    type={showConfirmPassword ? "text" : "password"}
+                    placeholder="••••••••"
+                    value={formData.confirmPassword}
+                    onChange={(e) => setFormData((p) => ({ ...p, confirmPassword: e.target.value }))}
+                    required
+                    className={`flex h-9 w-full rounded-lg border bg-white px-3 py-2 pr-10 text-sm text-orange-900 shadow-xs placeholder:text-orange-300 focus-visible:outline-none focus-visible:ring-[3px] transition-shadow ${
+                      formData.confirmPassword
+                        ? passwordsMatch
+                          ? "border-green-400 focus-visible:border-green-500 focus-visible:ring-green-500/20"
+                          : "border-red-300 focus-visible:border-red-400 focus-visible:ring-red-400/20"
+                        : "border-orange-200 focus-visible:border-orange-500 focus-visible:ring-orange-500/20"
+                    }`}
+                  />
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                    {formData.confirmPassword && passwordsMatch && (
+                      <CheckCircle2 className="w-4 h-4 text-green-500" />
+                    )}
+                    <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="text-orange-500 hover:text-orange-700 transition-colors">
+                      {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+              </div>
 
-          <div className="my-6 space-y-6">
-            <div className="flex items-center gap-4">
-              <div className="flex-1 h-px bg-gray-200" />
-              <span className="text-xs text-gray-400 font-bold">OU</span>
-              <div className="flex-1 h-px bg-gray-200" />
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="inline-flex w-full h-11 items-center justify-center rounded-lg bg-orange-600 px-8 text-sm font-medium text-white shadow-lg shadow-orange-900/30 hover:bg-orange-700 transition-colors disabled:pointer-events-none disabled:opacity-50 mt-2"
+              >
+                {isLoading ? "Inscription en cours…" : "Créer mon compte"}
+              </button>
+            </form>
+
+            {/* OAuth */}
+            <div className="my-5 flex items-center gap-3">
+              <div className="flex-1 h-px bg-orange-200" />
+              <span className="text-xs text-orange-400 font-medium">OU</span>
+              <div className="flex-1 h-px bg-orange-200" />
             </div>
-            <GoogleSignInButton callbackUrl="/profile?tab=guide-ia" />
+            <GoogleSignInButton callbackUrl="/profile" />
+
+            <div className="mt-6 pt-6 border-t border-orange-200 space-y-3 text-center">
+              <p className="text-sm text-orange-700">
+                Déjà un compte ?{" "}
+                <Link href="/login" className="text-orange-600 hover:text-orange-800 font-semibold underline">
+                  Se connecter
+                </Link>
+              </p>
+              <Link href="/agency/register" className="block text-xs text-orange-500 hover:text-orange-700 font-medium transition-colors">
+                Vous êtes une agence ? Créer un compte pro →
+              </Link>
+            </div>
           </div>
 
-          {/* Login Link */}
-          <p className="text-center text-sm text-gray-600 font-semibold mb-6">
-            Vous avez déjà un compte?{" "}
-            <Link
-              href="/login"
-              className="text-orange-600 font-black hover:text-orange-700 transition-colors"
-            >
-              Se connecter
-            </Link>
-          </p>
-
-          {/* Agency Link */}
-          <div className="pt-6 border-t border-gray-200 text-center">
-            <Link
-              href="/agency/register"
-              className="text-xs font-black text-gray-500 uppercase tracking-widest hover:text-orange-600 transition-colors"
-            >
-              Vous êtes une agence? Créer un compte pro
-            </Link>
+          <div className="mt-5 text-center">
+            <p className="text-xs text-orange-500">Protégé par un système de sécurité professionnel</p>
           </div>
         </div>
       </div>

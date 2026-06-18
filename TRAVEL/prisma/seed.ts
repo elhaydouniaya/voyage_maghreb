@@ -192,8 +192,77 @@ async function main() {
     }
   }
 
+  const externalReviewCount = await prisma.externalReview.count({
+    where: { agencyId: agency.id },
+  });
+  if (externalReviewCount === 0) {
+    const extSamples = [
+      {
+        platform: "GOOGLE" as const,
+        authorName: "Claire Dupont",
+        rating: 5,
+        title: "Agence au top !",
+        content:
+          "Circuit Sahara parfaitement organisé. Chauffeurs ponctuels, hôtels confortables et guide francophone excellent. Nous avons déjà réservé notre prochain voyage avec eux.",
+        reviewDate: new Date("2025-11-12"),
+        sourceUrl:
+          "https://www.google.com/maps/search/Sahara+Tours+Expert+Marrakech",
+        location: "Marrakech, Maroc",
+      },
+      {
+        platform: "TRIPADVISOR" as const,
+        authorName: "Roberto M.",
+        rating: 5,
+        title: "Excellente expérience au Maroc",
+        content:
+          "Voyage en petit groupe très bien géré. L'agence connaît parfaitement la région et propose des expériences authentiques loin du tourisme de masse.",
+        reviewDate: new Date("2025-09-03"),
+        sourceUrl:
+          "https://www.tripadvisor.com/Search?q=Sahara+Tours+Expert",
+        location: "Marrakech, Maroc",
+      },
+      {
+        platform: "FACEBOOK" as const,
+        authorName: "Samira B.",
+        rating: 4,
+        title: "Très satisfaite",
+        content:
+          "Bonne communication avant le départ. Le trek dans l'Atlas était magnifique. Petit bémol sur un transfert en retard mais vite résolu.",
+        reviewDate: new Date("2025-07-21"),
+        sourceUrl:
+          "https://www.facebook.com/search/pages?q=Sahara+Tours+Expert",
+        location: "Marrakech, Maroc",
+      },
+      {
+        platform: "VIATOR" as const,
+        authorName: "James W.",
+        rating: 5,
+        title: "Highly recommended",
+        content:
+          "Professional team, great value for money. The desert camp experience was the highlight of our Morocco trip.",
+        reviewDate: new Date("2025-05-15"),
+        sourceUrl: "https://www.viator.com/searchResults/all?text=Sahara+Tours",
+        location: "Marrakech, Maroc",
+      },
+    ];
+    for (const r of extSamples) {
+      await prisma.externalReview.create({
+        data: { agencyId: agency.id, ...r },
+      });
+    }
+  }
+
   const reviewCount = await prisma.review.count();
   if (reviewCount === 0) {
+    const tripsBySlug = Object.fromEntries(
+      (
+        await prisma.groupTrip.findMany({
+          where: { agencyId: agency.id },
+          select: { id: true, slug: true },
+        })
+      ).map((t) => [t.slug, t.id])
+    );
+
     const samples = [
       {
         authorName: "Fatima Ben",
@@ -201,9 +270,10 @@ async function main() {
         rating: 5,
         title: "Une expérience magique à Marrakech!",
         content:
-          "Guide professionnel, hôtels confortables et paysages inoubliables. Je recommande vivement MaghrebVoyage.",
+          "Guide professionnel, hôtels confortables et paysages inoubliables. Je recommande vivement cette agence.",
         destination: "Marrakech",
         tripDate: "Avril 2026",
+        groupTripId: tripsBySlug["escapade-culturelle-marrakech"],
       },
       {
         authorName: "Ahmed Slimani",
@@ -211,9 +281,10 @@ async function main() {
         rating: 4,
         title: "Très bon rapport qualité-prix",
         content:
-          "Excellent pour un voyage en famille. Activités variées et bien organisées.",
+          "Excellent pour un voyage en famille. Activités variées et bien organisées à Taghit.",
         destination: "Taghit",
         tripDate: "Mars 2026",
+        groupTripId: tripsBySlug["reveillon-taghit-2027"],
       },
       {
         authorName: "Leila Mansouri",
@@ -224,10 +295,25 @@ async function main() {
           "Organisation impeccable et accueil chaleureux. Ce voyage m'a transformée.",
         destination: "Djanet",
         tripDate: "Février 2026",
+        groupTripId: tripsBySlug["trek-aventure-tassili"],
+      },
+      {
+        authorName: "Karim Boudiaf",
+        authorEmail: "karim@example.com",
+        rating: 2,
+        title: "Organisation perfectible",
+        content:
+          "Retard au point de rendez-vous et hébergement moins confortable que prévu. L'agence doit améliorer sa communication.",
+        destination: "Taghit",
+        tripDate: "Janvier 2026",
+        groupTripId: tripsBySlug["reveillon-taghit-2027"],
+        status: "PENDING" as const,
       },
     ];
     for (const r of samples) {
-      await prisma.review.create({ data: { ...r, status: "APPROVED" } });
+      await prisma.review.create({
+        data: { ...r, status: r.status ?? "APPROVED" },
+      });
     }
   }
 

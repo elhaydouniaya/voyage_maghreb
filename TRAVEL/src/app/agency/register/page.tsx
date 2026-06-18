@@ -3,19 +3,16 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Globe, Check, Shield, FileText, X } from "lucide-react";
+import { Building2, Check, Shield, Globe, FileText, AlertCircle, Eye, EyeOff } from "lucide-react";
 import { loginWithFreshSession } from "@/lib/login-client";
+import { AnimatedBackground } from "@/components/auth/AnimatedBackground";
+
+const inputCls =
+  "flex h-9 w-full rounded-lg border border-orange-200 bg-white px-3 py-2 text-sm text-orange-900 shadow-xs placeholder:text-orange-300 focus-visible:border-orange-500 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-orange-500/20 transition-shadow";
 
 export default function AgencyRegisterPage() {
   const router = useRouter();
 
-  const handleBackdropClick = (e: React.MouseEvent) => {
-    // Only close if clicking on the backdrop container, not on the modal
-    const target = e.target as HTMLElement;
-    if (target.id === "backdrop-container") {
-      router.push("/");
-    }
-  };
   const [formData, setFormData] = useState({
     agencyName: "",
     managerName: "",
@@ -34,6 +31,7 @@ export default function AgencyRegisterPage() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target as HTMLInputElement;
@@ -46,44 +44,13 @@ export default function AgencyRegisterPage() {
     setIsLoading(true);
     setError("");
 
-    if (!formData.cguAccepted || !formData.rgpdAccepted) {
-      setError("Vous devez accepter les conditions pour continuer.");
-      setIsLoading(false);
-      return;
-    }
-
-    if (formData.agencyName.trim().length < 3) {
-      setError("Le nom de l'agence doit contenir au moins 3 caractères.");
-      setIsLoading(false);
-      return;
-    }
-
-    if (formData.description.trim().length < 100) {
-      setError("La description doit contenir au moins 100 caractères.");
-      setIsLoading(false);
-      return;
-    }
-
-    if (formData.coverage.length < 1) {
-      setError("Sélectionnez au moins une zone géographique.");
-      setIsLoading(false);
-      return;
-    }
-
-    if (formData.specialties.length < 1) {
-      setError("Sélectionnez au moins un type de voyage.");
-      setIsLoading(false);
-      return;
-    }
-
-    if (
-      formData.password.length < 8 ||
-      !/[A-Z]/.test(formData.password) ||
-      !/[0-9]/.test(formData.password)
-    ) {
-      setError(
-        "Le mot de passe doit contenir au moins 8 caractères, une majuscule et un chiffre."
-      );
+    if (!formData.cguAccepted || !formData.rgpdAccepted) { setError("Vous devez accepter les conditions pour continuer."); setIsLoading(false); return; }
+    if (formData.agencyName.trim().length < 3) { setError("Le nom de l'agence doit contenir au moins 3 caractères."); setIsLoading(false); return; }
+    if (formData.description.trim().length < 100) { setError("La description doit contenir au moins 100 caractères."); setIsLoading(false); return; }
+    if (formData.coverage.length < 1) { setError("Sélectionnez au moins une zone géographique."); setIsLoading(false); return; }
+    if (formData.specialties.length < 1) { setError("Sélectionnez au moins un type de voyage."); setIsLoading(false); return; }
+    if (formData.password.length < 8 || !/[A-Z]/.test(formData.password) || !/[0-9]/.test(formData.password)) {
+      setError("Le mot de passe doit contenir au moins 8 caractères, une majuscule et un chiffre.");
       setIsLoading(false);
       return;
     }
@@ -94,26 +61,11 @@ export default function AgencyRegisterPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
       });
-
       const data = await res.json();
+      if (!res.ok) { setError(data.error || "Inscription impossible."); setIsLoading(false); return; }
 
-      if (!res.ok) {
-        setError(data.error || "Inscription impossible.");
-        setIsLoading(false);
-        return;
-      }
-
-      const loginOutcome = await loginWithFreshSession(
-        formData.email.trim(),
-        formData.password,
-        { requiredRole: "AGENCY" }
-      );
-
-      if (!loginOutcome.ok) {
-        setError(loginOutcome.error);
-        setSuccess(true);
-      }
-      /* succès : redirection automatique vers /agency/dashboard */
+      const loginOutcome = await loginWithFreshSession(formData.email.trim(), formData.password, { requiredRole: "AGENCY" });
+      if (!loginOutcome.ok) { setError(loginOutcome.error); setSuccess(true); }
     } catch {
       setError("Impossible de contacter le serveur. Réessayez.");
     } finally {
@@ -121,298 +73,270 @@ export default function AgencyRegisterPage() {
     }
   }
 
+  // ─── Page succès ────────────────────────────────────────────────────────
   if (success) {
     return (
-      <div
-        id="backdrop-container"
-        className="fixed inset-0 bg-white flex items-center justify-center p-6 font-outfit overflow-y-auto z-50"
-        onClick={handleBackdropClick}
-      >
-        {/* Animated Blurred Background */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          {/* Gradient Overlay */}
-          <div className="absolute inset-0 bg-gradient-to-br from-white via-orange-50/40 to-white" />
-
-          {/* Animated Blur Shapes */}
-          <div className="absolute top-20 -left-40 w-96 h-96 bg-orange-200/20 rounded-full blur-3xl animate-pulse" />
-          <div className="absolute top-1/3 -right-32 w-80 h-80 bg-blue-100/20 rounded-full blur-3xl animate-pulse delay-1000" />
-          <div className="absolute -bottom-32 left-1/2 w-96 h-96 bg-orange-100/20 rounded-full blur-3xl animate-pulse delay-500" />
-
-          {/* Animated Lines */}
-          <svg className="absolute inset-0 w-full h-full opacity-10" preserveAspectRatio="none">
-            <defs>
-              <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-                <path d="M 40 0 L 0 0 0 40" fill="none" stroke="currentColor" strokeWidth="0.5" />
-              </pattern>
-            </defs>
-            <rect width="100%" height="100%" fill="url(#grid)" />
-          </svg>
-        </div>
-
-        <div 
-          className="bg-white rounded-[3.5rem] shadow-2xl w-full max-w-xl border border-gray-100 p-16 text-center relative z-10 animate-in fade-in zoom-in-95 duration-300"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* Close Button */}
-          <button
-            onClick={() => router.push("/")}
-            className="absolute top-6 right-6 z-20 p-2 hover:bg-gray-100 rounded-full transition-colors"
-            title="Fermer"
-            type="button"
-          >
-            <X size={24} className="text-gray-400 hover:text-gray-600" />
-          </button>
-          <div className="w-24 h-24 bg-green-50 rounded-3xl flex items-center justify-center text-green-500 mx-auto mb-8 shadow-sm">
-             <Check size={48} strokeWidth={3} />
-          </div>
-          <h2 className="text-4xl font-black tracking-tight mb-6 text-[#0F172A]">Compte agence créé !</h2>
-          <p className="text-gray-500 mb-10 font-medium leading-relaxed">
-            Votre compte est actif. Vous pouvez vous connecter à tout moment.
-            La validation de votre dossier est en cours de revue par notre équipe.
-            Envoyez votre justificatif officiel (registre de commerce ou licence) à{" "}
-            <strong>contact@maghrebvoyage.com</strong> avec votre email en objet.
-            Vous recevrez un email de confirmation dès que votre compte sera validé.
-          </p>
-          <div className="bg-[#F8FAFC] rounded-[2rem] p-8 mb-10 border border-gray-100 text-left">
-             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Prochaine étape</p>
-             <p className="text-sm font-bold text-[#0F172A] leading-relaxed">
-                Notre administrateur vérifie votre numéro de licence : <span className="text-orange-600 font-black">{formData.registrationNumber}</span>. 
+      <div className="min-h-screen w-full relative overflow-hidden bg-[#fef3e2] font-outfit" onClick={() => router.push("/")}>
+        <AnimatedBackground />
+        <div className="relative z-10 min-h-screen flex items-center justify-center p-6">
+          <div className="bg-white/80 backdrop-blur-xl border border-orange-200 rounded-2xl shadow-2xl p-10 max-w-lg w-full text-center" onClick={(e) => e.stopPropagation()}>
+            <div className="w-20 h-20 bg-green-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
+              <Check className="w-10 h-10 text-green-600" strokeWidth={2.5} />
+            </div>
+            <h2 className="text-2xl font-bold text-orange-900 mb-3">Compte agence créé !</h2>
+            <p className="text-orange-700 text-sm leading-relaxed mb-6">
+              Votre compte est actif. La validation de votre dossier est en cours de revue par notre équipe.
+              Envoyez votre justificatif officiel à{" "}
+              <strong className="text-orange-900">contact@maghrebvoyage.com</strong>.
+            </p>
+            <div className="bg-orange-50 border border-orange-200 rounded-xl p-5 mb-6 text-left">
+              <p className="text-xs font-semibold text-orange-600 uppercase tracking-widest mb-2">Prochaine étape</p>
+              <p className="text-sm text-orange-900">
+                Notre administrateur vérifie votre numéro de licence :{" "}
+                <span className="font-bold text-orange-600">{formData.registrationNumber}</span>.
                 Une fois validé, vous pourrez publier vos premiers voyages.
-             </p>
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={async () => {
+                const outcome = await loginWithFreshSession(formData.email.trim(), formData.password, { requiredRole: "AGENCY" });
+                if (!outcome.ok) router.push("/agency/login");
+              }}
+              className="inline-flex w-full h-11 items-center justify-center rounded-lg bg-orange-600 text-sm font-medium text-white shadow-lg shadow-orange-900/30 hover:bg-orange-700 transition-colors"
+            >
+              Accéder à mon espace agence
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={async () => {
-              const outcome = await loginWithFreshSession(
-                formData.email.trim(),
-                formData.password,
-                { requiredRole: "AGENCY" }
-              );
-              if (!outcome.ok) {
-                router.push("/agency/login");
-              }
-            }}
-            className="bg-[#0F172A] text-white font-black py-5 px-12 rounded-full shadow-xl hover:bg-black transition-all text-xs uppercase tracking-widest"
-          >
-            Accéder à mon espace agence
-          </button>
         </div>
       </div>
     );
   }
 
+  // ─── Formulaire principal ────────────────────────────────────────────────
   return (
     <div
-      id="backdrop-container"
-      className="fixed inset-0 bg-white flex items-center justify-center py-12 px-6 font-outfit overflow-y-auto z-50"
-      onClick={handleBackdropClick}
+      className="min-h-screen w-full relative overflow-hidden bg-[#fef3e2] font-outfit"
+      onClick={() => router.push("/")}
     >
-      {/* Animated Blurred Background */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        {/* Gradient Overlay */}
-        <div className="absolute inset-0 bg-gradient-to-br from-white via-orange-50/40 to-white" />
+      <AnimatedBackground />
 
-        {/* Animated Blur Shapes */}
-        <div className="absolute top-20 -left-40 w-96 h-96 bg-orange-200/20 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute top-1/3 -right-32 w-80 h-80 bg-blue-100/20 rounded-full blur-3xl animate-pulse delay-1000" />
-        <div className="absolute -bottom-32 left-1/2 w-96 h-96 bg-orange-100/20 rounded-full blur-3xl animate-pulse delay-500" />
+      <div className="relative z-10 min-h-screen flex items-center justify-center p-4 py-10">
+        <div className="w-full max-w-3xl" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white/80 backdrop-blur-xl border border-orange-200 rounded-2xl shadow-2xl overflow-hidden flex flex-col md:flex-row">
 
-        {/* Animated Lines */}
-        <svg className="absolute inset-0 w-full h-full opacity-10" preserveAspectRatio="none">
-          <defs>
-            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="currentColor" strokeWidth="0.5" />
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#grid)" />
-        </svg>
-      </div>
-
-      <div 
-        className="bg-white rounded-[3.5rem] shadow-2xl w-full max-w-3xl border border-gray-100 overflow-hidden flex flex-col md:flex-row relative z-10 animate-in fade-in zoom-in-95 duration-300 my-8"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Close Button */}
-        <button
-          onClick={() => router.push("/")}
-          className="absolute top-6 right-6 z-20 p-2 hover:bg-gray-100 rounded-full transition-colors"
-          title="Fermer"
-          type="button"
-        >
-          <X size={24} className="text-gray-400 hover:text-gray-600" />
-        </button>
-        
-        {/* Sidebar Info */}
-        <div className="md:w-1/3 bg-[#0F172A] p-12 text-white relative overflow-hidden flex flex-col">
-           <div className="absolute top-0 right-0 w-32 h-32 bg-orange-600/20 rounded-full blur-3xl" />
-           <div className="relative z-10">
-              <Link href="/" className="flex items-center gap-2 mb-12">
-                <div className="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center text-white">
-                   <Globe size={18} />
+            {/* Sidebar */}
+            <div className="md:w-72 bg-orange-600 p-8 text-white flex flex-col shrink-0">
+              <Link href="/" className="flex items-center gap-2.5 mb-10">
+                <div className="w-9 h-9 bg-white rounded-xl flex items-center justify-center">
+                  <Building2 className="w-5 h-5 text-orange-600" />
                 </div>
-                <span className="text-lg font-bold tracking-tight">MaghrebVoyage</span>
+                <span className="text-lg font-bold">MaghrebVoyage</span>
               </Link>
-              <h2 className="text-3xl font-black tracking-tight mb-6">Devenez partenaire.</h2>
-              <p className="text-gray-400 text-sm font-medium leading-relaxed mb-12">
-                 Publiez vos voyages de groupe et profitez de notre technologie IA pour toucher plus de voyageurs.
+
+              <h2 className="text-2xl font-bold mb-3">Devenez partenaire.</h2>
+              <p className="text-orange-100 text-sm leading-relaxed mb-8">
+                Publiez vos voyages et profitez de notre technologie IA pour toucher plus de voyageurs.
               </p>
-              
-              <div className="space-y-6">
-                 {[
-                   { icon: Shield, text: "Agences vérifiées" },
-                   { icon: Globe, text: "Visibilité Maghreb" },
-                   { icon: FileText, text: "Paiement sécurisé" }
-                 ].map((item, i) => (
-                   <div key={i} className="flex items-center gap-4 text-[10px] font-black uppercase tracking-widest text-gray-400">
-                      <div className="w-8 h-8 bg-white/5 rounded-xl flex items-center justify-center text-orange-500">
-                         <item.icon size={16} />
-                      </div>
-                      {item.text}
-                   </div>
-                 ))}
+
+              <div className="space-y-4">
+                {[
+                  { icon: Shield, label: "Agences vérifiées" },
+                  { icon: Globe, label: "Visibilité Maghreb" },
+                  { icon: FileText, label: "Paiement sécurisé" },
+                ].map(({ icon: Icon, label }) => (
+                  <div key={label} className="flex items-center gap-3 text-orange-100">
+                    <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center shrink-0">
+                      <Icon className="w-4 h-4" />
+                    </div>
+                    <span className="text-sm font-medium">{label}</span>
+                  </div>
+                ))}
               </div>
-           </div>
-           
-           <div className="mt-auto pt-12">
-              <p className="text-[9px] text-gray-600 font-bold uppercase tracking-widest leading-relaxed">
-                 Expertise locale • Sécurité Stripe • Support IA
-              </p>
-           </div>
-        </div>
 
-        {/* Form */}
-        <div className="md:w-2/3 p-10 md:p-16">
-          <header className="mb-10 flex justify-between items-center">
-             <div>
-                <h1 className="text-2xl font-black text-[#0F172A] tracking-tight">Inscription Agence</h1>
-                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">Créez votre compte professionnel</p>
-             </div>
-             <Link href="/agency/login" className="text-[10px] font-black text-orange-600 uppercase tracking-widest hover:underline">Connexion</Link>
-          </header>
-
-          {error && (
-            <div className="bg-red-50 border border-red-100 text-red-600 rounded-2xl p-5 mb-8 text-xs font-bold flex items-center gap-3">
-              <div className="w-6 h-6 bg-red-100 rounded-full flex items-center justify-center text-red-600">✕</div>
-              {error}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <label htmlFor="agencyName" className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Nom de l'agence *</label>
-                <input id="agencyName" type="text" name="agencyName" value={formData.agencyName} onChange={handleChange} title="Nom de l'agence" className="w-full bg-[#F8FAFC] border border-gray-100 rounded-2xl px-5 py-4 focus:ring-4 focus:ring-orange-500/10 outline-none font-bold text-[#0F172A] transition-all" required />
-              </div>
-              <div className="space-y-2">
-                <label htmlFor="managerName" className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Nom du gérant *</label>
-                <input id="managerName" type="text" name="managerName" value={formData.managerName} onChange={handleChange} title="Nom du gérant" className="w-full bg-[#F8FAFC] border border-gray-100 rounded-2xl px-5 py-4 focus:ring-4 focus:ring-orange-500/10 outline-none font-bold text-[#0F172A] transition-all" required />
+              <div className="mt-auto pt-8">
+                <p className="text-xs text-orange-200">Expertise locale · Sécurité Stripe · Support IA</p>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <label htmlFor="email" className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Email professionnel *</label>
-                <input id="email" type="email" name="email" value={formData.email} onChange={handleChange} title="Email professionnel" className="w-full bg-[#F8FAFC] border border-gray-100 rounded-2xl px-5 py-4 focus:ring-4 focus:ring-orange-500/10 outline-none font-bold text-[#0F172A] transition-all" required />
+            {/* Formulaire */}
+            <div className="flex-1 p-8 overflow-y-auto max-h-[90vh]">
+              <div className="flex items-center justify-between mb-8">
+                <div>
+                  <h1 className="text-xl font-bold text-orange-900">Inscription Agence</h1>
+                  <p className="text-sm text-orange-600">Créez votre compte professionnel</p>
+                </div>
+                <Link href="/agency/login" className="text-sm text-orange-600 hover:text-orange-800 font-medium hover:underline">
+                  Connexion →
+                </Link>
               </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Téléphone *</label>
-                <input type="tel" name="phone" value={formData.phone} onChange={handleChange} placeholder="+212..." className="w-full bg-[#F8FAFC] border border-gray-100 rounded-2xl px-5 py-4 focus:ring-4 focus:ring-orange-500/10 outline-none font-bold text-[#0F172A] transition-all" required />
-              </div>
-            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <label htmlFor="country" className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Pays *</label>
-                <select id="country" name="country" value={formData.country} onChange={handleChange} title="Pays de l'agence" className="w-full bg-[#F8FAFC] border border-gray-100 rounded-2xl px-5 py-4 focus:ring-4 focus:ring-orange-500/10 outline-none font-bold text-[#0F172A] transition-all appearance-none" required>
-                  <option value="">Sélectionner</option>
-                  <option value="Maroc">Maroc</option>
-                  <option value="Algérie">Algérie</option>
-                  <option value="Tunisie">Tunisie</option>
-                </select>
-              </div>
-              <div className="space-y-2">
-                <label htmlFor="city" className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Ville principale *</label>
-                <input id="city" type="text" name="city" value={formData.city} onChange={handleChange} title="Ville principale" className="w-full bg-[#F8FAFC] border border-gray-100 rounded-2xl px-5 py-4 focus:ring-4 focus:ring-orange-500/10 outline-none font-bold text-[#0F172A] transition-all" required />
-              </div>
-            </div>
+              {error && (
+                <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-3.5 mb-5 text-sm font-medium flex items-start gap-2.5">
+                  <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                  {error}
+                </div>
+              )}
 
-            <div className="space-y-2">
-              <label htmlFor="description" className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Description agence *</label>
-              <textarea id="description" name="description" value={formData.description} onChange={handleChange} rows={3} title="Description de l'agence" className="w-full bg-[#F8FAFC] border border-gray-100 rounded-[2rem] px-6 py-5 focus:ring-4 focus:ring-orange-500/10 outline-none font-medium text-[#0F172A] transition-all resize-none" placeholder="Décrivez votre expertise..." required />
-            </div>
+              <form onSubmit={handleSubmit} className="space-y-5">
+                {/* Noms */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label htmlFor="agencyName" className="text-sm font-medium text-orange-900">Nom de l'agence *</label>
+                    <input id="agencyName" type="text" name="agencyName" value={formData.agencyName} onChange={handleChange} className={inputCls} required />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label htmlFor="managerName" className="text-sm font-medium text-orange-900">Nom du gérant *</label>
+                    <input id="managerName" type="text" name="managerName" value={formData.managerName} onChange={handleChange} className={inputCls} required />
+                  </div>
+                </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-               <div className="space-y-2">
-                  <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Zones de couverture</label>
-                  <div className="flex flex-wrap gap-2">
-                     {["Sahara", "Atlas", "Côtier", "Villes Impériales"].map(zone => (
-                        <button 
+                {/* Contact */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label htmlFor="email" className="text-sm font-medium text-orange-900">Email professionnel *</label>
+                    <input id="email" type="email" name="email" value={formData.email} onChange={handleChange} placeholder="contact@agence.com" className={inputCls} required />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-orange-900">Téléphone *</label>
+                    <input type="tel" name="phone" value={formData.phone} onChange={handleChange} placeholder="+212 6 00 00 00 00" className={inputCls} required />
+                  </div>
+                </div>
+
+                {/* Localisation */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label htmlFor="country" className="text-sm font-medium text-orange-900">Pays *</label>
+                    <select id="country" name="country" value={formData.country} onChange={handleChange} className={inputCls} required>
+                      <option value="">Sélectionner</option>
+                      <option value="Maroc">Maroc</option>
+                      <option value="Algérie">Algérie</option>
+                      <option value="Tunisie">Tunisie</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label htmlFor="city" className="text-sm font-medium text-orange-900">Ville principale *</label>
+                    <input id="city" type="text" name="city" value={formData.city} onChange={handleChange} className={inputCls} required />
+                  </div>
+                </div>
+
+                {/* Description */}
+                <div className="space-y-1.5">
+                  <label htmlFor="description" className="text-sm font-medium text-orange-900">Description agence * <span className="text-xs text-orange-400 font-normal">(min. 100 caractères)</span></label>
+                  <textarea id="description" name="description" value={formData.description} onChange={handleChange} rows={3} placeholder="Décrivez votre expertise, destinations, services…" className="flex w-full rounded-lg border border-orange-200 bg-white px-3 py-2 text-sm text-orange-900 shadow-xs placeholder:text-orange-300 focus-visible:border-orange-500 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-orange-500/20 transition-shadow resize-none" required />
+                  <p className="text-xs text-orange-400">{formData.description.length}/100 min.</p>
+                </div>
+
+                {/* Zones & Spécialités */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-orange-900">Zones de couverture *</label>
+                    <div className="flex flex-wrap gap-2">
+                      {["Sahara", "Atlas", "Côtier", "Villes Impériales"].map((zone) => (
+                        <button
                           key={zone}
                           type="button"
                           onClick={() => {
-                             const current = formData.coverage;
-                             const next = current.includes(zone) ? current.filter(z => z !== zone) : [...current, zone];
-                             setFormData(f => ({ ...f, coverage: next }));
+                            const next = formData.coverage.includes(zone)
+                              ? formData.coverage.filter((z) => z !== zone)
+                              : [...formData.coverage, zone];
+                            setFormData((f) => ({ ...f, coverage: next }));
                           }}
-                          className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${
-                             formData.coverage.includes(zone) ? "bg-orange-600 text-white shadow-lg" : "bg-[#F8FAFC] text-gray-400 border border-gray-50"
+                          className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                            formData.coverage.includes(zone)
+                              ? "bg-orange-600 text-white shadow-md"
+                              : "bg-orange-50 text-orange-600 border border-orange-200 hover:bg-orange-100"
                           }`}
-                        >{zone}</button>
-                     ))}
+                        >
+                          {zone}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-               </div>
-               <div className="space-y-2">
-                  <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Spécialités</label>
-                  <div className="flex flex-wrap gap-2">
-                     {["Aventure", "Culturel", "Luxe", "Famille"].map(spec => (
-                        <button 
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-orange-900">Spécialités *</label>
+                    <div className="flex flex-wrap gap-2">
+                      {["Aventure", "Culturel", "Luxe", "Famille"].map((spec) => (
+                        <button
                           key={spec}
                           type="button"
                           onClick={() => {
-                             const current = formData.specialties;
-                             const next = current.includes(spec) ? current.filter(s => s !== spec) : [...current, spec];
-                             setFormData(f => ({ ...f, specialties: next }));
+                            const next = formData.specialties.includes(spec)
+                              ? formData.specialties.filter((s) => s !== spec)
+                              : [...formData.specialties, spec];
+                            setFormData((f) => ({ ...f, specialties: next }));
                           }}
-                          className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${
-                             formData.specialties.includes(spec) ? "bg-[#0F172A] text-white shadow-lg" : "bg-[#F8FAFC] text-gray-400 border border-gray-50"
+                          className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                            formData.specialties.includes(spec)
+                              ? "bg-orange-900 text-white shadow-md"
+                              : "bg-orange-50 text-orange-700 border border-orange-200 hover:bg-orange-100"
                           }`}
-                        >{spec}</button>
-                     ))}
+                        >
+                          {spec}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-               </div>
-            </div>
+                </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <label htmlFor="registrationNumber" className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">N° Licence / SIRET *</label>
-                <input id="registrationNumber" type="text" name="registrationNumber" value={formData.registrationNumber} onChange={handleChange} title="Numéro de licence ou SIRET" className="w-full bg-[#F8FAFC] border border-gray-100 rounded-2xl px-5 py-4 focus:ring-4 focus:ring-orange-500/10 outline-none font-bold text-[#0F172A] transition-all" required />
-              </div>
-            </div>
+                {/* Licence + Mot de passe */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label htmlFor="registrationNumber" className="text-sm font-medium text-orange-900">N° Licence / SIRET *</label>
+                    <input id="registrationNumber" type="text" name="registrationNumber" value={formData.registrationNumber} onChange={handleChange} className={inputCls} required />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-orange-900">Mot de passe *</label>
+                    <div className="relative">
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        name="password"
+                        value={formData.password}
+                        onChange={handleChange}
+                        placeholder="Min. 8 car., 1 maj., 1 chiffre"
+                        className={`${inputCls} pr-10`}
+                        required
+                      />
+                      <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-orange-500 hover:text-orange-700 transition-colors">
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
 
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Mot de passe *</label>
-              <input type="password" name="password" value={formData.password} onChange={handleChange} placeholder="••••••••" className="w-full bg-[#F8FAFC] border border-gray-100 rounded-2xl px-5 py-4 focus:ring-4 focus:ring-orange-500/10 outline-none font-bold text-[#0F172A] transition-all" required />
-            </div>
+                {/* Conditions */}
+                <div className="bg-orange-50 border border-orange-200 rounded-xl p-5 space-y-3">
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input type="checkbox" name="cguAccepted" checked={formData.cguAccepted} onChange={handleChange} className="mt-0.5 w-4 h-4 rounded border-orange-300 text-orange-600 focus:ring-orange-500" />
+                    <span className="text-sm text-orange-800">
+                      J'accepte les{" "}
+                      <Link href="/legal/cgu" className="text-orange-600 font-semibold hover:underline">CGU</Link>{" "}
+                      et certifie l'exactitude des informations.
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input type="checkbox" name="rgpdAccepted" checked={formData.rgpdAccepted} onChange={handleChange} className="mt-0.5 w-4 h-4 rounded border-orange-300 text-orange-600 focus:ring-orange-500" />
+                    <span className="text-sm text-orange-800">
+                      J'accepte la{" "}
+                      <Link href="/legal/confidentialite" className="text-orange-600 font-semibold hover:underline">Politique de confidentialité</Link>.
+                    </span>
+                  </label>
+                </div>
 
-            <div className="bg-[#F8FAFC] p-6 rounded-[2rem] border border-gray-100 mt-6 space-y-4">
-              <label className="flex items-start gap-4 cursor-pointer group">
-                <input type="checkbox" name="cguAccepted" checked={formData.cguAccepted} onChange={handleChange} className="mt-1 w-4 h-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500" />
-                <span className="text-[11px] text-gray-500 font-medium leading-relaxed">J'accepte les <Link href="/legal/cgu" className="text-orange-600 font-black hover:underline">CGU</Link> et je certifie l'exactitude des informations.</span>
-              </label>
-              <label className="flex items-start gap-4 cursor-pointer group">
-                <input type="checkbox" name="rgpdAccepted" checked={formData.rgpdAccepted} onChange={handleChange} className="mt-1 w-4 h-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500" />
-                <span className="text-[11px] text-gray-500 font-medium leading-relaxed">J'accepte la <Link href="/legal/confidentialite" className="text-orange-600 font-black hover:underline">Politique de confidentialité</Link>.</span>
-              </label>
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="inline-flex w-full h-11 items-center justify-center rounded-lg bg-orange-600 text-sm font-medium text-white shadow-lg shadow-orange-900/30 hover:bg-orange-700 transition-colors disabled:pointer-events-none disabled:opacity-50"
+                >
+                  {isLoading ? "Envoi du dossier…" : "Soumettre mon dossier"}
+                </button>
+              </form>
             </div>
+          </div>
 
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full bg-orange-600 text-white font-black py-5 rounded-full shadow-xl shadow-orange-600/20 hover:bg-orange-700 transition-all disabled:opacity-50 mt-4 text-xs uppercase tracking-widest"
-            >
-              {isLoading ? "ENVOI DU DOSSIER..." : "SOUMETTRE MON DOSSIER"}
-            </button>
-          </form>
+          <div className="mt-5 text-center">
+            <p className="text-xs text-orange-500">Protégé par un système de sécurité professionnel</p>
+          </div>
         </div>
       </div>
     </div>
