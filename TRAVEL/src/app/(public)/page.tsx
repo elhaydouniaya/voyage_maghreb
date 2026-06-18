@@ -121,19 +121,20 @@ function FeaturedTrips() {
     );
   }
 
-  const activeSeason = seasonOptionsList.find(s => s.key === selectedSeason);
-
   return (
     <div className="space-y-10">
 
-      {/* ── Season selector ─────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      {/* ── Creative expanding season selector ──────────────────────────── */}
+      <div
+        className="flex rounded-[2rem] overflow-hidden border border-gray-100 shadow-sm"
+        style={{ height: "128px" }}
+      >
         {seasonOptionsList.map((option) => {
-          const seasonTrips  = groupedTrips.find(g => g.season === option.key);
-          const tripCount    = seasonTrips?.trips.length ?? 0;
-          const isSelected   = selectedSeason === option.key;
-          const isCurrent    = option.key === currentSeason;
-          const isDisabled   = tripCount === 0;
+          const seasonTrips = groupedTrips.find((g) => g.season === option.key);
+          const tripCount   = seasonTrips?.trips.length ?? 0;
+          const isSelected  = selectedSeason === option.key;
+          const isCurrent   = option.key === currentSeason;
+          const isDisabled  = tripCount === 0;
 
           return (
             <button
@@ -141,98 +142,87 @@ function FeaturedTrips() {
               onClick={() => !isDisabled && setSelectedSeason(option.key)}
               disabled={isDisabled}
               aria-pressed={isSelected}
+              style={{
+                flex: isSelected ? "5 1 0%" : "1 1 0%",
+                transition: "flex 0.55s cubic-bezier(0.4, 0, 0.2, 1)",
+              }}
               className={[
-                "group relative flex flex-col items-start gap-4 p-5 rounded-[1.75rem]",
-                "border-2 text-left transition-all duration-300 outline-none",
+                "relative flex items-center overflow-hidden outline-none",
+                "border-r border-gray-100 last:border-r-0",
                 isSelected
-                  ? "bg-orange-600 border-orange-600"
+                  ? "bg-orange-600 px-8 gap-6 cursor-default"
                   : isDisabled
-                    ? "bg-gray-50 border-gray-100 opacity-30 cursor-not-allowed"
-                    : "bg-white border-gray-100 hover:border-orange-200 hover:shadow-[0_8px_30px_-8px_rgba(234,88,12,0.15)] cursor-pointer",
+                    ? "bg-gray-50 justify-center opacity-25 cursor-not-allowed"
+                    : "bg-white justify-center cursor-pointer group hover:bg-orange-50/60",
               ].join(" ")}
             >
-              {/* Live-season pulse dot */}
-              {isCurrent && (
-                <span
-                  className={[
-                    "absolute top-4 right-4 w-2 h-2 rounded-full animate-pulse",
-                    isSelected ? "bg-white/60" : "bg-orange-500",
-                  ].join(" ")}
-                />
+              {/* ── Collapsed state ── */}
+              {!isSelected && (
+                <div className="flex flex-col items-center gap-2">
+                  <span className="text-2xl leading-none">{option.emoji}</span>
+                  <span
+                    className={[
+                      "text-[8px] font-black uppercase tracking-[0.18em] whitespace-nowrap",
+                      isDisabled
+                        ? "text-gray-300"
+                        : "text-gray-400 group-hover:text-orange-500 transition-colors duration-200",
+                    ].join(" ")}
+                  >
+                    {option.name}
+                  </span>
+
+                  {/* Trip count badge (top-right) */}
+                  {tripCount > 0 && (
+                    <div className="absolute top-3 right-3 w-5 h-5 bg-orange-50 border border-orange-100 rounded-full flex items-center justify-center">
+                      <span className="text-[8px] font-black text-orange-500 leading-none">
+                        {tripCount}
+                      </span>
+                    </div>
+                  )}
+                </div>
               )}
 
-              {/* Emoji icon in a pill */}
-              <div className={[
-                "w-11 h-11 rounded-2xl flex items-center justify-center text-xl",
-                "border transition-colors duration-300",
-                isSelected
-                  ? "bg-white/15 border-white/20"
-                  : "bg-orange-50 border-orange-100 group-hover:bg-orange-100",
-              ].join(" ")}>
-                {option.emoji}
-              </div>
+              {/* ── Expanded state ── */}
+              {isSelected && (
+                <div className="flex items-center gap-6 w-full animate-in fade-in duration-300">
+                  {/* Emoji box */}
+                  <div className="w-14 h-14 bg-white/15 border border-white/20 rounded-2xl flex items-center justify-center text-3xl shrink-0">
+                    {option.emoji}
+                  </div>
 
-              {/* Labels */}
-              <div className="space-y-0.5">
-                <p className={[
-                  "text-[11px] font-black uppercase tracking-[0.18em] leading-tight",
-                  isSelected ? "text-white" : "text-[#0F172A]",
-                ].join(" ")}>
-                  {option.name}
-                </p>
-                <p className={[
-                  "text-[9px] font-bold uppercase tracking-widest",
-                  isSelected ? "text-orange-100" : "text-gray-400",
-                ].join(" ")}>
-                  {option.dates}
-                </p>
-              </div>
+                  {/* Season info */}
+                  <div className="flex flex-col gap-1 min-w-0">
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <span className="text-white font-black text-xl uppercase tracking-tight leading-tight whitespace-nowrap">
+                        {option.name}
+                      </span>
+                      {isCurrent && (
+                        <div className="flex items-center gap-1.5 bg-white/15 border border-white/20 px-3 py-1 rounded-full">
+                          <span className="w-1.5 h-1.5 rounded-full bg-white/80 animate-pulse" />
+                          <span className="text-[9px] font-black text-white/90 uppercase tracking-widest whitespace-nowrap">
+                            En cours
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <span className="text-orange-100/80 text-[10px] font-bold uppercase tracking-widest whitespace-nowrap">
+                      {option.dates}
+                    </span>
+                    <span className="text-white/50 text-[10px] font-bold uppercase tracking-widest whitespace-nowrap">
+                      {tripCount} voyage{tripCount > 1 ? "s" : ""} disponible{tripCount > 1 ? "s" : ""}
+                    </span>
+                  </div>
 
-              {/* Trip count chip */}
-              {tripCount > 0 && (
-                <div className={[
-                  "mt-auto inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full",
-                  "text-[9px] font-black uppercase tracking-widest border",
-                  isSelected
-                    ? "bg-white/15 border-white/20 text-white"
-                    : "bg-gray-50 border-gray-100 text-gray-400 group-hover:border-orange-100 group-hover:text-orange-500",
-                ].join(" ")}>
-                  <span className={[
-                    "w-1 h-1 rounded-full",
-                    isSelected ? "bg-orange-300" : "bg-gray-300 group-hover:bg-orange-400",
-                  ].join(" ")} />
-                  {tripCount} voyage{tripCount > 1 ? "s" : ""}
+                  {/* Arrow */}
+                  <div className="ml-auto shrink-0 w-12 h-12 bg-white/10 border border-white/20 rounded-2xl flex items-center justify-center">
+                    <ArrowRight size={20} className="text-white" />
+                  </div>
                 </div>
               )}
             </button>
           );
         })}
       </div>
-
-      {/* ── Selected season title bar ────────────────────────────────────── */}
-      {activeSeason && (
-        <div className="flex items-center gap-4 pt-2 border-t border-gray-50">
-          <div className="w-10 h-10 bg-orange-50 border border-orange-100 rounded-2xl flex items-center justify-center text-xl shrink-0">
-            {activeSeason.emoji}
-          </div>
-          <div>
-            <h3 className="text-xl font-black text-[#0F172A] tracking-tight leading-tight">
-              {activeSeason.name}
-            </h3>
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-              {activeSeason.dates}
-            </p>
-          </div>
-          {selectedSeason === currentSeason && (
-            <div className="ml-auto flex items-center gap-2 bg-orange-50 border border-orange-200 px-4 py-1.5 rounded-full shrink-0">
-              <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
-              <span className="text-[9px] font-black text-orange-600 uppercase tracking-widest">
-                Saison actuelle
-              </span>
-            </div>
-          )}
-        </div>
-      )}
 
       {/* ── Trips grid ──────────────────────────────────────────────────── */}
       {filteredTrips.length > 0 ? (
