@@ -20,11 +20,24 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
     const session = await getServerSession(authOptions);
 
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { error: "Connexion requise pour publier un avis." },
+        { status: 401 }
+      );
+    }
+    if (session.user.role !== "CLIENT") {
+      return NextResponse.json(
+        { error: "Seuls les voyageurs peuvent publier des avis." },
+        { status: 403 }
+      );
+    }
+
+    const body = await request.json();
     const review = await ReviewsService.create({
-      userId: session?.user?.id,
+      userId: session.user.id,
       authorName: String(body.name || session?.user?.name || ""),
       authorEmail: String(body.email || session?.user?.email || ""),
       rating: Number(body.rating) || 5,

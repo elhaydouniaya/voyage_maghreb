@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { MapPin, Calendar, Check, Sparkles, Heart, ChevronRight } from "lucide-react";
 import { getFallbackImage } from "@/lib/images";
 import { formatPriceShort } from "@/lib/currency";
@@ -26,59 +27,57 @@ interface TripCardProps {
 
 export default function TripCard({ trip }: TripCardProps) {
   const { data: session } = useSession();
+  const router = useRouter();
   const [isFavorited, setIsFavorited] = useState(false);
   const fillingPercentage = (trip.bookedSpots / trip.totalSpots) * 100;
   const isAlmostFull = trip.totalSpots - trip.bookedSpots <= 2;
 
   useEffect(() => {
     async function loadFavorite() {
-      if (session?.user?.id) {
+      if (session?.user?.id && session.user.role === "CLIENT") {
         try {
           const res = await fetch("/api/favorites");
           if (res.ok) {
             const data = await res.json();
             setIsFavorited((data.ids || []).includes(trip.id));
-            return;
           }
         } catch {
-          /* fallback local */
+          /* ignore */
         }
+      } else {
+        setIsFavorited(false);
       }
-      const favorites = JSON.parse(localStorage.getItem("mv_favorites") || "[]");
-      setIsFavorited(favorites.some((f: { id: string }) => f.id === trip.id));
     }
     loadFavorite();
-  }, [trip.id, session?.user?.id]);
+  }, [trip.id, session?.user?.id, session?.user?.role]);
 
   const toggleFavorite = async (e: React.MouseEvent) => {
     e.preventDefault();
 
-    if (session?.user?.id) {
-      try {
-        if (isFavorited) {
-          await fetch(`/api/favorites?groupTripId=${encodeURIComponent(trip.id)}`, {
-            method: "DELETE",
-          });
-        } else {
-          await fetch("/api/favorites", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ groupTripId: trip.id }),
-          });
-        }
-        setIsFavorited(!isFavorited);
-        return;
-      } catch {
-        /* ignore */
-      }
+    if (!session?.user?.id) {
+      const callbackUrl = window.location.pathname + window.location.search;
+      router.push(`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
+      return;
     }
 
-    const favorites = JSON.parse(localStorage.getItem("mv_favorites") || "[]");
-    const newFavorites = isFavorited
-      ? favorites.filter((f: { id: string }) => f.id !== trip.id)
-      : [...favorites, trip];
-    localStorage.setItem("mv_favorites", JSON.stringify(newFavorites));
-    setIsFavorited(!isFavorited);
+    if (session.user.role !== "CLIENT") return;
+
+    try {
+      if (isFavorited) {
+        await fetch(`/api/favorites?groupTripId=${encodeURIComponent(trip.id)}`, {
+          method: "DELETE",
+        });
+      } else {
+        await fetch("/api/favorites", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ groupTripId: trip.id }),
+        });
+      }
+      setIsFavorited(!isFavorited);
+    } catch {
+      /* ignore */
+    }
   };
 
   return (

@@ -4,13 +4,15 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
-import { Shield, X, Mail, Lock, Eye, EyeOff, ArrowRight, AlertTriangle } from "lucide-react";
+import { ShieldCheck, Eye, EyeOff, AlertCircle } from "lucide-react";
 import { loginWithFreshSession } from "@/lib/login-client";
 import { DemoAccountsBox } from "@/components/auth/DemoAccountsBox";
+import { AnimatedBackground } from "@/components/auth/AnimatedBackground";
 
 export default function AdminLoginPage() {
   const router = useRouter();
   const { data: session, status } = useSession();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -25,9 +27,8 @@ export default function AdminLoginPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setIsLoading(true);
     setError("");
-
+    setIsLoading(true);
     try {
       const outcome = await loginWithFreshSession(email, password, { requiredRole: "ADMIN" });
       if (!outcome.ok) setError(outcome.error);
@@ -40,151 +41,111 @@ export default function AdminLoginPage() {
 
   return (
     <div
-      className="fixed inset-0 flex items-center justify-center p-6 font-outfit overflow-y-auto z-50"
-      onClick={(e) => {
-        if ((e.target as HTMLElement).id === "admin-backdrop") router.push("/");
-      }}
-      id="admin-backdrop"
+      className="min-h-screen w-full relative overflow-hidden bg-[#fef3e2] font-outfit"
+      onClick={() => router.push("/")}
     >
-      {/* Fond sombre */}
-      <div className="absolute inset-0 bg-[#0F172A]">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_#EA580C15,_transparent_60%)]" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_#EA580C08,_transparent_60%)]" />
-        <svg className="absolute inset-0 w-full h-full opacity-[0.03]" preserveAspectRatio="none">
-          <defs>
-            <pattern id="grid-admin" width="60" height="60" patternUnits="userSpaceOnUse">
-              <path d="M 60 0 L 0 0 0 60" fill="none" stroke="white" strokeWidth="0.5" />
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#grid-admin)" />
-        </svg>
-      </div>
+      <AnimatedBackground />
 
-      {/* Carte */}
-      <div
-        className="bg-white rounded-[2.5rem] shadow-2xl shadow-black/60 w-full max-w-md overflow-hidden relative z-10 animate-in fade-in zoom-in-95 duration-300 my-8"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Bouton fermer */}
-        <button
-          onClick={() => router.push("/")}
-          className="absolute top-5 right-5 z-20 p-2 hover:bg-gray-100 rounded-full transition-colors"
-          aria-label="Fermer"
-          type="button"
-        >
-          <X size={20} className="text-gray-400" />
-        </button>
+      <div className="relative z-10 min-h-screen flex items-center justify-center p-4">
+        <div className="w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white/80 backdrop-blur-xl border border-orange-200 rounded-2xl shadow-2xl p-8">
 
-        {/* En-tête */}
-        <div className="bg-[#0F172A] px-8 py-10 text-white text-center relative overflow-hidden">
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_#EA580C20,_transparent_60%)]" />
-          <div className="relative z-10">
-            <Link href="/" className="group inline-block">
-              <div className="w-14 h-14 bg-orange-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-xl shadow-orange-600/40 group-hover:scale-105 transition-transform duration-200 ring-2 ring-orange-500/30">
-                <Shield size={26} className="text-white" />
-              </div>
-              <h1 className="text-2xl font-black tracking-tight">
-                Maghreb<span className="text-orange-500">Voyage</span>
+            {/* En-tête */}
+            <div className="flex flex-col items-center mb-8">
+              <Link href="/" className="group">
+                <div className="w-16 h-16 bg-orange-600 rounded-2xl flex items-center justify-center mb-4 shadow-lg group-hover:scale-105 transition-transform duration-200">
+                  <ShieldCheck className="w-8 h-8 text-white" />
+                </div>
+              </Link>
+              <h1 className="text-2xl font-bold text-orange-900 mb-1">
+                Maghreb<span className="text-orange-600">Voyage</span>
               </h1>
-            </Link>
-            <div className="mt-3 inline-flex items-center gap-2 bg-orange-600/20 border border-orange-500/30 rounded-full px-4 py-1.5">
-              <Shield size={11} className="text-orange-400" />
-              <span className="text-orange-300 text-[11px] font-black uppercase tracking-widest">
-                Espace Administration
-              </span>
+              <p className="text-orange-700 text-sm">Espace Administration</p>
             </div>
-          </div>
-        </div>
 
-        {/* Alerte accès restreint */}
-        <div className="mx-6 -mt-3 relative z-10">
-          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 flex items-center gap-2.5">
-            <AlertTriangle size={14} className="text-amber-600 shrink-0" />
-            <p className="text-[11px] font-bold text-amber-700">
-              Accès strictement réservé aux administrateurs système
-            </p>
-          </div>
-        </div>
-
-        {/* Formulaire */}
-        <div className="p-7 md:p-8 pt-5">
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-3.5 mb-5 text-sm font-semibold flex items-center gap-3 animate-in slide-in-from-top duration-200">
-              <div className="w-5 h-5 bg-red-100 rounded-full flex items-center justify-center shrink-0 text-red-600 text-xs font-black">!</div>
-              {error}
+            {/* Notice accès restreint */}
+            <div className="bg-orange-100 border border-orange-300 rounded-lg p-4 mb-6 flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-orange-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm text-orange-900 font-semibold mb-1">Accès restreint</p>
+                <p className="text-xs text-orange-700">
+                  Réservé exclusivement aux administrateurs système MaghrebVoyage.
+                </p>
+              </div>
             </div>
-          )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Email */}
-            <div>
-              <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-2 block">
-                Email administrateur
-              </label>
-              <div className="relative">
-                <Mail size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-3.5 mb-5 text-sm font-medium flex items-start gap-2.5">
+                <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                {error}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <div className="space-y-1.5">
+                <label htmlFor="email" className="text-sm font-medium text-orange-900">
+                  Email administrateur
+                </label>
                 <input
+                  id="email"
                   type="email"
+                  placeholder="admin@maghrebvoyage.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@maghrebvoyage.com"
                   autoComplete="email"
-                  className="w-full bg-gray-50 border-2 border-gray-200 rounded-xl pl-11 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent font-semibold text-gray-900 transition-all placeholder:text-gray-300 text-sm"
                   required
+                  className="flex h-9 w-full rounded-lg border border-orange-200 bg-white px-3 py-2 text-sm text-orange-900 shadow-xs placeholder:text-orange-300 focus-visible:border-orange-500 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-orange-500/20 transition-shadow"
                 />
               </div>
-            </div>
 
-            {/* Mot de passe */}
-            <div>
-              <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-2 block">
-                Mot de passe
-              </label>
-              <div className="relative">
-                <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  autoComplete="current-password"
-                  className="w-full bg-gray-50 border-2 border-gray-200 rounded-xl pl-11 pr-11 py-3 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent font-semibold text-gray-900 transition-all placeholder:text-gray-300 text-sm"
-                  required
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
-                  aria-label={showPassword ? "Masquer" : "Afficher"}
-                >
-                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
+              <div className="space-y-1.5">
+                <label htmlFor="password" className="text-sm font-medium text-orange-900">
+                  Mot de passe
+                </label>
+                <div className="relative">
+                  <input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    autoComplete="current-password"
+                    required
+                    className="flex h-9 w-full rounded-lg border border-orange-200 bg-white px-3 py-2 pr-10 text-sm text-orange-900 shadow-xs placeholder:text-orange-300 focus-visible:border-orange-500 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-orange-500/20 transition-shadow"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-orange-500 hover:text-orange-700 transition-colors"
+                    aria-label={showPassword ? "Masquer" : "Afficher"}
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
+
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="inline-flex w-full h-11 items-center justify-center rounded-lg bg-orange-600 px-8 text-sm font-medium text-white shadow-lg shadow-orange-900/30 hover:bg-orange-700 transition-colors disabled:pointer-events-none disabled:opacity-50"
+              >
+                {isLoading ? "Vérification…" : "Accéder au panel admin"}
+              </button>
+            </form>
+
+            <div className="mt-6 pt-6 border-t border-orange-200 space-y-4">
+              <DemoAccountsBox portal="admin" />
+              <Link
+                href="/login"
+                className="block text-center text-xs text-orange-500 hover:text-orange-700 font-medium transition-colors"
+              >
+                ← Retour au portail Voyageur
+              </Link>
             </div>
+          </div>
 
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full bg-orange-600 text-white font-black py-3.5 rounded-xl hover:bg-orange-700 transition-all disabled:opacity-50 mt-2 text-sm uppercase tracking-widest shadow-xl shadow-orange-600/25 flex items-center justify-center gap-2 hover:-translate-y-0.5"
-            >
-              {isLoading ? (
-                <span className="animate-pulse">Vérification…</span>
-              ) : (
-                <>
-                  Accéder au panel <ArrowRight size={16} />
-                </>
-              )}
-            </button>
-          </form>
-
-          <div className="mt-7 pt-6 border-t border-gray-100 space-y-4">
-            <DemoAccountsBox portal="admin" />
-            <Link
-              href="/login"
-              className="text-[11px] font-black text-gray-400 uppercase tracking-widest hover:text-orange-600 transition-colors block text-center"
-            >
-              ← Retour espace voyageur
-            </Link>
+          <div className="mt-5 text-center">
+            <p className="text-xs text-orange-500">Protégé par un système de sécurité professionnel</p>
           </div>
         </div>
       </div>

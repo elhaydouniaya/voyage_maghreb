@@ -1,21 +1,23 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
-import { Building2, X, Mail, Lock, Eye, EyeOff, ArrowRight, Shield } from "lucide-react";
+import { Building2, Eye, EyeOff, AlertCircle } from "lucide-react";
 import { loginWithFreshSession } from "@/lib/login-client";
 import { DemoAccountsBox } from "@/components/auth/DemoAccountsBox";
+import { AnimatedBackground } from "@/components/auth/AnimatedBackground";
 
 export default function AgencyLoginPage() {
   const router = useRouter();
   const { data: session, status } = useSession();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     if (status === "authenticated" && session?.user?.role === "AGENCY") {
@@ -28,9 +30,8 @@ export default function AgencyLoginPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setIsLoading(true);
     setError("");
-
+    setIsLoading(true);
     try {
       const outcome = await loginWithFreshSession(email, password, { requiredRole: "AGENCY" });
       if (!outcome.ok) setError(outcome.error);
@@ -42,170 +43,131 @@ export default function AgencyLoginPage() {
   }
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center p-6 font-outfit overflow-y-auto z-50">
-      {/* Fond navy animé */}
-      <div className="absolute inset-0 bg-[#0F172A]">
-        <div className="absolute inset-0 bg-gradient-to-br from-[#0F172A] via-[#1E293B] to-[#0F172A]" />
-        <div className="absolute top-20 -left-40 w-96 h-96 bg-orange-500/8 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute bottom-20 -right-32 w-80 h-80 bg-orange-600/5 rounded-full blur-3xl animate-pulse delay-1000" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-orange-500/3 rounded-full blur-3xl" />
-        <svg className="absolute inset-0 w-full h-full opacity-5" preserveAspectRatio="none">
-          <defs>
-            <pattern id="grid-agency" width="50" height="50" patternUnits="userSpaceOnUse">
-              <path d="M 50 0 L 0 0 0 50" fill="none" stroke="#EA580C" strokeWidth="0.5" />
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#grid-agency)" />
-        </svg>
-      </div>
+    <div
+      className="min-h-screen w-full relative overflow-hidden bg-[#fef3e2] font-outfit"
+      onClick={() => router.push("/")}
+    >
+      <AnimatedBackground />
 
-      {/* Carte */}
-      <div
-        className="bg-white rounded-[2.5rem] shadow-2xl shadow-black/40 w-full max-w-md overflow-hidden relative z-10 animate-in fade-in zoom-in-95 duration-300 my-8"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Bouton fermer */}
-        <button
-          onClick={() => router.push("/")}
-          className="absolute top-5 right-5 z-20 p-2 hover:bg-gray-100 rounded-full transition-colors"
-          aria-label="Fermer"
-          type="button"
-        >
-          <X size={20} className="text-gray-400" />
-        </button>
+      <div className="relative z-10 min-h-screen flex items-center justify-center p-4">
+        <div className="w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white/80 backdrop-blur-xl border border-orange-200 rounded-2xl shadow-2xl p-8">
 
-        {/* En-tête navy */}
-        <div className="bg-[#0F172A] px-8 py-10 text-white text-center relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/10 rounded-full blur-3xl" />
-          <div className="absolute bottom-0 left-0 w-24 h-24 bg-orange-600/10 rounded-full blur-3xl" />
-
-          <div className="relative z-10">
-            <Link href="/" className="group inline-block">
-              <div className="w-14 h-14 bg-orange-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-xl shadow-orange-600/30 group-hover:scale-105 transition-transform duration-200">
-                <Building2 size={26} className="text-white" />
-              </div>
-              <h1 className="text-2xl font-black tracking-tight">
-                Maghreb<span className="text-orange-500">Voyage</span>
+            {/* En-tête */}
+            <div className="flex flex-col items-center mb-8">
+              <Link href="/" className="group">
+                <div className="w-16 h-16 bg-orange-600 rounded-2xl flex items-center justify-center mb-4 shadow-lg group-hover:scale-105 transition-transform duration-200">
+                  <Building2 className="w-8 h-8 text-white" />
+                </div>
+              </Link>
+              <h1 className="text-2xl font-bold text-orange-900 mb-1">
+                Maghreb<span className="text-orange-600">Voyage</span>
               </h1>
-            </Link>
-            <div className="mt-3 inline-flex items-center gap-2 bg-white/10 rounded-full px-4 py-1.5 border border-white/10">
-              <Shield size={11} className="text-orange-400" />
-              <span className="text-gray-300 text-[11px] font-black uppercase tracking-widest">
-                Espace Professionnel Agences
-              </span>
+              <p className="text-orange-700 text-sm">Espace Professionnel Agences</p>
             </div>
-          </div>
-        </div>
 
-        {/* Badge partenaire */}
-        <div className="mx-6 -mt-3 relative z-10">
-          <div className="bg-orange-50 border border-orange-200 rounded-xl px-4 py-2.5 flex items-center gap-2.5">
-            <Shield size={14} className="text-orange-600 shrink-0" />
-            <p className="text-[11px] font-bold text-orange-700">
-              Réservé aux agences partenaires validées par MaghrebVoyage
-            </p>
-          </div>
-        </div>
-
-        {/* Formulaire */}
-        <div className="p-7 md:p-8 pt-5">
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-3.5 mb-5 text-sm font-semibold flex items-center gap-3 animate-in slide-in-from-top duration-200">
-              <div className="w-5 h-5 bg-red-100 rounded-full flex items-center justify-center shrink-0 text-red-600 text-xs font-black">!</div>
+            {/* Notice partenaire */}
+            <div className="bg-orange-100 border border-orange-300 rounded-lg p-4 mb-6 flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-orange-600 shrink-0 mt-0.5" />
               <div>
-                {error}
-                {error.toLowerCase().includes("voyageur") && (
-                  <Link href="/agency/register" className="block mt-1 text-orange-600 font-black hover:underline text-xs">
-                    Devenir partenaire →
-                  </Link>
-                )}
+                <p className="text-sm text-orange-900 font-semibold mb-1">Validation partenaire requise</p>
+                <p className="text-xs text-orange-700">
+                  Réservé aux agences partenaires validées par MaghrebVoyage.
+                  Utilisez vos identifiants professionnels.
+                </p>
               </div>
             </div>
-          )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Email */}
-            <div>
-              <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-2 block">
-                Email professionnel
-              </label>
-              <div className="relative">
-                <Mail size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-3.5 mb-5 text-sm font-medium flex items-start gap-2.5">
+                <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                <div>
+                  {error}
+                  {error.toLowerCase().includes("voyageur") && (
+                    <Link href="/agency/register" className="block mt-1 text-orange-600 font-semibold hover:underline text-xs">
+                      Devenir partenaire →
+                    </Link>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <div className="space-y-1.5">
+                <label htmlFor="email" className="text-sm font-medium text-orange-900">
+                  Email professionnel
+                </label>
                 <input
+                  id="email"
                   type="email"
+                  placeholder="contact@votre-agence.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="contact@votre-agence.com"
                   autoComplete="email"
-                  className="w-full bg-gray-50 border-2 border-gray-200 rounded-xl pl-11 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#0F172A] focus:border-transparent font-semibold text-gray-900 transition-all placeholder:text-gray-300 text-sm"
                   required
+                  className="flex h-9 w-full rounded-lg border border-orange-200 bg-white px-3 py-2 text-sm text-orange-900 shadow-xs placeholder:text-orange-300 focus-visible:border-orange-500 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-orange-500/20 transition-shadow"
                 />
               </div>
-            </div>
 
-            {/* Mot de passe */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest">
-                  Mot de passe
-                </label>
-                <Link href="/forgot-password" className="text-[11px] font-bold text-orange-600 hover:underline">
-                  Oublié ?
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label htmlFor="password" className="text-sm font-medium text-orange-900">
+                    Mot de passe
+                  </label>
+                  <Link href="/forgot-password" className="text-xs text-orange-600 hover:text-orange-800 font-medium hover:underline">
+                    Oublié ?
+                  </Link>
+                </div>
+                <div className="relative">
+                  <input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    autoComplete="current-password"
+                    required
+                    className="flex h-9 w-full rounded-lg border border-orange-200 bg-white px-3 py-2 pr-10 text-sm text-orange-900 shadow-xs placeholder:text-orange-300 focus-visible:border-orange-500 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-orange-500/20 transition-shadow"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-orange-500 hover:text-orange-700 transition-colors"
+                    aria-label={showPassword ? "Masquer" : "Afficher"}
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="inline-flex w-full h-11 items-center justify-center rounded-lg bg-orange-600 px-8 text-sm font-medium text-white shadow-lg shadow-orange-900/30 hover:bg-orange-700 transition-colors disabled:pointer-events-none disabled:opacity-50"
+              >
+                {isLoading ? "Validation en cours…" : "Accéder à mon espace agence"}
+              </button>
+            </form>
+
+            <div className="mt-6 pt-6 border-t border-orange-200 space-y-4">
+              <p className="text-center text-sm text-orange-700">
+                Pas encore partenaire ?{" "}
+                <Link href="/agency/register" className="text-orange-600 hover:text-orange-800 font-semibold underline">
+                  Créer un compte agence
                 </Link>
-              </div>
-              <div className="relative">
-                <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  autoComplete="current-password"
-                  className="w-full bg-gray-50 border-2 border-gray-200 rounded-xl pl-11 pr-11 py-3 focus:outline-none focus:ring-2 focus:ring-[#0F172A] focus:border-transparent font-semibold text-gray-900 transition-all placeholder:text-gray-300 text-sm"
-                  required
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
-                  aria-label={showPassword ? "Masquer" : "Afficher"}
-                >
-                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full bg-[#0F172A] text-white font-black py-3.5 rounded-xl hover:bg-[#1E293B] transition-all disabled:opacity-50 mt-2 text-sm uppercase tracking-widest shadow-xl shadow-gray-900/20 flex items-center justify-center gap-2 hover:-translate-y-0.5"
-            >
-              {isLoading ? (
-                <span className="animate-pulse">Connexion en cours…</span>
-              ) : (
-                <>
-                  Accéder au dashboard <ArrowRight size={16} />
-                </>
-              )}
-            </button>
-          </form>
-
-          <div className="mt-7 pt-6 border-t border-gray-100 space-y-4">
-            <p className="text-center text-sm text-gray-500 font-semibold">
-              Pas encore partenaire ?{" "}
-              <Link href="/agency/register" className="text-orange-600 font-black hover:text-orange-700 transition-colors">
-                Créer un compte agence
+              </p>
+              <DemoAccountsBox portal="agency" />
+              <Link
+                href="/login"
+                className="block text-center text-xs text-orange-500 hover:text-orange-700 font-medium transition-colors"
+              >
+                ← Retour au portail Voyageur
               </Link>
-            </p>
+            </div>
+          </div>
 
-            <DemoAccountsBox portal="agency" />
-
-            <Link
-              href="/login"
-              className="text-[11px] font-black text-gray-400 uppercase tracking-widest hover:text-[#0F172A] transition-colors block text-center"
-            >
-              ← Portail Voyageur
-            </Link>
+          <div className="mt-5 text-center">
+            <p className="text-xs text-orange-500">Protégé par un système de sécurité professionnel</p>
           </div>
         </div>
       </div>

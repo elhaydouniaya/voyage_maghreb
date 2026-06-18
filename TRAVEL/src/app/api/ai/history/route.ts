@@ -10,6 +10,12 @@ export async function GET() {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Connexion requise." }, { status: 401 });
   }
+  if (session.user.role !== "CLIENT") {
+    return NextResponse.json(
+      { error: "Historique réservé aux comptes voyageurs." },
+      { status: 403 }
+    );
+  }
 
   try {
     const history = await TravelRequestsService.listForUser(session.user.id);

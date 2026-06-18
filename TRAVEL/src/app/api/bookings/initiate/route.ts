@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
-import { findOrCreateGuestUser } from "@/lib/guest-user";
 import { getClientIp, rateLimit } from "@/lib/rate-limit";
 import { BookingsService } from "@/services/bookings.service";
 import { isDemoPaymentsAllowed } from "@/lib/payments-config";
@@ -23,6 +22,19 @@ export async function POST(request: Request) {
     const body = await request.json();
     const session = await getServerSession(authOptions);
 
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { error: "Connexion requise pour réserver un voyage." },
+        { status: 401 }
+      );
+    }
+    if (session.user.role !== "CLIENT") {
+      return NextResponse.json(
+        { error: "Seuls les voyageurs peuvent effectuer des réservations." },
+        { status: 403 }
+      );
+    }
+
     const clientEmail = String(body.clientEmail || "").trim().toLowerCase();
     const clientName = String(body.clientName || "").trim();
 
@@ -33,9 +45,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const userId =
-      session?.user?.id ||
-      (await findOrCreateGuestUser(clientEmail, clientName));
+    const userId = session.user.id;
 
     const booking = await BookingsService.initiate({
       groupTripId: body.groupTripId || body.tripId,

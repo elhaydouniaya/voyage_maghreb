@@ -2,13 +2,19 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useSession } from "next-auth/react";
-import { MessageCircle, X, Send, Bot, Sparkles, Compass } from "lucide-react";
+import { MessageCircle, X, Send, Bot, Sparkles, Compass, LogIn } from "lucide-react";
 import Link from "next/link";
 
 type ChatMessage = { role: "bot" | "user"; content: string };
 
+const BASIC_WELCOME =
+  "Bonjour ! Je suis votre guide MaghrebVoyage 🌍\n\nJe peux vous donner des infos générales sur nos destinations au Maghreb. Pour un guide personnalisé qui mémorise vos préférences, connectez-vous à votre compte voyageur !";
+
 const AIChatWidget = () => {
   const { data: session, status } = useSession();
+  const isClient = status === "authenticated" && session?.user?.role === "CLIENT";
+  const isVisitor = status !== "loading" && !isClient;
+
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -21,8 +27,7 @@ const AIChatWidget = () => {
   const loadedRef = useRef(false);
 
   const loadFromServer = useCallback(async () => {
-    if (status !== "authenticated" || session?.user?.role !== "CLIENT") return;
-
+    if (!isClient) return;
     setGuideMode("loading");
     try {
       const res = await fetch("/api/ai/guide-chat", { cache: "no-store" });
@@ -32,47 +37,35 @@ const AIChatWidget = () => {
         setGuideMode("offline");
         return;
       }
-
       const serverMessages: ChatMessage[] = (data.messages || []).map(
         (m: { role: string; content: string }) => ({
           role: m.role === "user" ? "user" : "bot",
           content: m.content,
         })
       );
-
       setMessages(serverMessages.length > 0 ? serverMessages : []);
       setSuggestions(data.suggestions || []);
-
       const dests = data.profile?.preferredDestinations || [];
-      if (dests.length > 0) {
-        setProfileHint(dests.join(" · "));
-      }
+      if (dests.length > 0) setProfileHint(dests.join(" · "));
       setGuideMode("offline");
     } catch {
       setError("Connexion au guide impossible.");
       setGuideMode("offline");
     }
-  }, [session?.user?.role, status]);
+  }, [isClient]);
 
   useEffect(() => {
     if (loadedRef.current) return;
     if (status === "loading") return;
-
-    if (status === "authenticated" && session?.user?.role === "CLIENT") {
-      loadedRef.current = true;
+    loadedRef.current = true;
+    if (isClient) {
       loadFromServer();
     } else {
-      loadedRef.current = true;
-      setMessages([
-        {
-          role: "bot",
-          content:
-            "Connectez-vous avec un compte voyageur pour un guide personnalisé qui se souvient de vos préférences.",
-        },
-      ]);
+      setMessages([{ role: "bot", content: BASIC_WELCOME }]);
+      setSuggestions(["Destinations au Maroc", "Voyager en Algérie", "Que faire en Tunisie ?"]);
       setGuideMode("offline");
     }
-  }, [status, session, loadFromServer]);
+  }, [status, isClient, loadFromServer]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -84,11 +77,6 @@ const AIChatWidget = () => {
     const messageText = (text || input).trim();
     if (!messageText || isTyping) return;
 
-    if (status !== "authenticated" || session?.user?.role !== "CLIENT") {
-      setError("Connectez-vous en tant que voyageur pour utiliser le guide.");
-      return;
-    }
-
     setError("");
     const userMsg: ChatMessage = { role: "user", content: messageText };
     const nextMessages = [...messages, userMsg];
@@ -96,20 +84,20 @@ const AIChatWidget = () => {
     setInput("");
     setIsTyping(true);
 
-    try {
-      const apiMessages = nextMessages.map((m) => ({
-        role: m.role === "user" ? ("user" as const) : ("assistant" as const),
-        content: m.content,
-      }));
+    const apiMessages = nextMessages.map((m) => ({
+      role: m.role === "user" ? ("user" as const) : ("assistant" as const),
+      content: m.content,
+    }));
 
-      const res = await fetch("/api/ai/guide-chat", {
+    try {
+      const endpoint = isClient ? "/api/ai/guide-chat" : "/api/ai/basic-chat";
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages: apiMessages }),
       });
 
       const data = await res.json();
-
       if (!res.ok) {
         setError(data.error || "Réponse impossible.");
         setIsTyping(false);
@@ -117,11 +105,12 @@ const AIChatWidget = () => {
       }
 
       setMessages((prev) => [...prev, { role: "bot", content: data.reply }]);
-      setSuggestions(data.suggestions || []);
-      setGuideMode(data.mode === "openai" ? "openai" : "offline");
-
-      const dests = data.profile?.preferredDestinations || [];
-      if (dests.length > 0) setProfileHint(dests.join(" · "));
+      if (isClient) {
+        setSuggestions(data.suggestions || []);
+        setGuideMode(data.mode === "openai" ? "openai" : "offline");
+        const dests = data.profile?.preferredDestinations || [];
+        if (dests.length > 0) setProfileHint(dests.join(" · "));
+      }
     } catch {
       setError("Connexion au guide impossible.");
     } finally {
@@ -143,22 +132,25 @@ const AIChatWidget = () => {
 
       {isOpen && (
         <div className="absolute bottom-24 right-0 w-[400px] max-w-[calc(100vw-2rem)] h-[600px] max-h-[70vh] bg-white rounded-[3rem] shadow-2xl border border-gray-100 flex flex-col overflow-hidden animate-in slide-in-from-bottom-12 duration-500">
+          {/* Header */}
           <div className="bg-[#0F172A] p-6 text-white flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-orange-500 rounded-xl flex items-center justify-center">
                 <Bot size={20} />
               </div>
               <div>
-                <h4 className="font-black text-sm">Guide personnel</h4>
+                <h4 className="font-black text-sm">Guide MaghrebVoyage</h4>
                 <div className="flex items-center gap-1.5">
                   <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
                   <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">
-                    {guideMode === "openai"
-                      ? "IA · Profil mémorisé"
-                      : "Conseil expert · Profil mémorisé"}
+                    {isClient
+                      ? guideMode === "openai"
+                        ? "IA · Profil mémorisé"
+                        : "Conseil expert · Profil mémorisé"
+                      : "Mode basique · Découverte"}
                   </span>
                 </div>
-                {profileHint && (
+                {isClient && profileHint && (
                   <p className="text-[8px] text-orange-300/90 mt-1 max-w-[200px] truncate">
                     {profileHint}
                   </p>
@@ -168,6 +160,17 @@ const AIChatWidget = () => {
             <Sparkles size={18} className="text-orange-500" />
           </div>
 
+          {/* Login banner for visitors */}
+          {isVisitor && (
+            <Link
+              href="/login"
+              className="flex items-center justify-center gap-2 bg-orange-50 border-b border-orange-100 py-2.5 px-4 text-[10px] font-black uppercase tracking-widest text-orange-700 hover:bg-orange-100 transition-colors"
+            >
+              <LogIn size={12} /> Connectez-vous pour un guide personnalisé
+            </Link>
+          )}
+
+          {/* Messages */}
           <div
             ref={scrollRef}
             className="flex-1 overflow-y-auto p-6 space-y-6 bg-[#F8FAFC]/50 scroll-smooth"
@@ -207,6 +210,7 @@ const AIChatWidget = () => {
             )}
           </div>
 
+          {/* Suggestions */}
           {suggestions.length > 0 && (
             <div className="px-4 pb-2 flex flex-wrap gap-2 border-t border-gray-50 pt-3 bg-white">
               {suggestions.map((s) => (
@@ -223,6 +227,7 @@ const AIChatWidget = () => {
             </div>
           )}
 
+          {/* Input */}
           <div className="p-6 bg-white border-t border-gray-100">
             <div className="relative">
               <input
@@ -230,7 +235,7 @@ const AIChatWidget = () => {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSend()}
-                placeholder="Parlez-moi de votre voyage idéal..."
+                placeholder={isClient ? "Parlez-moi de votre voyage idéal..." : "Posez votre question sur le Maghreb..."}
                 title="Votre message au guide"
                 className="w-full bg-[#F8FAFC] border border-gray-100 rounded-xl pl-4 pr-12 py-4 text-xs font-bold outline-none focus:ring-2 focus:ring-orange-500/10 transition-all"
               />
@@ -243,9 +248,15 @@ const AIChatWidget = () => {
                 <Send size={14} />
               </button>
             </div>
-            <p className="mt-3 text-[9px] text-gray-400 font-bold text-center uppercase tracking-widest">
-              Vos préférences sont enregistrées sur votre compte
-            </p>
+            {isClient ? (
+              <p className="mt-3 text-[9px] text-gray-400 font-bold text-center uppercase tracking-widest">
+                Vos préférences sont enregistrées sur votre compte
+              </p>
+            ) : (
+              <p className="mt-3 text-[9px] text-gray-400 font-bold text-center uppercase tracking-widest">
+                Créez un compte gratuit pour un guide personnalisé
+              </p>
+            )}
             <Link
               href="/recherche"
               className="mt-2 w-full bg-orange-50 text-orange-600 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest text-center border border-orange-100/50 hover:bg-orange-100 transition-all flex items-center justify-center gap-2"
