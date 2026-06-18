@@ -116,7 +116,7 @@ export default function AgencyDashboardLayout({
 
         <div className="p-6 mt-auto">
           <button
-            onClick={() => signOutToHome()}
+            onClick={() => void signOutToHome()}
             className="w-full flex items-center gap-4 px-6 py-4 text-gray-400 hover:text-white hover:bg-white/5 rounded-2xl transition-all"
           >
             <LogOut size={20} />

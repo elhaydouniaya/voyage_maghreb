@@ -165,7 +165,7 @@ export default function AdminPortalLayout({
           </div>
           <button
             type="button"
-            onClick={() => signOutToHome()}
+            onClick={() => void signOutToHome()}
             className="w-full flex items-center gap-3 px-6 py-3 bg-orange-600 text-white hover:bg-orange-700 font-bold rounded-2xl transition-all shadow-lg shadow-orange-600/20 hover:shadow-orange-600/40"
           >
             <LogOut size={18} />

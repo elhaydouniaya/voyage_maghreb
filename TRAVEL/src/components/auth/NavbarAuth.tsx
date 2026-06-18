@@ -71,7 +71,7 @@ export function NavbarAuth() {
                 </Link>
               )}
               <button
-                onClick={() => signOutToHome()}
+                onClick={() => void signOutToHome()}
                 className="w-full flex items-center gap-3 px-6 py-3.5 text-xs font-black uppercase tracking-widest text-red-500 hover:bg-red-50 transition-colors"
               >
                 <LogOut size={14} />

@@ -1,10 +1,7 @@
 import { signOut } from "next-auth/react";
 
-/** Déconnexion fiable vers l'accueil (évite les 404 NextAuth). */
-export function signOutToHome() {
-  const home =
-    typeof window !== "undefined"
-      ? `${window.location.origin}/`
-      : process.env.NEXT_PUBLIC_APP_URL || "/";
-  void signOut({ callbackUrl: home });
+/** Déconnexion fiable vers l'accueil — contourne la validation d'URL de NextAuth. */
+export async function signOutToHome() {
+  await signOut({ redirect: false });
+  window.location.href = "/";
 }
