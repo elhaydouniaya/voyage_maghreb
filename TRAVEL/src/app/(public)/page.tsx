@@ -86,10 +86,10 @@ function FeaturedTrips() {
   }, []);
 
   const seasonOptionsList = [
-    { key: 'SPRING' as Season, label: '🌸 Printemps', dates: 'Mars à Mai' },
-    { key: 'SUMMER' as Season, label: '☀️ Été', dates: 'Juin à Août' },
-    { key: 'AUTUMN' as Season, label: '🍂 Automne', dates: 'Septembre à Novembre' },
-    { key: 'WINTER' as Season, label: '❄️ Hiver', dates: 'Décembre à Février' },
+    { key: 'SPRING' as Season, emoji: '🌸', name: 'Printemps', dates: 'Mars à Mai' },
+    { key: 'SUMMER' as Season, emoji: '☀️', name: 'Été', dates: 'Juin à Août' },
+    { key: 'AUTUMN' as Season, emoji: '🍂', name: 'Automne', dates: 'Septembre à Novembre' },
+    { key: 'WINTER' as Season, emoji: '❄️', name: 'Hiver', dates: 'Décembre à Février' },
   ];
 
   const filteredTrips = groupedTrips.filter((g) => {
@@ -121,51 +121,120 @@ function FeaturedTrips() {
     );
   }
 
+  const activeSeason = seasonOptionsList.find(s => s.key === selectedSeason);
+
   return (
-    <div className="space-y-12">
-      {/* Season Selector */}
-      <div className="space-y-6">
-        {/* Current Season Badge */}
-        <div className="inline-flex items-center gap-3 bg-orange-50 border border-orange-200 px-6 py-3 rounded-full">
-          <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Saison actuelle :</span>
-          <span className="text-lg font-black text-orange-600">
-            {seasonOptionsList.find(s => s.key === currentSeason)?.label}
-          </span>
-        </div>
+    <div className="space-y-10">
 
-        {/* Season Buttons */}
-        <div className="flex flex-wrap gap-3">
-          {seasonOptionsList.map((option) => {
-            const seasonTrips = groupedTrips.find(g => g.season === option.key);
-            const tripCount = seasonTrips?.trips.length || 0;
-            const isSelected = selectedSeason === option.key;
+      {/* ── Season selector ─────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {seasonOptionsList.map((option) => {
+          const seasonTrips  = groupedTrips.find(g => g.season === option.key);
+          const tripCount    = seasonTrips?.trips.length ?? 0;
+          const isSelected   = selectedSeason === option.key;
+          const isCurrent    = option.key === currentSeason;
+          const isDisabled   = tripCount === 0;
 
-            return (
-              <button
-                key={option.key}
-                onClick={() => setSelectedSeason(option.key)}
-                className={`px-6 py-3 rounded-2xl font-black text-sm uppercase tracking-widest transition-all duration-300 border-2 flex items-center gap-3 ${
+          return (
+            <button
+              key={option.key}
+              onClick={() => !isDisabled && setSelectedSeason(option.key)}
+              disabled={isDisabled}
+              aria-pressed={isSelected}
+              className={[
+                "group relative flex flex-col items-start gap-4 p-5 rounded-[1.75rem]",
+                "border-2 text-left transition-all duration-300 outline-none",
+                isSelected
+                  ? "bg-orange-600 border-orange-600"
+                  : isDisabled
+                    ? "bg-gray-50 border-gray-100 opacity-30 cursor-not-allowed"
+                    : "bg-white border-gray-100 hover:border-orange-200 hover:shadow-[0_8px_30px_-8px_rgba(234,88,12,0.15)] cursor-pointer",
+              ].join(" ")}
+            >
+              {/* Live-season pulse dot */}
+              {isCurrent && (
+                <span
+                  className={[
+                    "absolute top-4 right-4 w-2 h-2 rounded-full animate-pulse",
+                    isSelected ? "bg-white/60" : "bg-orange-500",
+                  ].join(" ")}
+                />
+              )}
+
+              {/* Emoji icon in a pill */}
+              <div className={[
+                "w-11 h-11 rounded-2xl flex items-center justify-center text-xl",
+                "border transition-colors duration-300",
+                isSelected
+                  ? "bg-white/15 border-white/20"
+                  : "bg-orange-50 border-orange-100 group-hover:bg-orange-100",
+              ].join(" ")}>
+                {option.emoji}
+              </div>
+
+              {/* Labels */}
+              <div className="space-y-0.5">
+                <p className={[
+                  "text-[11px] font-black uppercase tracking-[0.18em] leading-tight",
+                  isSelected ? "text-white" : "text-[#0F172A]",
+                ].join(" ")}>
+                  {option.name}
+                </p>
+                <p className={[
+                  "text-[9px] font-bold uppercase tracking-widest",
+                  isSelected ? "text-orange-100" : "text-gray-400",
+                ].join(" ")}>
+                  {option.dates}
+                </p>
+              </div>
+
+              {/* Trip count chip */}
+              {tripCount > 0 && (
+                <div className={[
+                  "mt-auto inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full",
+                  "text-[9px] font-black uppercase tracking-widest border",
                   isSelected
-                    ? "bg-orange-600 text-white border-orange-600 shadow-lg shadow-orange-600/30"
-                    : tripCount > 0
-                      ? "bg-white text-[#0F172A] border-gray-200 hover:border-orange-500 hover:shadow-md"
-                      : "bg-gray-50 text-gray-400 border-gray-100 opacity-50 cursor-not-allowed"
-                }`}
-                disabled={tripCount === 0}
-              >
-                <span className="text-lg">{option.label.split(" ")[0]}</span>
-                <div className="flex flex-col items-start">
-                  <span className="text-xs">{option.label.split(" ").slice(1).join(" ")}</span>
-                  <span className="text-[10px] opacity-75">{option.dates}</span>
+                    ? "bg-white/15 border-white/20 text-white"
+                    : "bg-gray-50 border-gray-100 text-gray-400 group-hover:border-orange-100 group-hover:text-orange-500",
+                ].join(" ")}>
+                  <span className={[
+                    "w-1 h-1 rounded-full",
+                    isSelected ? "bg-orange-300" : "bg-gray-300 group-hover:bg-orange-400",
+                  ].join(" ")} />
+                  {tripCount} voyage{tripCount > 1 ? "s" : ""}
                 </div>
-                {tripCount > 0 && <span className="ml-2 text-[10px] opacity-75">({tripCount})</span>}
-              </button>
-            );
-          })}
-        </div>
+              )}
+            </button>
+          );
+        })}
       </div>
 
-      {/* Trips Display */}
+      {/* ── Selected season title bar ────────────────────────────────────── */}
+      {activeSeason && (
+        <div className="flex items-center gap-4 pt-2 border-t border-gray-50">
+          <div className="w-10 h-10 bg-orange-50 border border-orange-100 rounded-2xl flex items-center justify-center text-xl shrink-0">
+            {activeSeason.emoji}
+          </div>
+          <div>
+            <h3 className="text-xl font-black text-[#0F172A] tracking-tight leading-tight">
+              {activeSeason.name}
+            </h3>
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+              {activeSeason.dates}
+            </p>
+          </div>
+          {selectedSeason === currentSeason && (
+            <div className="ml-auto flex items-center gap-2 bg-orange-50 border border-orange-200 px-4 py-1.5 rounded-full shrink-0">
+              <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
+              <span className="text-[9px] font-black text-orange-600 uppercase tracking-widest">
+                Saison actuelle
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Trips grid ──────────────────────────────────────────────────── */}
       {filteredTrips.length > 0 ? (
         <TripsGroupedBySeason groupedTrips={filteredTrips} />
       ) : (
