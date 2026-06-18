@@ -233,6 +233,7 @@ model GroupTrip {
   bookedSpots     Int      @default(0)
   
   tripType        TripType
+  season          Season   @default(OTHER)
   inclusions      String[]
   exclusions      String[]
   meetingPoint    String?
@@ -265,6 +266,14 @@ enum TripType {
   NATURE
   RELIGIEUX
   HISTORIQUE
+}
+
+enum Season {
+  SPRING
+  SUMMER
+  AUTUMN
+  WINTER
+  OTHER
 }
 
 enum TripStatus {

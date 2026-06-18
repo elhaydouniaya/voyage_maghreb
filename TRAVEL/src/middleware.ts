@@ -1,48 +1,82 @@
 import { withAuth } from "next-auth/middleware";
 import { NextResponse } from "next/server";
 
+// Routes qui redirigent vers une page de login spécifique selon le contexte
+const ADMIN_LOGIN = "/admin/login";
+const AGENCY_LOGIN = "/agency/login";
+const CLIENT_LOGIN = "/login";
+
 export default withAuth(
   function middleware(req) {
     const token = req.nextauth.token;
     const path = req.nextUrl.pathname;
 
+    // ─── Utilisateur non authentifié ───────────────────────────────────────
     if (!token) {
       if (path.startsWith("/admin")) {
-        return NextResponse.redirect(new URL("/admin/login", req.url));
+        return NextResponse.redirect(new URL(ADMIN_LOGIN, req.url));
       }
-      if (path.startsWith("/agency")) {
-        return NextResponse.redirect(new URL("/agency/login", req.url));
+      if (path.startsWith("/agency") && !path.startsWith("/agency/login") && !path.startsWith("/agency/register")) {
+        return NextResponse.redirect(new URL(AGENCY_LOGIN, req.url));
       }
-      return NextResponse.redirect(new URL("/login", req.url));
+      // Routes CLIENT protégées (booking, profil, favoris, avis, IA)
+      return NextResponse.redirect(
+        new URL(`${CLIENT_LOGIN}?callbackUrl=${encodeURIComponent(path)}`, req.url)
+      );
     }
 
-    if (path.startsWith("/admin") && !path.startsWith("/admin/login") && token.role !== "ADMIN") {
-      return NextResponse.redirect(new URL("/admin/login", req.url));
+    const role = token.role as string;
+
+    // ─── Espace ADMIN ──────────────────────────────────────────────────────
+    if (path.startsWith("/admin") && !path.startsWith("/admin/login")) {
+      if (role !== "ADMIN") {
+        if (role === "AGENCY") return NextResponse.redirect(new URL("/agency/dashboard", req.url));
+        if (role === "CLIENT") return NextResponse.redirect(new URL("/", req.url));
+        return NextResponse.redirect(new URL(ADMIN_LOGIN, req.url));
+      }
     }
 
+    // ─── Espace AGENCY ─────────────────────────────────────────────────────
     if (
       path.startsWith("/agency") &&
       !path.startsWith("/agency/login") &&
-      !path.startsWith("/agency/register") &&
-      token.role !== "AGENCY"
+      !path.startsWith("/agency/register")
     ) {
-      return NextResponse.redirect(new URL("/agency/login", req.url));
+      if (role !== "AGENCY") {
+        if (role === "ADMIN") return NextResponse.redirect(new URL("/admin/dashboard", req.url));
+        if (role === "CLIENT") return NextResponse.redirect(new URL("/", req.url));
+        return NextResponse.redirect(new URL(AGENCY_LOGIN, req.url));
+      }
     }
 
-    if (path.startsWith("/profile") && token.role !== "CLIENT") {
-      if (token.role === "AGENCY") {
-        return NextResponse.redirect(new URL("/agency/dashboard", req.url));
+    // ─── Espace CLIENT (profil, réservation, IA, favoris) ─────────────────
+    if (path.startsWith("/profile")) {
+      if (role === "AGENCY") return NextResponse.redirect(new URL("/agency/dashboard", req.url));
+      if (role === "ADMIN") return NextResponse.redirect(new URL("/admin/dashboard", req.url));
+    }
+
+    if (path.startsWith("/booking") || path.startsWith("/favorites") || path.startsWith("/ai")) {
+      if (role !== "CLIENT") {
+        if (role === "AGENCY") return NextResponse.redirect(new URL("/agency/dashboard", req.url));
+        if (role === "ADMIN") return NextResponse.redirect(new URL("/admin/dashboard", req.url));
+        return NextResponse.redirect(new URL(CLIENT_LOGIN, req.url));
       }
-      if (token.role === "ADMIN") {
-        return NextResponse.redirect(new URL("/admin/dashboard", req.url));
+    }
+
+    // /reviews/new nécessite d'être CLIENT
+    if (path === "/reviews/new") {
+      if (role !== "CLIENT") {
+        return NextResponse.redirect(
+          new URL(`${CLIENT_LOGIN}?callbackUrl=${encodeURIComponent(path)}`, req.url)
+        );
       }
-      return NextResponse.redirect(new URL("/login", req.url));
     }
 
     return NextResponse.next();
   },
   {
     callbacks: {
+      // On laisse passer tout le monde — la logique est dans la fonction ci-dessus
       authorized: () => true,
     },
   }
@@ -50,38 +84,24 @@ export default withAuth(
 
 export const config = {
   matcher: [
-    "/admin/dashboard",
+    // Admin
     "/admin/dashboard/:path*",
-    "/admin/trips",
     "/admin/trips/:path*",
-    "/admin/bookings",
     "/admin/bookings/:path*",
-    "/admin/payments",
     "/admin/payments/:path*",
-    "/admin/ai-requests",
     "/admin/ai-requests/:path*",
-    "/admin/agencies",
     "/admin/agencies/:path*",
-    "/admin/clients",
     "/admin/clients/:path*",
-    "/admin/reviews",
     "/admin/reviews/:path*",
-    "/admin/profile",
     "/admin/profile/:path*",
-    "/admin/settings",
     "/admin/settings/:path*",
-    "/agency",
-    "/agency/dashboard",
-    "/agency/dashboard/:path*",
-    "/agency/trips",
-    "/agency/trips/:path*",
-    "/agency/bookings",
-    "/agency/bookings/:path*",
-    "/agency/profile",
-    "/agency/profile/:path*",
-    "/agency/settings",
-    "/agency/settings/:path*",
-    "/profile",
+    // Agency
+    "/agency/((?!login|register).*)",
+    // Client (authentifié requis)
     "/profile/:path*",
+    "/booking/:path*",
+    "/favorites/:path*",
+    "/ai/:path*",
+    "/reviews/new",
   ],
 };

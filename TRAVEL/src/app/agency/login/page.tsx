@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
-import { Globe, X } from "lucide-react";
+import { Building2, X, Mail, Lock, Eye, EyeOff, ArrowRight, Shield } from "lucide-react";
 import { loginWithFreshSession } from "@/lib/login-client";
 import { DemoAccountsBox } from "@/components/auth/DemoAccountsBox";
 
@@ -15,12 +15,16 @@ export default function AgencyLoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     if (status === "authenticated" && session?.user?.role === "AGENCY") {
-      window.location.href = "/agency/dashboard";
+      router.replace("/agency/dashboard");
     }
-  }, [status, session]);
+    if (status === "authenticated" && session?.user?.role === "ADMIN") {
+      router.replace("/admin/dashboard");
+    }
+  }, [status, session, router]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -28,130 +32,179 @@ export default function AgencyLoginPage() {
     setError("");
 
     try {
-      const outcome = await loginWithFreshSession(email, password, {
-        requiredRole: "AGENCY",
-      });
-      if (!outcome.ok) {
-        setError(outcome.error);
-      }
-    } catch (err) {
-      setError("Une erreur est survenue.");
+      const outcome = await loginWithFreshSession(email, password, { requiredRole: "AGENCY" });
+      if (!outcome.ok) setError(outcome.error);
+    } catch {
+      setError("Une erreur est survenue. Réessayez.");
     } finally {
       setIsLoading(false);
     }
   }
 
   return (
-    <div className="fixed inset-0 bg-white flex items-center justify-center p-6 font-outfit overflow-y-auto z-50">
-      {/* Animated Blurred Background */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        {/* Gradient Overlay */}
-        <div className="absolute inset-0 bg-gradient-to-br from-white via-orange-50/40 to-white" />
-
-        {/* Animated Blur Shapes */}
-        <div className="absolute top-20 -left-40 w-96 h-96 bg-orange-200/20 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute top-1/3 -right-32 w-80 h-80 bg-blue-100/20 rounded-full blur-3xl animate-pulse delay-1000" />
-        <div className="absolute -bottom-32 left-1/2 w-96 h-96 bg-orange-100/20 rounded-full blur-3xl animate-pulse delay-500" />
-
-        {/* Animated Lines */}
-        <svg className="absolute inset-0 w-full h-full opacity-10" preserveAspectRatio="none">
+    <div className="fixed inset-0 flex items-center justify-center p-6 font-outfit overflow-y-auto z-50">
+      {/* Fond navy animé */}
+      <div className="absolute inset-0 bg-[#0F172A]">
+        <div className="absolute inset-0 bg-gradient-to-br from-[#0F172A] via-[#1E293B] to-[#0F172A]" />
+        <div className="absolute top-20 -left-40 w-96 h-96 bg-orange-500/8 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute bottom-20 -right-32 w-80 h-80 bg-orange-600/5 rounded-full blur-3xl animate-pulse delay-1000" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-orange-500/3 rounded-full blur-3xl" />
+        <svg className="absolute inset-0 w-full h-full opacity-5" preserveAspectRatio="none">
           <defs>
-            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="currentColor" strokeWidth="0.5" />
+            <pattern id="grid-agency" width="50" height="50" patternUnits="userSpaceOnUse">
+              <path d="M 50 0 L 0 0 0 50" fill="none" stroke="#EA580C" strokeWidth="0.5" />
             </pattern>
           </defs>
-          <rect width="100%" height="100%" fill="url(#grid)" />
+          <rect width="100%" height="100%" fill="url(#grid-agency)" />
         </svg>
       </div>
 
-      <div 
-        className="bg-white rounded-[3rem] shadow-2xl w-full max-w-md border border-gray-100 overflow-hidden relative my-8 z-10 animate-in fade-in zoom-in-95 duration-300"
+      {/* Carte */}
+      <div
+        className="bg-white rounded-[2.5rem] shadow-2xl shadow-black/40 w-full max-w-md overflow-hidden relative z-10 animate-in fade-in zoom-in-95 duration-300 my-8"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="bg-[#0F172A] px-8 py-12 text-white text-center relative overflow-hidden">
-          {/* Close Button */}
-          <button
-            onClick={() => router.push("/")}
-            className="absolute top-6 right-6 z-20 p-2 hover:bg-white/10 rounded-full transition-colors"
-            title="Fermer"
-            type="button"
-          >
-            <X size={24} className="text-gray-400 hover:text-white" />
-          </button>
+        {/* Bouton fermer */}
+        <button
+          onClick={() => router.push("/")}
+          className="absolute top-5 right-5 z-20 p-2 hover:bg-gray-100 rounded-full transition-colors"
+          aria-label="Fermer"
+          type="button"
+        >
+          <X size={20} className="text-gray-400" />
+        </button>
 
-          <Link href="/" className="group cursor-pointer inline-block">
-            <div className="w-16 h-16 bg-orange-600 rounded-2xl flex items-center justify-center text-white mx-auto mb-6 shadow-xl shadow-orange-600/30 group-hover:scale-105 transition-transform">
-              <Globe size={32} />
+        {/* En-tête navy */}
+        <div className="bg-[#0F172A] px-8 py-10 text-white text-center relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/10 rounded-full blur-3xl" />
+          <div className="absolute bottom-0 left-0 w-24 h-24 bg-orange-600/10 rounded-full blur-3xl" />
+
+          <div className="relative z-10">
+            <Link href="/" className="group inline-block">
+              <div className="w-14 h-14 bg-orange-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-xl shadow-orange-600/30 group-hover:scale-105 transition-transform duration-200">
+                <Building2 size={26} className="text-white" />
+              </div>
+              <h1 className="text-2xl font-black tracking-tight">
+                Maghreb<span className="text-orange-500">Voyage</span>
+              </h1>
+            </Link>
+            <div className="mt-3 inline-flex items-center gap-2 bg-white/10 rounded-full px-4 py-1.5 border border-white/10">
+              <Shield size={11} className="text-orange-400" />
+              <span className="text-gray-300 text-[11px] font-black uppercase tracking-widest">
+                Espace Professionnel Agences
+              </span>
             </div>
-            <h1 className="text-3xl font-black tracking-tight mb-2 text-white">Maghreb<span className="text-orange-500">Voyage</span></h1>
-          </Link>
-          <p className="text-gray-400 text-xs font-bold uppercase tracking-widest text-orange-500">Espace Professionnel Agences</p>
+          </div>
         </div>
 
-        <div className="p-10">
+        {/* Badge partenaire */}
+        <div className="mx-6 -mt-3 relative z-10">
+          <div className="bg-orange-50 border border-orange-200 rounded-xl px-4 py-2.5 flex items-center gap-2.5">
+            <Shield size={14} className="text-orange-600 shrink-0" />
+            <p className="text-[11px] font-bold text-orange-700">
+              Réservé aux agences partenaires validées par MaghrebVoyage
+            </p>
+          </div>
+        </div>
+
+        {/* Formulaire */}
+        <div className="p-7 md:p-8 pt-5">
           {error && (
-            <div className="bg-red-50 border border-red-100 text-red-600 rounded-2xl p-4 mb-8 text-xs font-bold">
-              <p className="flex items-center gap-2">
-                <span className="w-5 h-5 bg-red-100 rounded-full flex items-center justify-center shrink-0">
-                  ✕
-                </span>
+            <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-3.5 mb-5 text-sm font-semibold flex items-center gap-3 animate-in slide-in-from-top duration-200">
+              <div className="w-5 h-5 bg-red-100 rounded-full flex items-center justify-center shrink-0 text-red-600 text-xs font-black">!</div>
+              <div>
                 {error}
-              </p>
-              {error.includes("voyageur") && (
-                <Link
-                  href="/agency/register"
-                  className="mt-3 inline-block text-orange-600 underline underline-offset-2"
-                >
-                  Devenir partenaire →
-                </Link>
-              )}
+                {error.toLowerCase().includes("voyageur") && (
+                  <Link href="/agency/register" className="block mt-1 text-orange-600 font-black hover:underline text-xs">
+                    Devenir partenaire →
+                  </Link>
+                )}
+              </div>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Email professionnel</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="contact@votre-agence.com"
-                className="w-full bg-[#F8FAFC] border border-gray-100 rounded-2xl px-5 py-4 focus:outline-none focus:ring-4 focus:ring-orange-500/10 font-bold text-[#0F172A] transition-all"
-                required
-              />
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Email */}
+            <div>
+              <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-2 block">
+                Email professionnel
+              </label>
+              <div className="relative">
+                <Mail size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="contact@votre-agence.com"
+                  autoComplete="email"
+                  className="w-full bg-gray-50 border-2 border-gray-200 rounded-xl pl-11 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#0F172A] focus:border-transparent font-semibold text-gray-900 transition-all placeholder:text-gray-300 text-sm"
+                  required
+                />
+              </div>
             </div>
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Mot de passe</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full bg-[#F8FAFC] border border-gray-100 rounded-2xl px-5 py-4 focus:outline-none focus:ring-4 focus:ring-orange-500/10 font-bold text-[#0F172A] transition-all"
-                required
-              />
+
+            {/* Mot de passe */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest">
+                  Mot de passe
+                </label>
+                <Link href="/forgot-password" className="text-[11px] font-bold text-orange-600 hover:underline">
+                  Oublié ?
+                </Link>
+              </div>
+              <div className="relative">
+                <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  autoComplete="current-password"
+                  className="w-full bg-gray-50 border-2 border-gray-200 rounded-xl pl-11 pr-11 py-3 focus:outline-none focus:ring-2 focus:ring-[#0F172A] focus:border-transparent font-semibold text-gray-900 transition-all placeholder:text-gray-300 text-sm"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                  aria-label={showPassword ? "Masquer" : "Afficher"}
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
             </div>
+
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full bg-[#0F172A] text-white font-black py-5 rounded-full shadow-xl shadow-gray-200 hover:bg-black transition-all disabled:opacity-50 mt-4 text-sm uppercase tracking-widest"
+              className="w-full bg-[#0F172A] text-white font-black py-3.5 rounded-xl hover:bg-[#1E293B] transition-all disabled:opacity-50 mt-2 text-sm uppercase tracking-widest shadow-xl shadow-gray-900/20 flex items-center justify-center gap-2 hover:-translate-y-0.5"
             >
-              {isLoading ? "CONNEXION PRO..." : "ACCÉDER AU DASHBOARD"}
+              {isLoading ? (
+                <span className="animate-pulse">Connexion en cours…</span>
+              ) : (
+                <>
+                  Accéder au dashboard <ArrowRight size={16} />
+                </>
+              )}
             </button>
           </form>
 
-          <div className="mt-10 pt-8 border-t border-gray-50 text-center space-y-6">
-            <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">
+          <div className="mt-7 pt-6 border-t border-gray-100 space-y-4">
+            <p className="text-center text-sm text-gray-500 font-semibold">
               Pas encore partenaire ?{" "}
-              <Link href="/agency/register" className="text-orange-600 hover:underline font-black transition-colors">
-                Devenir partenaire
+              <Link href="/agency/register" className="text-orange-600 font-black hover:text-orange-700 transition-colors">
+                Créer un compte agence
               </Link>
             </p>
 
             <DemoAccountsBox portal="agency" />
 
-            <Link href="/login" className="text-[10px] font-black text-gray-300 uppercase tracking-widest hover:text-[#0F172A] transition-colors block pt-2">
-              ← Retour au portail Voyageur
+            <Link
+              href="/login"
+              className="text-[11px] font-black text-gray-400 uppercase tracking-widest hover:text-[#0F172A] transition-colors block text-center"
+            >
+              ← Portail Voyageur
             </Link>
           </div>
         </div>

@@ -183,6 +183,18 @@ export const authOptions: NextAuthOptions = {
         token.role = userRole || "CLIENT";
         token.email = user.email;
         if (user.name) token.name = user.name;
+
+        // Charger le statut de vérification de l'agence dans le JWT
+        if (token.role === "AGENCY" && user.id) {
+          try {
+            const agency = await prisma.agency.findUnique({
+              where: { userId: user.id },
+              select: { verificationStatus: true },
+            });
+            token.agencyVerificationStatus = agency?.verificationStatus ?? undefined;
+          } catch { /* ignore */ }
+        }
+
         if (token.role) return token; // Exit early with populated token
       }
 
@@ -234,6 +246,10 @@ export const authOptions: NextAuthOptions = {
         session.user.role = tokenRole || "CLIENT";
         if (token.name) session.user.name = token.name as string;
         if (token.email) session.user.email = token.email as string;
+        if (token.agencyVerificationStatus) {
+          (session.user as { agencyVerificationStatus?: string }).agencyVerificationStatus =
+            token.agencyVerificationStatus as string;
+        }
       }
       return session;
     },
