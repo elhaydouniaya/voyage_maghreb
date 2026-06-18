@@ -5,7 +5,7 @@ import { ExternalReviewsService } from "@/services/external-reviews.service";
 
 export async function GET(
   _request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id || session.user.role !== "ADMIN") {
@@ -15,7 +15,8 @@ export async function GET(
     );
   }
 
-  const result = await ExternalReviewsService.ensureAndList(params.id);
+  const { id } = await params;
+  const result = await ExternalReviewsService.ensureAndList(id);
 
   if (!result) {
     return NextResponse.json({ error: "Agence introuvable." }, { status: 404 });

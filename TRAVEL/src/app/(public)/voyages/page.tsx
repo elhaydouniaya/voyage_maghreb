@@ -73,8 +73,14 @@ function MarketplaceContent() {
 
       if (requestId) {
         try {
+          const emailParam = searchParams.get("email")?.trim() || "";
+          const emailQuery = emailParam
+            ? `?email=${encodeURIComponent(emailParam)}`
+            : session?.user?.email
+              ? `?email=${encodeURIComponent(session.user.email)}`
+              : "";
           const res = await fetch(
-            `/api/travel-requests/${encodeURIComponent(requestId)}/recommendations`
+            `/api/travel-requests/${encodeURIComponent(requestId)}/recommendations${emailQuery}`
           );
           const data = await res.json();
           if (data.success && Array.isArray(data.results) && data.results.length > 0) {
@@ -125,7 +131,7 @@ function MarketplaceContent() {
     loadData();
     window.addEventListener("storage", loadData);
     return () => window.removeEventListener("storage", loadData);
-  }, [searchParams]);
+  }, [searchParams, session?.user?.email]);
 
   const handleSort = (order: "asc" | "desc") => {
     const sorted = [...filteredTrips].sort((a, b) => {

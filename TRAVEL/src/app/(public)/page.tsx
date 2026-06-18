@@ -4,27 +4,13 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import MaghrebCarousel from "@/components/public/MaghrebCarousel";
-import SafeImage from "@/components/ui/SafeImage";
-import { formatPriceShort } from "@/lib/currency";
-import { sanitizeImageUrl } from "@/lib/images";
 import { 
   ArrowRight, 
-  MapPin, 
   ShieldCheck, 
-  Zap, 
   Star, 
   CheckCircle2,
-  Globe,
-  CalendarDays,
-  Lock,
-  UserCheck,
-  CreditCard,
-  MessageCircle,
   ChevronDown,
   Sparkles,
-  Bot,
-  X,
-  Calendar
 } from "lucide-react";
 
 import DestinationsSection from "@/components/public/DestinationsSection";
@@ -32,24 +18,22 @@ import TripsGroupedBySeason from "@/components/trips/TripsGroupedBySeason";
 import { groupTripsBySeason, SEASON_ORDER } from "@/lib/seasons";
 import type { Season } from "@/lib/seasons";
 
-const TRIP_TAG_COLORS: Record<string, string> = {
-  DESERT: "bg-orange-500",
-  CULTURE: "bg-[#0F172A]",
-  ADVENTURE: "bg-orange-600",
-  RELAXATION: "bg-[#10B981]",
-  NATURE: "bg-emerald-600",
-};
-
-const TRIP_TYPE_LABELS: Record<string, string> = {
-  DESERT: "Désert",
-  CULTURE: "Culture",
-  ADVENTURE: "Aventure",
-  RELAXATION: "Détente",
-  NATURE: "Nature",
+type CatalogTrip = {
+  id: string;
+  title: string;
+  slug: string;
+  destination: string;
+  tripType: string;
+  totalPrice: number;
+  coverImage: string;
+  totalSpots: number;
+  bookedSpots: number;
+  status?: string;
+  season?: Season;
 };
 
 function FeaturedTrips() {
-  const [groupedTrips, setGroupedTrips] = useState<{ season: Season; trips: any[] }[]>([]);
+  const [groupedTrips, setGroupedTrips] = useState<{ season: Season; trips: CatalogTrip[] }[]>([]);
   const [selectedSeason, setSelectedSeason] = useState<Season | null>(null);
   const [currentSeason, setCurrentSeason] = useState<Season>("SUMMER");
   const [loading, setLoading] = useState(true);
@@ -58,7 +42,9 @@ function FeaturedTrips() {
     fetch("/api/trips")
       .then((res) => res.json())
       .then((data) => {
-        const published = (data.trips || []).filter((t: any) => t.status === "PUBLISHED");
+        const published = ((data.trips || []) as CatalogTrip[]).filter(
+          (t) => t.status === "PUBLISHED"
+        );
         const grouped = groupTripsBySeason(published);
         const seasonList = SEASON_ORDER;
         const result = (Object.keys(seasonList) as Season[])

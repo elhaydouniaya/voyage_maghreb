@@ -70,9 +70,8 @@ export class BookingsService {
       throw new Error("Le nom est requis.");
     }
 
-    return prisma.$transaction(
+    const booking = await prisma.$transaction(
       async (tx) => {
-        // ── Lock the trip row ──────────────────────────────────────────────
         const rows = await tx.$queryRaw<TripRow[]>`
           SELECT id, "totalSpots", "bookedSpots", "reservedSpots",
                  status, "agencyId",
@@ -139,12 +138,12 @@ export class BookingsService {
         return booking;
       },
       { timeout: 10_000, maxWait: 5_000 }
-    ).then(async (booking) => {
-      if (booking.travelRequestId) {
-        void TravelRequestsService.markPaymentPending(booking.travelRequestId);
-      }
-      return booking;
-    });
+    );
+
+    if (booking.travelRequestId) {
+      void TravelRequestsService.markPaymentPending(booking.travelRequestId);
+    }
+    return booking;
   }
 
   // ───────────────────────────────────────────────────────────────────────────

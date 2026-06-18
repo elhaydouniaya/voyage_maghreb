@@ -92,6 +92,7 @@ export default function AdminPortalLayout({
     { icon: CreditCard, label: "Réservations", href: "/admin/bookings", badge: null },
     { icon: Wallet, label: "Paiements", href: "/admin/payments", badge: null },
     { icon: Star, label: "Avis clients", href: "/admin/reviews", badge: null },
+    { icon: ShieldCheck, label: "Journal d'audit", href: "/admin/audit-logs", badge: null },
     { icon: Sparkles, label: "Demandes IA", href: "/admin/ai-requests", badge: null },
     { icon: ScrollText, label: "Audit logs", href: "/admin/audit-logs", badge: null },
     { icon: User, label: "Mon profil", href: "/admin/profile", badge: null },
@@ -113,7 +114,9 @@ export default function AdminPortalLayout({
             ? "Réservations"
             : pathname.includes("/payments")
               ? "Paiements"
-              : pathname.includes("/ai-requests")
+              : pathname.includes("/audit-logs")
+                ? "Journal d'audit"
+                : pathname.includes("/ai-requests")
               ? "Demandes IA"
               : pathname.includes("/profile")
                 ? "Mon profil"

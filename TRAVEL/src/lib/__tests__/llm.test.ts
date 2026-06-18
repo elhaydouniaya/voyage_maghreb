@@ -9,8 +9,10 @@ describe("llm", () => {
   });
 
   it("isLlmConfigured rejects placeholder keys", async () => {
-    process.env.OPENAI_API_KEY = "sk-...";
+    process.env.GROQ_API_KEY = "";
     process.env.LLM_API_KEY = "";
+    process.env.LLM_BASE_URL = "";
+    process.env.OPENAI_API_KEY = "sk-...";
     const { isLlmConfigured } = await import("@/lib/llm");
     assert.equal(isLlmConfigured(), false);
   });

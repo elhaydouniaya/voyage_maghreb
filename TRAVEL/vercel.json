@@ -1,6 +1,10 @@
 {
   "crons": [
     {
+      "path": "/api/cron/expire-bookings",
+      "schedule": "*/15 * * * *"
+    },
+    {
       "path": "/api/cron/pre-trip-reminder",
       "schedule": "0 8 * * *"
     },

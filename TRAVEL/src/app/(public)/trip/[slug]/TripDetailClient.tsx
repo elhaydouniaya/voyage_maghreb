@@ -21,6 +21,10 @@ import BookingForm from "@/components/booking/BookingForm";
 import Breadcrumbs from "@/components/ui/Breadcrumbs";
 import SafeImage from "@/components/ui/SafeImage";
 import { formatPriceShort } from "@/lib/currency";
+import {
+  parseProgramDays,
+  splitProgramAndCancelPolicy,
+} from "@/lib/program-days";
 
 export type EnrichedTrip = {
   id: string;
@@ -38,6 +42,7 @@ export type EnrichedTrip = {
   totalSpots: number;
   bookedSpots: number;
   meetingPoint: string | null;
+  programDays?: string | null;
   inclusions: string[];
   exclusions: string[];
   agency: {
@@ -67,6 +72,31 @@ export default function TripDetailClient({
   relatedTrips,
 }: TripDetailClientProps) {
   const [linkCopied, setLinkCopied] = useState(false);
+  const programItems = parseProgramDays(trip.programDays);
+  const { cancelPolicy } = splitProgramAndCancelPolicy(trip.programDays);
+  const defaultProgram = [
+    {
+      day: "Jour 1",
+      title: "Arrivée et accueil",
+      desc: "Accueil à l'aéroport et transfert vers votre hébergement. Premier dîner traditionnel pour s'immerger dans l'ambiance locale.",
+    },
+    {
+      day: "Jour 2",
+      title: "Exploration et immersion",
+      desc: "Départ pour les premières étapes du circuit. Découverte des paysages et rencontre avec les guides locaux.",
+    },
+    {
+      day: "Jour 3-5",
+      title: "Le cœur de l'aventure",
+      desc: "Immersion totale. Bivouac sous les étoiles, randonnées ou visites de sites historiques majeurs.",
+    },
+    {
+      day: "Dernier Jour",
+      title: "Clôture et départ",
+      desc: "Derniers achats souvenirs et transfert vers l'aéroport. Fin d'une aventure inoubliable.",
+    },
+  ];
+  const timeline = programItems.length > 0 ? programItems : defaultProgram;
 
   const handleShare = (platform: string) => {
     const url = window.location.href;
@@ -269,28 +299,7 @@ export default function TripDetailClient({
                 Programme du voyage
               </h2>
               <div className="space-y-12 relative before:absolute before:left-6 before:top-2 before:bottom-2 before:w-0.5 before:bg-gray-50">
-                {[
-                  {
-                    day: "Jour 1",
-                    title: "Arrivée et accueil",
-                    desc: "Accueil à l'aéroport et transfert vers votre hébergement. Premier dîner traditionnel pour s'immerger dans l'ambiance locale.",
-                  },
-                  {
-                    day: "Jour 2",
-                    title: "Exploration et immersion",
-                    desc: "Départ pour les premières étapes du circuit. Découverte des paysages et rencontre avec les guides locaux.",
-                  },
-                  {
-                    day: "Jour 3-5",
-                    title: "Le cœur de l'aventure",
-                    desc: "Immersion totale. Bivouac sous les étoiles, randonnées ou visites de sites historiques majeurs.",
-                  },
-                  {
-                    day: "Dernier Jour",
-                    title: "Clôture et départ",
-                    desc: "Derniers achats souvenirs et transfert vers l'aéroport. Fin d'une aventure inoubliable.",
-                  },
-                ].map((item, i) => (
+                {timeline.map((item, i) => (
                   <div key={i} className="relative pl-16 group">
                     <div className="absolute left-0 top-0 w-12 h-12 bg-white border-4 border-[#F8FAFC] rounded-2xl shadow-sm flex items-center justify-center text-orange-600 font-black text-xs z-10 group-hover:bg-orange-600 group-hover:text-white transition-all">
                       {i + 1}
@@ -299,12 +308,24 @@ export default function TripDetailClient({
                       {item.day}
                     </h4>
                     <h3 className="text-xl font-black text-[#0F172A] mb-3">{item.title}</h3>
-                    <p className="text-sm text-gray-500 font-medium leading-relaxed max-w-xl">
-                      {item.desc}
-                    </p>
+                    {item.desc ? (
+                      <p className="text-sm text-gray-500 font-medium leading-relaxed max-w-xl">
+                        {item.desc}
+                      </p>
+                    ) : null}
                   </div>
                 ))}
               </div>
+              {cancelPolicy ? (
+                <div className="mt-10 p-6 bg-[#F8FAFC] rounded-[2rem] border border-gray-100">
+                  <h3 className="text-sm font-black text-[#0F172A] mb-3 uppercase tracking-widest">
+                    Politique d&apos;annulation
+                  </h3>
+                  <p className="text-sm text-gray-500 font-medium whitespace-pre-wrap leading-relaxed">
+                    {cancelPolicy}
+                  </p>
+                </div>
+              ) : null}
             </div>
 
             <div className="mt-12 bg-white rounded-[4rem] p-12 border border-gray-100 shadow-sm relative overflow-hidden group hover:border-orange-500/20 transition-all duration-500">

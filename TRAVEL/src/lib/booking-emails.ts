@@ -34,7 +34,7 @@ export async function sendTravelRequestReceivedEmail(input: {
   travelRequestId?: string;
 }) {
   const voyagesUrl = input.travelRequestId
-    ? `${baseUrl()}/voyages?matched=true&request=${encodeURIComponent(input.travelRequestId)}`
+    ? `${baseUrl()}/voyages?matched=true&request=${encodeURIComponent(input.travelRequestId)}&email=${encodeURIComponent(input.to)}`
     : `${baseUrl()}/voyages?matched=true`;
 
   await sendEmail({

@@ -170,6 +170,20 @@ export class TravelRequestsService {
     };
   }
 
+  static canAccessRequest(
+    request: { userId: string; clientEmail: string },
+    session?: { user?: { id?: string; role?: string } | null } | null,
+    email?: string | null
+  ): boolean {
+    if (session?.user?.role === "ADMIN") return true;
+    if (session?.user?.id && session.user.id === request.userId) return true;
+    const normalized = email?.trim().toLowerCase();
+    if (normalized && normalized === request.clientEmail.toLowerCase()) {
+      return true;
+    }
+    return false;
+  }
+
   /** Recharge les voyages recommandés pour un lien email / voyages?request=… */
   static async getRecommendationsForRequest(requestId: string) {
     const request = await prisma.travelRequest.findUnique({

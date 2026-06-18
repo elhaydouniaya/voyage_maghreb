@@ -184,11 +184,6 @@ export class ExternalReviewsService {
     const seed = hashSeed(agency.id + agency.name);
     const location = `${agency.city}, ${agency.country}`;
 
-    const profileSlug = agency.name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/(^-|-$)/g, "");
-
     const platforms: ExternalReviewPlatform[] = [
       "GOOGLE",
       "TRIPADVISOR",

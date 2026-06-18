@@ -115,7 +115,21 @@ export class TripsService {
       include: { agency: true },
     });
     if (!trip) return null;
-    return formatTrip(trip);
+
+    const formatted = formatTrip(trip);
+    const { ReviewsService } = await import("@/services/reviews.service");
+    const agencyStats = await ReviewsService.getAgencyStats(trip.agencyId);
+
+    return {
+      ...formatted,
+      agency: formatted.agency
+        ? {
+            ...formatted.agency,
+            rating: agencyStats.average,
+            reviews: agencyStats.count,
+          }
+        : undefined,
+    };
   }
 
   static async listRelatedByAgency(

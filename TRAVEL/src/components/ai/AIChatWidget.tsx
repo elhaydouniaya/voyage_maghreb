@@ -10,12 +10,17 @@ type ChatMessage = { role: "bot" | "user"; content: string };
 const BASIC_WELCOME =
   "Bonjour ! Je suis votre guide MaghrebVoyage 🌍\n\nJe peux vous donner des infos générales sur nos destinations au Maghreb. Pour un guide personnalisé qui mémorise vos préférences, connectez-vous à votre compte voyageur !";
 
-const AIChatWidget = () => {
+type AIChatWidgetProps = {
+  variant?: "floating" | "embedded";
+};
+
+const AIChatWidget = ({ variant = "floating" }: AIChatWidgetProps) => {
+  const embedded = variant === "embedded";
   const { data: session, status } = useSession();
   const isClient = status === "authenticated" && session?.user?.role === "CLIENT";
   const isVisitor = status !== "loading" && !isClient;
 
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(embedded);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
@@ -118,20 +123,14 @@ const AIChatWidget = () => {
     }
   };
 
-  return (
-    <div className="fixed bottom-8 right-8 z-[100] font-outfit">
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        title={isOpen ? "Fermer le guide" : "Ouvrir le guide touristique"}
-        className={`w-16 h-16 rounded-full shadow-2xl flex items-center justify-center transition-all duration-500 hover:scale-110 active:scale-95 ${
-          isOpen ? "bg-[#0F172A] text-white rotate-90" : "bg-orange-600 text-white"
-        }`}
-      >
-        {isOpen ? <X size={28} /> : <MessageCircle size={28} />}
-      </button>
-
-      {isOpen && (
-        <div className="absolute bottom-24 right-0 w-[400px] max-w-[calc(100vw-2rem)] h-[600px] max-h-[70vh] bg-white rounded-[3rem] shadow-2xl border border-gray-100 flex flex-col overflow-hidden animate-in slide-in-from-bottom-12 duration-500">
+  const panel = (
+    <div
+      className={
+        embedded
+          ? "w-full min-h-[520px] h-[min(680px,72vh)] bg-white rounded-[2.5rem] shadow-xl border border-gray-100 flex flex-col overflow-hidden"
+          : "absolute bottom-24 right-0 w-[400px] max-w-[calc(100vw-2rem)] h-[600px] max-h-[70vh] bg-white rounded-[3rem] shadow-2xl border border-gray-100 flex flex-col overflow-hidden animate-in slide-in-from-bottom-12 duration-500"
+      }
+    >
           {/* Header */}
           <div className="bg-[#0F172A] p-6 text-white flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -264,8 +263,26 @@ const AIChatWidget = () => {
               <Compass size={14} /> Trouver mon voyage
             </Link>
           </div>
-        </div>
-      )}
+    </div>
+  );
+
+  if (embedded) {
+    return <div className="font-outfit">{panel}</div>;
+  }
+
+  return (
+    <div className="fixed bottom-8 right-8 z-[100] font-outfit">
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        title={isOpen ? "Fermer le guide" : "Ouvrir le guide touristique"}
+        className={`w-16 h-16 rounded-full shadow-2xl flex items-center justify-center transition-all duration-500 hover:scale-110 active:scale-95 ${
+          isOpen ? "bg-[#0F172A] text-white rotate-90" : "bg-orange-600 text-white"
+        }`}
+      >
+        {isOpen ? <X size={28} /> : <MessageCircle size={28} />}
+      </button>
+      {isOpen && panel}
     </div>
   );
 };

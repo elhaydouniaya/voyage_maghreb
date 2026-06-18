@@ -40,6 +40,7 @@ function enrichTrip(found: ReturnType<typeof formatTrip>): EnrichedTrip {
           ],
     inclusions: found.inclusions || [],
     exclusions: found.exclusions || [],
+    programDays: found.programDays || "",
   };
 }
 

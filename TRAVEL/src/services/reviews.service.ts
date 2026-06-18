@@ -40,6 +40,37 @@ export class ReviewsService {
     return { count, average: Math.round(avg * 10) / 10 };
   }
 
+  static async getAgencyStats(agencyId: string) {
+    const approved = await prisma.review.findMany({
+      where: {
+        status: "APPROVED",
+        groupTrip: { agencyId },
+      },
+      select: { rating: true },
+    });
+    const count = approved.length;
+    const average =
+      count > 0
+        ? Math.round(
+            (approved.reduce((sum, r) => sum + r.rating, 0) / count) * 10
+          ) / 10
+        : 0;
+    return { count, average };
+  }
+
+  static async hasVerifiedBooking(
+    userId: string,
+    groupTripId?: string
+  ): Promise<boolean> {
+    const where = {
+      userId,
+      status: "CONFIRMED" as const,
+      ...(groupTripId ? { groupTripId } : {}),
+    };
+    const booking = await prisma.booking.findFirst({ where });
+    return Boolean(booking);
+  }
+
   static async create(input: {
     userId?: string;
     authorName: string;
@@ -59,6 +90,15 @@ export class ReviewsService {
       throw new Error("Titre et contenu requis.");
     }
 
+    let status: ReviewStatus = input.status || "PENDING";
+    if (input.userId && !input.status) {
+      const verified = await this.hasVerifiedBooking(
+        input.userId,
+        input.groupTripId
+      );
+      status = verified ? "APPROVED" : "PENDING";
+    }
+
     const review = await prisma.review.create({
       data: {
         userId: input.userId,
@@ -70,7 +110,7 @@ export class ReviewsService {
         destination: input.destination.trim(),
         tripDate: input.tripDate?.trim() || null,
         groupTripId: input.groupTripId,
-        status: input.userId ? "APPROVED" : input.status || "PENDING",
+        status,
       },
     });
 
