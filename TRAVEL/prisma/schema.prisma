@@ -135,6 +135,7 @@ model Agency {
   trips           GroupTrip[]
   bookings        Booking[]
   payments        Payment[]
+  externalReviews ExternalReview[]
 }
 
 enum AgencyStatus {
@@ -416,6 +417,37 @@ enum ReviewStatus {
   PENDING
   APPROVED
   REJECTED
+}
+
+// ==========================================
+// 8b. Avis externes (plateformes tierces)
+// ==========================================
+
+enum ExternalReviewPlatform {
+  GOOGLE
+  TRIPADVISOR
+  FACEBOOK
+  TRUSTPILOT
+  VIATOR
+}
+
+model ExternalReview {
+  id         String                 @id @default(cuid())
+  agencyId   String
+  agency     Agency                 @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+
+  platform   ExternalReviewPlatform
+  authorName String
+  rating     Int
+  title      String?
+  content    String                 @db.Text
+  reviewDate DateTime
+  sourceUrl  String?
+  location   String?
+
+  fetchedAt  DateTime               @default(now())
+
+  @@index([agencyId])
 }
 
 // ==========================================
