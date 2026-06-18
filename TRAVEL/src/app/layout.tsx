@@ -8,6 +8,11 @@ const outfit = Outfit({ subsets: ["latin"], variable: "--font-outfit" });
 export const metadata: Metadata = {
   title: "MaghrebVoyage | Voyages de groupe exceptionnels",
   description: "Réservez votre place pour des voyages de groupe inoubliables au Maghreb. MaghrebVoyage vous connecte aux meilleures agences.",
+  icons: {
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+    ],
+  },
 };
 
 import { AuthProvider } from "@/components/providers/AuthProvider";

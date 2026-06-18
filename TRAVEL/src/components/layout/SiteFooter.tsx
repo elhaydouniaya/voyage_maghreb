@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Globe } from "lucide-react";
+import AnimatedLogo from "@/components/brand/AnimatedLogo";
 
 const LEGAL_LINKS = [
   { href: "/legal/mentions", label: "Mentions légales" },
@@ -20,16 +20,11 @@ export default function SiteFooter({ variant = "light" }: { variant?: "light" | 
       }
     >
       <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-10">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-orange-500 rounded-xl flex items-center justify-center text-white">
-            <Globe size={22} />
-          </div>
-          <span
-            className={`text-xl font-black tracking-tight ${isDark ? "text-white" : "text-[#0F172A]"}`}
-          >
-            MaghrebVoyage
-          </span>
-        </div>
+        <AnimatedLogo
+          variant="full"
+          theme={isDark ? "dark" : "light"}
+          size="md"
+        />
 
         <div className="flex flex-wrap justify-center gap-6 md:gap-8">
           {LEGAL_LINKS.map((link) => (

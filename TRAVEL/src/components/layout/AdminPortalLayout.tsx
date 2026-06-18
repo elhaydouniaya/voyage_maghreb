@@ -18,6 +18,7 @@ import {
   Settings,
   ShieldCheck,
 } from "lucide-react";
+import AnimatedLogo from "@/components/brand/AnimatedLogo";
 
 type AdminMe = {
   name: string;
@@ -112,14 +113,7 @@ export default function AdminPortalLayout({
     <div className="flex min-h-screen bg-[#F8FAFC] font-outfit">
       <aside className="w-72 bg-[#0F172A] text-white flex flex-col fixed h-full z-20">
         <div className="p-8">
-          <Link href="/admin/dashboard" className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-orange-500 rounded-xl flex items-center justify-center text-white">
-              <Globe size={20} />
-            </div>
-            <span className="text-xl font-bold tracking-tight">
-              Maghreb<span className="text-orange-500">Voyage</span>
-            </span>
-          </Link>
+          <AnimatedLogo variant="full" theme="dark" size="md" href="/admin/dashboard" />
           <p className="text-[9px] font-black text-gray-500 uppercase tracking-[0.2em] mt-4 ml-1">
             Espace administrateur
           </p>
