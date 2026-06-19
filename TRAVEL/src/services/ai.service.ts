@@ -1,6 +1,8 @@
 /**
  * AI Service for MaghrebVoyage
  * Implements Module C of the CDC: Structuration and Matching.
+ *
+ * LLM priority: Gemini (primary, free tier) → OpenAI (fallback) → heuristic offline
  */
 
 import { getOpenAIClient, isOpenAIConfigured } from "@/lib/openai";
@@ -9,6 +11,8 @@ import {
   isOpenAIQuotaOrRateLimitError,
   pauseOpenAI,
 } from "@/lib/openai-errors";
+import { getGeminiClient, isGeminiConfigured } from "@/lib/gemini";
+import { isGeminiPaused, pauseGemini, isGeminiQuotaError } from "@/lib/gemini-errors";
 import type { ClientGuideContext } from "@/services/guide-profile.service";
 
 // ─── Intent Engine types ──────────────────────────────────────────────────────
@@ -562,16 +566,74 @@ Réponds UNIQUEMENT en JSON avec: summary, tags (string[]), complexity (1-5), de
     };
   }
 
-  static async extractIntent(
+  // ── Shared JSON validator for intent results ────────────────────────────────
+
+  static #validateIntentResult(parsed: Partial<IntentResult>): IntentResult {
+    const VALID_INTENTS: IntentType[] = [
+      "travel_plan", "recommendation", "booking_request",
+      "modification_request", "history_query", "smalltalk", "unknown",
+    ];
+    const VALID_ACTIONS: IntentAction[] = ["ask_user", "call_backend", "fetch_history"];
+    return {
+      intent:              VALID_INTENTS.includes(parsed.intent as IntentType) ? (parsed.intent as IntentType) : "unknown",
+      destination:         typeof parsed.destination === "string"  ? parsed.destination  : null,
+      budget:              typeof parsed.budget      === "number"  ? parsed.budget        : null,
+      dates:               typeof parsed.dates       === "string"  ? parsed.dates         : null,
+      people:              typeof parsed.people      === "number"  ? parsed.people        : null,
+      travel_type:         typeof parsed.travel_type === "string"  ? parsed.travel_type   : null,
+      missing_information: Array.isArray(parsed.missing_information) ? parsed.missing_information.map(String) : [],
+      action:              VALID_ACTIONS.includes(parsed.action as IntentAction) ? (parsed.action as IntentAction) : "ask_user",
+    };
+  }
+
+  // ── Intent extraction — Gemini primary ──────────────────────────────────────
+
+  private static async #intentViaGemini(
     userMessage: string,
-    sessionContext: SessionContext = {}
-  ): Promise<IntentResult> {
-    const fallback = () => this.extractIntentOffline(userMessage, sessionContext);
+    sessionContext: SessionContext
+  ): Promise<IntentResult | null> {
+    if (!isGeminiConfigured() || isGeminiPaused()) return null;
+    const genai = getGeminiClient();
+    if (!genai) return null;
 
-    if (!isOpenAIConfigured() || isOpenAIPaused()) return fallback();
+    try {
+      const model = genai.getGenerativeModel({
+        model: process.env.GEMINI_MODEL || "gemini-1.5-flash",
+        systemInstruction: INTENT_SYSTEM_PROMPT,
+        generationConfig: {
+          responseMimeType: "application/json",
+          maxOutputTokens: 200,
+          temperature: 0.1,
+        } as object,
+      });
 
+      const result = await model.generateContent(
+        JSON.stringify({ user_message: userMessage, session_context: sessionContext })
+      );
+      const raw = result.response.text().trim();
+      if (!raw) return null;
+
+      return this.#validateIntentResult(JSON.parse(raw) as Partial<IntentResult>);
+    } catch (error) {
+      if (isGeminiQuotaError(error)) {
+        pauseGemini(60);
+        console.warn("Gemini intent quota — fallback to OpenAI");
+      } else {
+        console.error("Gemini extractIntent error:", error);
+      }
+      return null;
+    }
+  }
+
+  // ── Intent extraction — OpenAI fallback ────────────────────────────────────
+
+  private static async #intentViaOpenAI(
+    userMessage: string,
+    sessionContext: SessionContext
+  ): Promise<IntentResult | null> {
+    if (!isOpenAIConfigured() || isOpenAIPaused()) return null;
     const openai = getOpenAIClient();
-    if (!openai) return fallback();
+    if (!openai) return null;
 
     try {
       const completion = await openai.chat.completions.create({
@@ -580,10 +642,7 @@ Réponds UNIQUEMENT en JSON avec: summary, tags (string[]), complexity (1-5), de
           { role: "system", content: INTENT_SYSTEM_PROMPT },
           {
             role: "user",
-            content: JSON.stringify({
-              user_message: userMessage,
-              session_context: sessionContext,
-            }),
+            content: JSON.stringify({ user_message: userMessage, session_context: sessionContext }),
           },
         ],
         response_format: { type: "json_object" },
@@ -592,26 +651,9 @@ Réponds UNIQUEMENT en JSON avec: summary, tags (string[]), complexity (1-5), de
       });
 
       const raw = completion.choices[0]?.message?.content;
-      if (!raw) return fallback();
+      if (!raw) return null;
 
-      const parsed = JSON.parse(raw) as Partial<IntentResult>;
-
-      const VALID_INTENTS: IntentType[] = [
-        "travel_plan", "recommendation", "booking_request",
-        "modification_request", "history_query", "smalltalk", "unknown",
-      ];
-      const VALID_ACTIONS: IntentAction[] = ["ask_user", "call_backend", "fetch_history"];
-
-      return {
-        intent:             VALID_INTENTS.includes(parsed.intent as IntentType) ? (parsed.intent as IntentType) : "unknown",
-        destination:        typeof parsed.destination === "string"  ? parsed.destination  : null,
-        budget:             typeof parsed.budget      === "number"  ? parsed.budget        : null,
-        dates:              typeof parsed.dates       === "string"  ? parsed.dates         : null,
-        people:             typeof parsed.people      === "number"  ? parsed.people        : null,
-        travel_type:        typeof parsed.travel_type === "string"  ? parsed.travel_type   : null,
-        missing_information: Array.isArray(parsed.missing_information) ? parsed.missing_information.map(String) : [],
-        action:             VALID_ACTIONS.includes(parsed.action as IntentAction) ? (parsed.action as IntentAction) : "ask_user",
-      };
+      return this.#validateIntentResult(JSON.parse(raw) as Partial<IntentResult>);
     } catch (error) {
       if (isOpenAIQuotaOrRateLimitError(error)) {
         pauseOpenAI(60);
@@ -619,59 +661,125 @@ Réponds UNIQUEMENT en JSON avec: summary, tags (string[]), complexity (1-5), de
       } else {
         console.error("OpenAI extractIntent error:", error);
       }
-      return fallback();
+      return null;
+    }
+  }
+
+  static async extractIntent(
+    userMessage: string,
+    sessionContext: SessionContext = {}
+  ): Promise<IntentResult> {
+    // 1. Gemini (free, primary)
+    const geminiResult = await this.#intentViaGemini(userMessage, sessionContext);
+    if (geminiResult) return geminiResult;
+
+    // 2. OpenAI (paid, fallback)
+    const openaiResult = await this.#intentViaOpenAI(userMessage, sessionContext);
+    if (openaiResult) return openaiResult;
+
+    // 3. Offline heuristic (always available)
+    return this.extractIntentOffline(userMessage, sessionContext);
+  }
+
+  // ── Guide chat — Gemini primary ─────────────────────────────────────────────
+
+  private static #buildGuideSystem(ctx: ClientGuideContext): string {
+    const profile = this.formatContextBlock(ctx);
+    const firstName = ctx.userName?.split(" ")[0] ?? "";
+    const onboarding = ctx.profile.onboardingComplete
+      ? "Profil complet : proposez des suggestions personnalisées et concrètes."
+      : "Profil incomplet : posez UNE seule question ciblée (destination, style, budget ou nombre de voyageurs) avant de donner des conseils.";
+    return [
+      GUIDE_SYSTEM_PROMPT,
+      "",
+      "Profil mémorisé du client :",
+      profile,
+      firstName ? `Prénom : ${firstName}.` : "",
+      onboarding,
+    ].filter(Boolean).join("\n");
+  }
+
+  private static async #guideChatViaGemini(
+    messages: { role: "user" | "assistant"; content: string }[],
+    ctx: ClientGuideContext
+  ): Promise<string | null> {
+    if (!isGeminiConfigured() || isGeminiPaused()) return null;
+    const genai = getGeminiClient();
+    if (!genai) return null;
+
+    try {
+      const model = genai.getGenerativeModel({
+        model: process.env.GEMINI_MODEL || "gemini-1.5-flash",
+        systemInstruction: this.#buildGuideSystem(ctx),
+        generationConfig: { maxOutputTokens: 700, temperature: 0.75 } as object,
+      });
+
+      // Gemini history uses role "user" | "model"
+      const history = messages.slice(0, -1).map(m => ({
+        role: m.role === "user" ? "user" : "model",
+        parts: [{ text: m.content }],
+      }));
+
+      const chat = model.startChat({ history });
+      const lastMsg = messages[messages.length - 1].content;
+      const result = await chat.sendMessage(lastMsg);
+      return result.response.text().trim() || null;
+    } catch (error) {
+      if (isGeminiQuotaError(error)) {
+        pauseGemini(60);
+        console.warn("Gemini guideChat quota — fallback to OpenAI");
+      } else {
+        console.error("Gemini guideChat error:", error);
+      }
+      return null;
+    }
+  }
+
+  private static async #guideChatViaOpenAI(
+    messages: { role: "user" | "assistant"; content: string }[],
+    ctx: ClientGuideContext
+  ): Promise<string | null> {
+    if (!isOpenAIConfigured() || isOpenAIPaused()) return null;
+    const openai = getOpenAIClient();
+    if (!openai) return null;
+
+    try {
+      const completion = await openai.chat.completions.create({
+        model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+        messages: [
+          { role: "system", content: this.#buildGuideSystem(ctx) },
+          ...messages.slice(-14).map(m => ({ role: m.role as "user" | "assistant", content: m.content })),
+        ],
+        max_tokens: 650,
+        temperature: 0.75,
+      });
+
+      return completion.choices[0]?.message?.content?.trim() || null;
+    } catch (error) {
+      if (isOpenAIQuotaOrRateLimitError(error)) {
+        pauseOpenAI(60);
+        console.warn("OpenAI guideChat quota — offline fallback");
+      } else {
+        console.error("OpenAI guideChat error:", error);
+      }
+      return null;
     }
   }
 
   static async guideChat(
     messages: { role: "user" | "assistant"; content: string }[],
     ctx: ClientGuideContext
-  ): Promise<{ reply: string; mode: "openai" | "offline" }> {
-    if (!isOpenAIConfigured() || isOpenAIPaused()) {
-      return { reply: this.guideChatOffline(messages, ctx), mode: "offline" };
-    }
+  ): Promise<{ reply: string; mode: "gemini" | "openai" | "offline" }> {
+    // 1. Gemini — free, primary
+    const geminiReply = await this.#guideChatViaGemini(messages, ctx);
+    if (geminiReply) return { reply: geminiReply, mode: "gemini" };
 
-    const openai = getOpenAIClient();
-    if (!openai) {
-      return { reply: this.guideChatOffline(messages, ctx), mode: "offline" };
-    }
+    // 2. OpenAI — paid, fallback
+    const openaiReply = await this.#guideChatViaOpenAI(messages, ctx);
+    if (openaiReply) return { reply: openaiReply, mode: "openai" };
 
-    const profileBlock = this.formatContextBlock(ctx);
-    const systemWithUser = `${GUIDE_SYSTEM_PROMPT}
-
-Profil mémorisé du client :
-${profileBlock}
-${ctx.userName ? `Prénom : ${ctx.userName.split(" ")[0]}.` : ""}
-${!ctx.profile.onboardingComplete ? "Le profil est incomplet : posez une question ciblée (destination, style, budget ou nombre de voyageurs) avant de donner des conseils détaillés." : "Profil complet : proposez des suggestions personnalisées."}`;
-
-    try {
-      const completion = await openai.chat.completions.create({
-        model: process.env.OPENAI_MODEL || "gpt-4o-mini",
-        messages: [
-          { role: "system", content: systemWithUser },
-          ...messages.slice(-14).map((m) => ({
-            role: m.role as "user" | "assistant",
-            content: m.content,
-          })),
-        ],
-        max_tokens: 650,
-        temperature: 0.75,
-      });
-
-      const reply =
-        completion.choices[0]?.message?.content?.trim() ||
-        this.guideChatOffline(messages, ctx);
-
-      return { reply, mode: "openai" };
-    } catch (error) {
-      if (isOpenAIQuotaOrRateLimitError(error)) {
-        pauseOpenAI(60);
-        console.warn("OpenAI quota/rate limit — guide en mode local 60 min");
-      } else {
-        console.error("OpenAI guideChat error:", error);
-      }
-      return { reply: this.guideChatOffline(messages, ctx), mode: "offline" };
-    }
+    // 3. Offline heuristic — always available
+    return { reply: this.guideChatOffline(messages, ctx), mode: "offline" };
   }
 }
 
