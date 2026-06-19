@@ -11,6 +11,75 @@ import {
 } from "@/lib/openai-errors";
 import type { ClientGuideContext } from "@/services/guide-profile.service";
 
+// ─── Intent Engine types ──────────────────────────────────────────────────────
+
+export type IntentType =
+  | "travel_plan"
+  | "recommendation"
+  | "booking_request"
+  | "modification_request"
+  | "history_query"
+  | "smalltalk"
+  | "unknown";
+
+export type IntentAction = "ask_user" | "call_backend" | "fetch_history";
+
+export interface SessionContext {
+  last_destination?: string | null;
+  last_budget?: number | null;
+  last_intent?: string | null;
+  [key: string]: unknown;
+}
+
+export interface IntentResult {
+  intent: IntentType;
+  destination: string | null;
+  budget: number | null;
+  dates: string | null;
+  people: number | null;
+  travel_type: string | null;
+  missing_information: string[];
+  action: IntentAction;
+}
+
+// ─── Intent engine system prompt (sent verbatim to the LLM) ──────────────────
+
+const INTENT_SYSTEM_PROMPT = `You are a senior AI system architect.
+Your role is ONLY to transform user messages into structured decisions for a travel platform (MaghrebVoyage).
+You are NOT a chatbot. You NEVER respond directly to the user.
+
+STRICT ARCHITECTURE: Next.js → Node.js + Prisma → FastAPI → OpenAI → PostgreSQL + Redis
+
+CORE RULE: Output ONLY valid JSON. No explanations. No natural language. No extra text.
+
+INPUT: user_message (string) + session_context (Redis summary: last_destination, last_budget, last_intent)
+
+YOUR TASK:
+1. Detect user intent
+2. Extract travel entities
+3. Decide system action
+4. Use session_context only for continuity
+5. Detect history requests
+
+SUPPORTED INTENTS: travel_plan | recommendation | booking_request | modification_request | history_query | smalltalk | unknown
+
+ACTION TYPES:
+- ask_user → missing information required
+- call_backend → enough data to process travel logic
+- fetch_history → user requests past data
+
+HISTORY RULE: If user asks "my history", "last trip", "what did I say", "previous trips" → intent=history_query, action=fetch_history
+
+DECISION RULES:
+- If required info is missing → action=ask_user
+- If all required info exists → action=call_backend
+- If history requested → action=fetch_history
+
+DATA TO EXTRACT: intent, destination, budget (number|null), dates (string|null), people (number|null), travel_type (string|null), missing_information (string[]), action
+
+OUTPUT FORMAT (STRICT JSON ONLY):
+{"intent":"","destination":null,"budget":null,"dates":null,"people":null,"travel_type":null,"missing_information":[],"action":""}`;
+
 const GUIDE_SYSTEM_PROMPT = `Tu es le Guide Touristique personnel MaghrebVoyage, réservé aux clients connectés.
 Tu accompagnes le voyageur dans la préparation de son voyage au Maghreb (Maroc, Algérie, Tunisie, Mauritanie, Libye).
 Réponds en français, avec chaleur et expertise. Mène une vraie conversation : pose des questions pour mieux connaître le client avant de conseiller.
@@ -386,6 +455,172 @@ Réponds UNIQUEMENT en JSON avec: summary, tags (string[]), complexity (1-5), de
       if (lower.includes(k) && !found.includes(v)) found.push(v);
     }
     return found;
+  }
+
+  // ── Intent extraction engine ────────────────────────────────────────────────
+
+  static extractIntentOffline(
+    userMessage: string,
+    ctx: SessionContext
+  ): IntentResult {
+    const msg  = userMessage.toLowerCase().trim();
+    const base = this.#blankIntent();
+
+    // History query
+    if (/(historique|history|dernier voyage|last trip|j'ai dit|qu'est.ce que j'ai|mes messages|mes conversations)/i.test(msg)) {
+      return { ...base, intent: "history_query", action: "fetch_history" };
+    }
+
+    // Smalltalk
+    if (/^(salam|bonjour|hello|bonsoir|hi|coucou|merci|ok|yes|non|oui|bonne journée|salut)[\s!.?]*$/.test(msg)) {
+      return { ...base, intent: "smalltalk", action: "ask_user", missing_information: ["destination"] };
+    }
+
+    // Extract destination
+    const destMap: Record<string, string> = {
+      maroc: "Maroc", marrakech: "Marrakech", fès: "Fès", fez: "Fès",
+      casablanca: "Casablanca", algérie: "Algérie", algerie: "Algérie",
+      tunisie: "Tunisie", sahara: "Sahara", djerba: "Djerba",
+      djanet: "Djanet", tassili: "Tassili", agadir: "Agadir",
+      oran: "Oran", alger: "Alger",
+    };
+    let destination: string | null = null;
+    for (const [key, val] of Object.entries(destMap)) {
+      if (msg.includes(key)) { destination = val; break; }
+    }
+    if (!destination && ctx.last_destination) destination = ctx.last_destination;
+
+    // Extract budget
+    const budgetMatch = msg.match(/(\d[\d\s]*)(€|eur|euros?|mad|dh|dirham)/i)
+      ?? msg.match(/budget[^\d]*(\d[\d\s]*)/i);
+    const rawBudget = budgetMatch ? parseInt(budgetMatch[1].replace(/\s/g, ""), 10) : null;
+    const budget = rawBudget ?? ctx.last_budget ?? null;
+
+    // Extract people
+    const peopleMatch = msg.match(/(\d+)\s*(personne|voyageur|adulte|enfant|pax)/i)
+      ?? msg.match(/(couple|seul|solo)/i);
+    let people: number | null = null;
+    if (peopleMatch) {
+      people = peopleMatch[1] ? parseInt(peopleMatch[1], 10) : peopleMatch[0].includes("couple") ? 2 : 1;
+    }
+
+    // Extract dates (loose)
+    const dateMatch = msg.match(/(janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre|jan|fev|mar|avr|jun|jul|aou|sep|oct|nov|dec|\d{1,2}\/\d{1,2}(\/\d{2,4})?)/i);
+    const dates: string | null = dateMatch ? dateMatch[0] : null;
+
+    // Extract travel type
+    const typeMap: Record<string, string> = {
+      aventure: "ADVENTURE", culture: "CULTURE", famille: "FAMILLE",
+      luxe: "LUXE", désert: "DESERT", desert: "DESERT",
+      détente: "RELAXATION", detente: "RELAXATION", nature: "NATURE",
+      religieux: "RELIGIEUX", historique: "HISTORIQUE",
+    };
+    let travel_type: string | null = null;
+    for (const [key, val] of Object.entries(typeMap)) {
+      if (msg.includes(key)) { travel_type = val; break; }
+    }
+
+    // Determine intent
+    let intent: IntentType = "unknown";
+    if (/(réserver|reserver|book|je veux partir|je voudrais partir)/i.test(msg)) {
+      intent = "booking_request";
+    } else if (/(modifier|changer|annuler|repousser|changer la date)/i.test(msg)) {
+      intent = "modification_request";
+    } else if (/(recommande|conseille|suggestion|idée|que faire|où aller)/i.test(msg)) {
+      intent = "recommendation";
+    } else if (destination || budget || dates) {
+      intent = "travel_plan";
+    } else if (ctx.last_intent) {
+      intent = (ctx.last_intent as IntentType) ?? "unknown";
+    }
+
+    // Determine missing info and action
+    const missing: string[] = [];
+    if (!destination) missing.push("destination");
+    if (!budget)      missing.push("budget");
+    if (!people)      missing.push("people");
+
+    const action: IntentAction =
+      intent === "history_query"   ? "fetch_history" :
+      intent === "booking_request" && destination && budget ? "call_backend" :
+      intent === "travel_plan"     && destination           ? "call_backend" :
+      "ask_user";
+
+    return { intent, destination, budget, dates, people, travel_type, missing_information: missing, action };
+  }
+
+  static #blankIntent(): IntentResult {
+    return {
+      intent: "unknown",
+      destination: null,
+      budget: null,
+      dates: null,
+      people: null,
+      travel_type: null,
+      missing_information: [],
+      action: "ask_user",
+    };
+  }
+
+  static async extractIntent(
+    userMessage: string,
+    sessionContext: SessionContext = {}
+  ): Promise<IntentResult> {
+    const fallback = () => this.extractIntentOffline(userMessage, sessionContext);
+
+    if (!isOpenAIConfigured() || isOpenAIPaused()) return fallback();
+
+    const openai = getOpenAIClient();
+    if (!openai) return fallback();
+
+    try {
+      const completion = await openai.chat.completions.create({
+        model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+        messages: [
+          { role: "system", content: INTENT_SYSTEM_PROMPT },
+          {
+            role: "user",
+            content: JSON.stringify({
+              user_message: userMessage,
+              session_context: sessionContext,
+            }),
+          },
+        ],
+        response_format: { type: "json_object" },
+        max_tokens: 180,
+        temperature: 0.1,
+      });
+
+      const raw = completion.choices[0]?.message?.content;
+      if (!raw) return fallback();
+
+      const parsed = JSON.parse(raw) as Partial<IntentResult>;
+
+      const VALID_INTENTS: IntentType[] = [
+        "travel_plan", "recommendation", "booking_request",
+        "modification_request", "history_query", "smalltalk", "unknown",
+      ];
+      const VALID_ACTIONS: IntentAction[] = ["ask_user", "call_backend", "fetch_history"];
+
+      return {
+        intent:             VALID_INTENTS.includes(parsed.intent as IntentType) ? (parsed.intent as IntentType) : "unknown",
+        destination:        typeof parsed.destination === "string"  ? parsed.destination  : null,
+        budget:             typeof parsed.budget      === "number"  ? parsed.budget        : null,
+        dates:              typeof parsed.dates       === "string"  ? parsed.dates         : null,
+        people:             typeof parsed.people      === "number"  ? parsed.people        : null,
+        travel_type:        typeof parsed.travel_type === "string"  ? parsed.travel_type   : null,
+        missing_information: Array.isArray(parsed.missing_information) ? parsed.missing_information.map(String) : [],
+        action:             VALID_ACTIONS.includes(parsed.action as IntentAction) ? (parsed.action as IntentAction) : "ask_user",
+      };
+    } catch (error) {
+      if (isOpenAIQuotaOrRateLimitError(error)) {
+        pauseOpenAI(60);
+        console.warn("OpenAI intent quota — mode heuristic");
+      } else {
+        console.error("OpenAI extractIntent error:", error);
+      }
+      return fallback();
+    }
   }
 
   static async guideChat(
