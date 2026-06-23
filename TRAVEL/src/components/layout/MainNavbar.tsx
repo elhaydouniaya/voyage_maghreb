@@ -5,7 +5,7 @@ import { useState } from "react";
 import { Menu, X } from "lucide-react";
 import { NavbarAuth } from "@/components/auth/NavbarAuth";
 import { usePathname } from "next/navigation";
-import AnimatedLogo from "@/components/brand/AnimatedLogo";
+import StaticLogo from "@/components/brand/StaticLogo";
 
 export default function MainNavbar() {
   const pathname = usePathname();
@@ -23,7 +23,7 @@ export default function MainNavbar() {
   return (
     <>
       <nav className="fixed top-0 w-full bg-white/80 backdrop-blur-md px-6 md:px-12 py-5 flex justify-between items-center z-50 border-b border-gray-50/50">
-        <AnimatedLogo variant="full" theme="light" size="md" />
+        <StaticLogo theme="light" size="md" />
         
         {/* Desktop Menu */}
         <div className="hidden md:flex items-center gap-10 text-[13px] font-bold text-gray-500">

@@ -28,7 +28,11 @@ export default function NewsletterSignup() {
       }
 
       setStatus("ok");
-      setMessage("Merci ! Vérifiez votre boîte mail.");
+      setMessage(
+        data.emailSent === false
+          ? "Inscription enregistrée ! (email de bienvenue en attente)"
+          : "Merci ! Vérifiez votre boîte mail."
+      );
       setEmail("");
     } catch {
       setStatus("error");
@@ -43,8 +47,11 @@ export default function NewsletterSignup() {
         className="flex flex-col sm:flex-row gap-4 max-w-lg mx-auto"
       >
         <input
+          id="newsletter-email"
+          name="email"
           type="email"
           required
+          autoComplete="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="Votre email"

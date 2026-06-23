@@ -139,6 +139,7 @@ async function main() {
   runNpm("typecheck");
   runNpm("test");
   runNpm("health");
+  runNpm("db:cdc");
 
   if (!quick) {
     log("2/4 — Production build");

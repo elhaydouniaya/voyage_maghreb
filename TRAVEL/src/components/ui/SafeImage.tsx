@@ -11,6 +11,7 @@ type SafeImageProps = {
   className?: string;
   sizes?: string;
   destination?: string;
+  priority?: boolean;
 };
 
 export default function SafeImage({
@@ -20,6 +21,7 @@ export default function SafeImage({
   className,
   sizes,
   destination = "",
+  priority,
 }: SafeImageProps) {
   const [current, setCurrent] = useState(src);
 
@@ -30,6 +32,7 @@ export default function SafeImage({
       fill={fill}
       sizes={sizes}
       className={className}
+      priority={priority}
       onError={() => setCurrent(getFallbackImage(destination || alt))}
     />
   );

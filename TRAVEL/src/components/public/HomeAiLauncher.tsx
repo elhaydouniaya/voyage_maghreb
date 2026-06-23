@@ -39,10 +39,13 @@ export default function HomeAiLauncher() {
         voyage publié (seuil 6/18).
       </p>
       <textarea
+        id="home-ai-prompt"
+        name="prompt"
         value={prompt}
         onChange={(e) => setPrompt(e.target.value)}
         rows={2}
         placeholder={placeholder}
+        aria-label="Décrivez votre voyage idéal"
         className="w-full bg-white/10 border border-white/15 rounded-2xl px-5 py-4 text-sm font-medium text-white placeholder:text-gray-500 outline-none focus:ring-2 focus:ring-orange-500/40 resize-none"
       />
       <div className="flex flex-col sm:flex-row gap-3 mt-4">

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { getFallbackImage } from "@/lib/images";
 
 interface DestinationCarouselProps {
   images: string[];
@@ -24,6 +25,9 @@ export default function DestinationCarousel({ images, alt }: DestinationCarousel
         src={images[0]}
         alt={alt}
         className="w-full h-full object-cover transition-transform duration-[2000ms] group-hover:scale-110"
+        onError={(e) => {
+          (e.target as HTMLImageElement).src = getFallbackImage(alt);
+        }}
       />
     );
   }
@@ -38,6 +42,9 @@ export default function DestinationCarousel({ images, alt }: DestinationCarousel
           className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ease-in-out ${
             index === current ? "opacity-100" : "opacity-0"
           } transition-transform duration-[2000ms] group-hover:scale-110`}
+          onError={(e) => {
+            (e.target as HTMLImageElement).src = getFallbackImage(alt);
+          }}
         />
       ))}
       {/* Indicators */}

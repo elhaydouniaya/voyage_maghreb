@@ -10,9 +10,10 @@ import {
   isLlmDisabled,
   llmChatCompletion,
 } from "@/lib/llm";
-import { buildCatalogContext } from "@/lib/catalog-context";
 import { destinationsMatch, normalizeForMatch } from "@/lib/string-similarity";
 import { buildNextDeparturesScores } from "@/lib/match-fallback";
+import { hasSpotsAvailable } from "@/lib/trip-availability";
+import { buildCatalogContext } from "@/lib/catalog-context";
 import { getOpenAIClient, isOpenAIConfigured } from "@/lib/openai";
 import {
   isOpenAIPaused,
@@ -56,40 +57,16 @@ export interface IntentResult {
 
 // ─── Intent engine system prompt (sent verbatim to the LLM) ──────────────────
 
-const INTENT_SYSTEM_PROMPT = `You are a senior AI system architect.
-Your role is ONLY to transform user messages into structured decisions for a travel platform (MaghrebVoyage).
-You are NOT a chatbot. You NEVER respond directly to the user.
+const INTENT_SYSTEM_PROMPT = `Classify MaghrebVoyage user messages for a travel platform. Output ONLY valid JSON — no prose.
 
-STRICT ARCHITECTURE: Next.js → Node.js + Prisma → FastAPI → OpenAI → PostgreSQL + Redis
+Input: user_message + session_context (last_destination, last_budget, last_intent).
 
-CORE RULE: Output ONLY valid JSON. No explanations. No natural language. No extra text.
+Intents: travel_plan | recommendation | booking_request | modification_request | history_query | smalltalk | unknown
+Actions: ask_user (missing info) | call_backend (enough to process) | fetch_history (past trips/messages)
 
-INPUT: user_message (string) + session_context (Redis summary: last_destination, last_budget, last_intent)
+History cues → intent=history_query, action=fetch_history.
+Extract: intent, destination, budget, dates, people, travel_type, missing_information[], action.
 
-YOUR TASK:
-1. Detect user intent
-2. Extract travel entities
-3. Decide system action
-4. Use session_context only for continuity
-5. Detect history requests
-
-SUPPORTED INTENTS: travel_plan | recommendation | booking_request | modification_request | history_query | smalltalk | unknown
-
-ACTION TYPES:
-- ask_user → missing information required
-- call_backend → enough data to process travel logic
-- fetch_history → user requests past data
-
-HISTORY RULE: If user asks "my history", "last trip", "what did I say", "previous trips" → intent=history_query, action=fetch_history
-
-DECISION RULES:
-- If required info is missing → action=ask_user
-- If all required info exists → action=call_backend
-- If history requested → action=fetch_history
-
-DATA TO EXTRACT: intent, destination, budget (number|null), dates (string|null), people (number|null), travel_type (string|null), missing_information (string[]), action
-
-OUTPUT FORMAT (STRICT JSON ONLY):
 {"intent":"","destination":null,"budget":null,"dates":null,"people":null,"travel_type":null,"missing_information":[],"action":""}`;
 
 const GUIDE_SYSTEM_PROMPT = `Tu es le Guide Touristique personnel MaghrebVoyage, réservé aux clients connectés.
@@ -141,6 +118,7 @@ type MatchableTrip = {
   id: string;
   status: string;
   bookedSpots: number;
+  reservedSpots?: number;
   totalSpots: number;
   startDate: string | Date;
   destination: string;
@@ -252,7 +230,7 @@ Réponds UNIQUEMENT en JSON avec: summary, tags (string[]), complexity (1-5), de
 
       // --- PHASE 1: Filtres durs (Éliminatoires) ---
       if (trip.status !== "PUBLISHED") return null;
-      if (trip.bookedSpots >= trip.totalSpots) return null;
+      if (!hasSpotsAvailable(trip, demand.numberOfSeats)) return null;
       
       const tripStartDate = new Date(trip.startDate);
       const now = new Date();
@@ -318,7 +296,7 @@ Réponds UNIQUEMENT en JSON avec: summary, tags (string[]), complexity (1-5), de
       if (tagPoints > 0) reasons.push("Correspond à vos centres d'intérêt");
 
       // 6. Places suffisantes (+1)
-      if (trip.totalSpots - trip.bookedSpots >= demand.numberOfSeats) {
+      if (hasSpotsAvailable(trip, demand.numberOfSeats)) {
         score += 1;
       }
 
@@ -603,7 +581,7 @@ Réponds UNIQUEMENT en JSON avec: summary, tags (string[]), complexity (1-5), de
 
   // ── Intent extraction — Gemini primary ──────────────────────────────────────
 
-  private static async #intentViaGemini(
+  static async #intentViaGemini(
     userMessage: string,
     sessionContext: SessionContext
   ): Promise<IntentResult | null> {
@@ -642,7 +620,7 @@ Réponds UNIQUEMENT en JSON avec: summary, tags (string[]), complexity (1-5), de
 
   // ── Intent extraction — OpenAI fallback ────────────────────────────────────
 
-  private static async #intentViaOpenAI(
+  static async #intentViaOpenAI(
     userMessage: string,
     sessionContext: SessionContext
   ): Promise<IntentResult | null> {
@@ -698,12 +676,29 @@ Réponds UNIQUEMENT en JSON avec: summary, tags (string[]), complexity (1-5), de
 
   // ── Guide chat — Gemini primary ─────────────────────────────────────────────
 
-  private static #buildGuideSystem(ctx: ClientGuideContext): string {
+  static async #buildGuideSystem(
+    ctx: ClientGuideContext,
+    lastUserMessage = ""
+  ): Promise<string> {
     const profile = this.formatContextBlock(ctx);
     const firstName = ctx.userName?.split(" ")[0] ?? "";
     const onboarding = ctx.profile.onboardingComplete
       ? "Profil complet : proposez des suggestions personnalisées et concrètes."
       : "Profil incomplet : posez UNE seule question ciblée (destination, style, budget ou nombre de voyageurs) avant de donner des conseils.";
+
+    let catalogBlock = "";
+    try {
+      catalogBlock = await buildCatalogContext({
+        query: lastUserMessage,
+        destinations: ctx.profile.preferredDestinations,
+        tripTypes: ctx.profile.travelStyles,
+        budgetMax: ctx.profile.budgetMax ?? undefined,
+        limit: 5,
+      });
+    } catch {
+      catalogBlock = "";
+    }
+
     return [
       GUIDE_SYSTEM_PROMPT,
       "",
@@ -711,10 +706,15 @@ Réponds UNIQUEMENT en JSON avec: summary, tags (string[]), complexity (1-5), de
       profile,
       firstName ? `Prénom : ${firstName}.` : "",
       onboarding,
-    ].filter(Boolean).join("\n");
+      catalogBlock
+        ? `\n${catalogBlock}\nCite uniquement ces voyages réels quand vous recommandez une offre précise.`
+        : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
   }
 
-  private static async #guideChatViaGemini(
+  static async #guideChatViaGemini(
     messages: { role: "user" | "assistant"; content: string }[],
     ctx: ClientGuideContext
   ): Promise<string | null> {
@@ -723,9 +723,13 @@ Réponds UNIQUEMENT en JSON avec: summary, tags (string[]), complexity (1-5), de
     if (!genai) return null;
 
     try {
+      const systemInstruction = await this.#buildGuideSystem(
+        ctx,
+        messages[messages.length - 1]?.content || ""
+      );
       const model = genai.getGenerativeModel({
         model: process.env.GEMINI_MODEL || "gemini-1.5-flash",
-        systemInstruction: this.#buildGuideSystem(ctx),
+        systemInstruction,
         generationConfig: { maxOutputTokens: 700, temperature: 0.75 } as object,
       });
 
@@ -750,7 +754,7 @@ Réponds UNIQUEMENT en JSON avec: summary, tags (string[]), complexity (1-5), de
     }
   }
 
-  private static async #guideChatViaOpenAI(
+  static async #guideChatViaOpenAI(
     messages: { role: "user" | "assistant"; content: string }[],
     ctx: ClientGuideContext
   ): Promise<string | null> {
@@ -759,10 +763,14 @@ Réponds UNIQUEMENT en JSON avec: summary, tags (string[]), complexity (1-5), de
     if (!openai) return null;
 
     try {
+      const systemContent = await this.#buildGuideSystem(
+        ctx,
+        messages[messages.length - 1]?.content || ""
+      );
       const completion = await openai.chat.completions.create({
         model: process.env.OPENAI_MODEL || "gpt-4o-mini",
         messages: [
-          { role: "system", content: this.#buildGuideSystem(ctx) },
+          { role: "system", content: systemContent },
           ...messages.slice(-14).map(m => ({ role: m.role as "user" | "assistant", content: m.content })),
         ],
         max_tokens: 650,

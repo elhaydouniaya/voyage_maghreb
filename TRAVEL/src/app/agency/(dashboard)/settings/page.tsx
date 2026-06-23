@@ -451,6 +451,19 @@ function AgencySettingsContent() {
                             Stripe n&apos;est pas configuré sur le serveur (STRIPE_SECRET_KEY).
                           </p>
                         )}
+                        {stripeStatus.configured && !stripeStatus.onboardingComplete && (
+                          <p className="text-xs text-gray-500 font-medium leading-relaxed">
+                            <a
+                              href="https://dashboard.stripe.com/test/connect/overview"
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-orange-600 font-bold hover:underline"
+                            >
+                              Activer Stripe Connect
+                            </a>
+                            {" "}sur votre compte plateforme si le bouton ci-dessous échoue.
+                          </p>
+                        )}
                         {stripeStatus.configured && (
                           <p className="text-xs text-gray-500 font-medium leading-relaxed">
                             Les acomptes clients passent par MaghrebVoyage. Une fois Connect actif,
@@ -475,7 +488,9 @@ function AgencySettingsContent() {
                           });
                           const data = await res.json();
                           if (!res.ok || !data.url) {
-                            setSaveError(data.error || "Lien Stripe indisponible.");
+                            const err = data.error || "Lien Stripe indisponible.";
+                            setStripeMessage(err);
+                            setSaveError(err);
                             return;
                           }
                           window.location.href = data.url;

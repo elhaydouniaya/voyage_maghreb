@@ -317,6 +317,45 @@ async function main() {
     }
   }
 
+  const confirmedBookingCount = await prisma.booking.count({
+    where: { status: "CONFIRMED" },
+  });
+  if (confirmedBookingCount === 0) {
+    const demoClient = await prisma.user.findUnique({
+      where: { email: "client@test.com" },
+      select: { id: true },
+    });
+    const demoTrip = await prisma.groupTrip.findFirst({
+      where: { agencyId: agency.id, slug: "escapade-culturelle-marrakech" },
+      select: { id: true, depositAmount: true, totalPrice: true },
+    });
+    if (demoClient && demoTrip) {
+      const seats = 2;
+      await prisma.booking.create({
+        data: {
+          groupTripId: demoTrip.id,
+          agencyId: agency.id,
+          userId: demoClient.id,
+          clientName: "Jean Client",
+          clientEmail: "client@test.com",
+          clientPhone: "+33600000000",
+          clientCountry: "France",
+          numberOfSeats: seats,
+          depositPaid: Number(demoTrip.depositAmount) * seats,
+          totalAmount: Number(demoTrip.totalPrice) * seats,
+          confirmationCode: "MV-DEMO01",
+          status: "CONFIRMED",
+          expiresAt: null,
+          confirmationEmailSentAt: new Date(),
+        },
+      });
+      await prisma.groupTrip.update({
+        where: { id: demoTrip.id },
+        data: { bookedSpots: { increment: seats } },
+      });
+    }
+  }
+
   const auditCount = await prisma.auditLog.count();
   if (auditCount === 0) {
     const admin = await prisma.user.findUnique({

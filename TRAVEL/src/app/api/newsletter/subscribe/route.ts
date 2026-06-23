@@ -34,19 +34,28 @@ export async function POST(req: Request) {
       update: { source },
     });
 
-    await sendEmail({
-      to: email,
-      subject: "Bienvenue dans l'aventure MaghrebVoyage",
-      title: "Newsletter",
-      html: `
+    let emailSent = false;
+    try {
+      const sent = await sendEmail({
+        to: email,
+        subject: "Bienvenue dans l'aventure MaghrebVoyage",
+        title: "Newsletter",
+        html: `
         <p>Merci pour votre inscription !</p>
         <p>Vous recevrez nos meilleurs itinéraires et offres au Maghreb.</p>
         ${emailButton(`${baseUrl()}/voyages`, "Découvrir les voyages")}
         ${emailButton(`${baseUrl()}/recherche`, "Configurer mon voyage avec l'IA")}
+        <p style="margin-top:24px;font-size:12px;color:#64748b">
+          <a href="${baseUrl()}/api/newsletter/unsubscribe?email=${encodeURIComponent(email)}" style="color:#64748b">Se désinscrire</a>
+        </p>
       `,
-    });
+      });
+      emailSent = sent.ok;
+    } catch (emailError) {
+      console.warn("POST /api/newsletter/subscribe welcome email:", emailError);
+    }
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, emailSent });
   } catch (error) {
     console.error("POST /api/newsletter/subscribe", error);
     return NextResponse.json(

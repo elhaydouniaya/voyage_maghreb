@@ -1,7 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Volume2, VolumeX, Play, Languages } from "lucide-react";
+import { getFallbackImage } from "@/lib/images";
+
+/** Expected when cancel() runs or a new utterance replaces the current one. */
+function isBenignSpeechError(error: string) {
+  return error === "interrupted" || error === "canceled";
+}
 
 const LANGUAGES = {
   fr: {
@@ -71,6 +77,8 @@ export default function MaghrebCarousel({ autoPlay = true, interval = 5000 }: Ma
   const [hasSpoken, setHasSpoken] = useState(false);
   const [speaking, setSpeaking] = useState(false);
   const [showLangMenu, setShowLangMenu] = useState(false);
+  const speechGenRef = useRef(0);
+  const arabicAudioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     if (!isAutoPlay) return;
@@ -100,11 +108,25 @@ export default function MaghrebCarousel({ autoPlay = true, interval = 5000 }: Ma
     setTimeout(() => setIsAutoPlay(autoPlay), 10000);
   };
 
+  const stopSpeech = () => {
+    speechGenRef.current += 1;
+    arabicAudioRef.current?.pause();
+    arabicAudioRef.current = null;
+    if ("speechSynthesis" in window) {
+      try {
+        window.speechSynthesis.cancel();
+      } catch {
+        /* ignore */
+      }
+    }
+    setSpeaking(false);
+  };
+
   const speak = (forceLang?: keyof typeof LANGUAGES) => {
     const currentLang = forceLang || lang;
     const text = LANGUAGES[currentLang].text;
-    
-    if (currentLang === 'ar') {
+
+    if (currentLang === "ar") {
       return speakArabicWithGoogle(text);
     }
 
@@ -112,12 +134,9 @@ export default function MaghrebCarousel({ autoPlay = true, interval = 5000 }: Ma
       console.error("Speech Synthesis not supported");
       return;
     }
-    
-    try {
-      window.speechSynthesis.cancel();
-    } catch (e) {
-      console.error("Error canceling speech:", e);
-    }
+
+    stopSpeech();
+    const gen = speechGenRef.current;
 
     const langCode = LANGUAGES[currentLang].code;
     const utter = new SpeechSynthesisUtterance(text);
@@ -126,19 +145,26 @@ export default function MaghrebCarousel({ autoPlay = true, interval = 5000 }: Ma
     utter.pitch = 1.0;
     utter.volume = 1;
 
-    utter.onstart = () => setSpeaking(true);
-    utter.onend = () => setSpeaking(false);
+    utter.onstart = () => {
+      if (gen === speechGenRef.current) setSpeaking(true);
+    };
+    utter.onend = () => {
+      if (gen === speechGenRef.current) setSpeaking(false);
+    };
     utter.onerror = (e) => {
-      console.error(`❌ Speech error: ${e.error}`);
+      if (gen !== speechGenRef.current) return;
       setSpeaking(false);
+      if (!isBenignSpeechError(e.error)) {
+        console.error(`Speech error: ${e.error}`);
+      }
     };
 
     const voices = window.speechSynthesis.getVoices();
-    const targetLangCode = langCode.split('-')[0];
-    
-    const voice = 
-      voices.find(v => v.lang === langCode) ||
-      voices.find(v => v.lang.startsWith(targetLangCode)) ||
+    const targetLangCode = langCode.split("-")[0];
+
+    const voice =
+      voices.find((v) => v.lang === langCode) ||
+      voices.find((v) => v.lang.startsWith(targetLangCode)) ||
       voices[0];
 
     if (voice) utter.voice = voice;
@@ -154,41 +180,59 @@ export default function MaghrebCarousel({ autoPlay = true, interval = 5000 }: Ma
   };
 
   const speakArabicWithGoogle = (text: string) => {
+    stopSpeech();
+    const gen = speechGenRef.current;
     setSpeaking(true);
     try {
       const encodedText = encodeURIComponent(text);
       const audioUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodedText}&tl=ar&client=tw-ob`;
-      
+
       const audio = new Audio(audioUrl);
-      audio.onplay = () => setSpeaking(true);
-      audio.onended = () => setSpeaking(false);
-      audio.onerror = () => {
-        setSpeaking(false);
-        fallbackToSystemSpeech(text);
+      arabicAudioRef.current = audio;
+      audio.onplay = () => {
+        if (gen === speechGenRef.current) setSpeaking(true);
       };
-      
-      audio.play().catch(() => {
+      audio.onended = () => {
+        if (gen === speechGenRef.current) setSpeaking(false);
+      };
+      audio.onerror = () => {
+        if (gen !== speechGenRef.current) return;
         setSpeaking(false);
-        fallbackToSystemSpeech(text);
+        fallbackToSystemSpeech(text, gen);
+      };
+
+      audio.play().catch(() => {
+        if (gen !== speechGenRef.current) return;
+        setSpeaking(false);
+        fallbackToSystemSpeech(text, gen);
       });
     } catch {
       setSpeaking(false);
-      fallbackToSystemSpeech(text);
+      fallbackToSystemSpeech(text, gen);
     }
     setHasSpoken(true);
   };
 
-  const fallbackToSystemSpeech = (text: string) => {
-    if (!("speechSynthesis" in window)) return;
+  const fallbackToSystemSpeech = (text: string, gen = speechGenRef.current) => {
+    if (!("speechSynthesis" in window) || gen !== speechGenRef.current) return;
     try {
-      window.speechSynthesis.cancel();
       const utter = new SpeechSynthesisUtterance(text);
-      utter.lang = 'ar-SA';
+      utter.lang = "ar-SA";
       utter.rate = 0.8;
       utter.pitch = 0.95;
-      utter.onstart = () => setSpeaking(true);
-      utter.onend = () => setSpeaking(false);
-      utter.onerror = () => setSpeaking(false);
+      utter.onstart = () => {
+        if (gen === speechGenRef.current) setSpeaking(true);
+      };
+      utter.onend = () => {
+        if (gen === speechGenRef.current) setSpeaking(false);
+      };
+      utter.onerror = (e) => {
+        if (gen !== speechGenRef.current) return;
+        setSpeaking(false);
+        if (!isBenignSpeechError(e.error)) {
+          console.error(`Speech error: ${e.error}`);
+        }
+      };
       window.speechSynthesis.speak(utter);
     } catch {
       setSpeaking(false);
@@ -197,10 +241,7 @@ export default function MaghrebCarousel({ autoPlay = true, interval = 5000 }: Ma
 
   const toggleMute = () => {
     if (speaking) {
-      if ("speechSynthesis" in window) {
-        window.speechSynthesis.cancel();
-      }
-      setSpeaking(false);
+      stopSpeech();
     } else {
       speak();
     }
@@ -216,13 +257,15 @@ export default function MaghrebCarousel({ autoPlay = true, interval = 5000 }: Ma
     if ("speechSynthesis" in window) {
       window.speechSynthesis.getVoices();
       const handleVoicesChanged = () => window.speechSynthesis.getVoices();
-      window.speechSynthesis.addEventListener('voiceschanged', handleVoicesChanged);
-      
+      window.speechSynthesis.addEventListener("voiceschanged", handleVoicesChanged);
+
       return () => {
-        window.speechSynthesis.removeEventListener('voiceschanged', handleVoicesChanged);
+        window.speechSynthesis.removeEventListener("voiceschanged", handleVoicesChanged);
+        stopSpeech();
       };
     }
-     
+
+    return () => stopSpeech();
   }, []);
 
   return (
@@ -240,6 +283,9 @@ export default function MaghrebCarousel({ autoPlay = true, interval = 5000 }: Ma
               src={country.image}
               alt={country.name}
               className="w-full h-full object-cover"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = getFallbackImage(country.name);
+              }}
             />
             {/* Overlay with gradient */}
             <div

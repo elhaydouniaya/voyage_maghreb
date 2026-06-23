@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 import { getLlmRuntimeStatus } from "@/lib/llm";
+import { isGeminiConfigured } from "@/lib/gemini";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,9 @@ export async function GET() {
 
   return NextResponse.json({
     ...status,
+    geminiConfigured: isGeminiConfigured(),
     matchingUrl: "/recherche",
-    guideUsesSameEngine: true,
+    guideUsesSameEngine: false,
+    guidePrimary: isGeminiConfigured() ? "gemini" : status.configured ? "llm" : "offline",
   });
 }

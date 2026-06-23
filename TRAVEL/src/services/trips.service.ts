@@ -2,6 +2,7 @@ import prisma from "@/lib/prisma";
 import { generateUniqueSlug } from "@/lib/slug";
 import { generateTripAiTags } from "@/lib/trip-tags";
 import { formatTrip } from "@/lib/trip-format";
+import { hasSpotsAvailable } from "@/lib/trip-availability";
 import { sendTripCancelledToClientEmail } from "@/lib/booking-emails";
 import { resolveAccountEmailForBooking } from "@/lib/account-email";
 import type { PhysicalLevel, TripStatus, TripType } from "@prisma/client";
@@ -93,7 +94,7 @@ export class TripsService {
       return [];
     }
 
-    let filtered = trips.filter((t) => t.bookedSpots < t.totalSpots);
+    let filtered = trips.filter((t) => hasSpotsAvailable(t));
 
     if (filters?.destination && filters.destination !== "Toutes les destinations") {
       filtered = filtered.filter((t) =>
@@ -322,11 +323,43 @@ export class TripsService {
       throw new Error("Votre agence doit être vérifiée pour publier un voyage.");
     }
 
+    const publishing = status === "PUBLISHED" && existing.status === "DRAFT";
+    const aiTags =
+      publishing || (status === "PUBLISHED" && (!existing.aiTags || existing.aiTags.length === 0))
+        ? generateTripAiTags({
+            destination: existing.destination,
+            tripType: existing.tripType,
+            inclusions: existing.inclusions,
+            exclusions: existing.exclusions,
+            physicalLevel: existing.physicalLevel,
+            guideLanguages: existing.guideLanguages,
+            description: existing.description,
+          })
+        : undefined;
+
     const updated = await prisma.groupTrip.update({
       where: { id: tripId },
-      data: { status },
+      data: {
+        status,
+        ...(aiTags ? { aiTags } : {}),
+      },
       include: { agency: true },
     });
+
+    if (publishing) {
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+      try {
+        const { sendTripPublishedEmail } = await import("@/lib/agency-emails");
+        await sendTripPublishedEmail({
+          agencyEmail: updated.agency.email,
+          agencyName: updated.agency.name,
+          tripTitle: updated.title,
+          magicLink: `${appUrl}/trip/${updated.slug}`,
+        });
+      } catch (e) {
+        console.error("Trip published email:", e);
+      }
+    }
 
     return formatTrip(updated);
   }

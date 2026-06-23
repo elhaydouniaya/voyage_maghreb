@@ -1,35 +1,38 @@
+"use client";
+
 import LinkNext from "next/link";
 import { MapPin, ArrowRight } from "lucide-react";
+import { COUNTRY_IMAGES, getFallbackImage } from "@/lib/images";
 
 const destinations = [
   {
     name: "Maroc",
     count: "10 voyages",
-    image: "/maroc.jpg",
+    image: COUNTRY_IMAGES.MAROC[0],
     slug: "maroc",
   },
   {
     name: "Algérie",
     count: "8 voyages",
-    image: "/alger.jpg",
+    image: COUNTRY_IMAGES.ALGERIE[0],
     slug: "algerie",
   },
   {
     name: "Tunisie",
     count: "6 voyages",
-    image: "/tunisie.jpg",
+    image: COUNTRY_IMAGES.TUNISIE[0],
     slug: "tunisie",
   },
   {
     name: "Libye",
     count: "4 voyages",
-    image: "/libye_capi.jpg",
+    image: COUNTRY_IMAGES.LIBYE[0],
     slug: "libye",
   },
   {
     name: "Mauritanie",
     count: "5 voyages",
-    image: "/chinguetti_libye.jpg",
+    image: COUNTRY_IMAGES.MAURITANIE[0],
     slug: "mauritanie",
   },
 ];
@@ -59,6 +62,9 @@ export default function DestinationsSection() {
                 src={dest.image}
                 alt={dest.name}
                 className="absolute inset-0 w-full h-full object-cover transition-transform duration-[2000ms] group-hover:scale-110"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = getFallbackImage(dest.name);
+                }}
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
               <div className="absolute bottom-10 left-10 right-10">

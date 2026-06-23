@@ -7,6 +7,7 @@ import SafeImage from "@/components/ui/SafeImage";
 import { formatPriceShort } from "@/lib/currency";
 import { sanitizeImageUrl } from "@/lib/images";
 import { groupTripsBySeason } from "@/lib/seasons";
+import { getSpotsLeft } from "@/lib/trip-availability";
 import type { Season } from "@/lib/seasons";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -21,6 +22,8 @@ interface Trip {
   coverImage: string;
   totalSpots: number;
   bookedSpots: number;
+  reservedSpots?: number;
+  spotsLeft?: number;
   season?: Season;
 }
 
@@ -63,7 +66,7 @@ function CardSkeleton() {
 
 function HeroCard({ trip, alone }: { trip: Trip; alone?: boolean }) {
   const cover     = sanitizeImageUrl(trip.coverImage, trip.destination);
-  const spotsLeft = Math.max(0, (trip.totalSpots || 0) - (trip.bookedSpots || 0));
+  const spotsLeft = trip.spotsLeft ?? getSpotsLeft(trip);
   const typeLabel = TYPE_LABELS[trip.tripType] || trip.tripType;
 
   return (
@@ -227,7 +230,9 @@ export default function CinematicShowcase() {
     fetch("/api/trips")
       .then(r => r.json())
       .then(data => {
-        const published = (data.trips || []).filter((t: any) => t.status === "PUBLISHED");
+        const published = (data.trips || []).filter(
+          (t: Trip & { status?: string }) => t.status === "PUBLISHED"
+        );
         const grouped   = groupTripsBySeason(published) as Record<Season, Trip[]>;
         setAllGrouped(grouped);
 

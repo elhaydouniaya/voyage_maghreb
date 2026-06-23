@@ -1,5 +1,12 @@
 import prisma from "@/lib/prisma";
+import { isCloudinaryConfigured } from "@/lib/cloudinary";
 import { getLlmProviderLabel, isLlmConfigured } from "@/lib/llm";
+import { isGeminiConfigured } from "@/lib/gemini";
+import {
+  getVapiWebhookUrl,
+  isVapiConfigured,
+  isVapiWebhookReady,
+} from "@/lib/vapi-config";
 
 export function isEmailConfigured() {
   return Boolean(process.env.RESEND_API_KEY?.trim());
@@ -77,12 +84,19 @@ export function getSystemIntegrationsStatus() {
         process.env.OPENAI_MODEL?.trim() ||
         "gpt-4o-mini",
     },
+    gemini: {
+      configured: isGeminiConfigured(),
+      disabled: process.env.GEMINI_DISABLE === "true",
+      model: process.env.GEMINI_MODEL?.trim() || "gemini-1.5-flash",
+    },
+    cloudinary: {
+      configured: isCloudinaryConfigured(),
+      cloudName: process.env.CLOUDINARY_CLOUD_NAME?.trim() || null,
+    },
     vapi: {
-      configured: Boolean(
-        process.env.NEXT_PUBLIC_VAPI_PUBLIC_KEY?.trim() &&
-          process.env.NEXT_PUBLIC_VAPI_ASSISTANT_ID?.trim()
-      ),
-      webhookSecretSet: Boolean(process.env.VAPI_WEBHOOK_SECRET?.trim()),
+      configured: isVapiConfigured(),
+      webhookSecretSet: isVapiWebhookReady(),
+      webhookUrl: getVapiWebhookUrl(),
     },
     /** @deprecated use integrations.llm */
     openai: {

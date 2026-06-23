@@ -1,5 +1,6 @@
 import { stripe } from "@/lib/stripe";
 import { isStripeConfigured } from "@/lib/payments-config";
+import { formatStripeConnectError } from "@/lib/stripe-errors";
 import prisma from "@/lib/prisma";
 
 const COUNTRY_MAP: Record<string, string> = {
@@ -121,25 +122,29 @@ export class StripeConnectService {
 
     if (!accountId) {
       const country = resolveConnectCountry(agency.country);
-      const account = await stripe.accounts.create({
-        type: "express",
-        country,
-        email: agency.email,
-        capabilities: {
-          card_payments: { requested: true },
-          transfers: { requested: true },
-        },
-        business_type: "company",
-        metadata: {
-          agencyId: agency.id,
-          agencyName: agency.name,
-        },
-      });
-      accountId = account.id;
-      await prisma.agency.update({
-        where: { id: agencyId },
-        data: { stripeConnectAccountId: accountId },
-      });
+      try {
+        const account = await stripe.accounts.create({
+          type: "express",
+          country,
+          email: agency.email,
+          capabilities: {
+            card_payments: { requested: true },
+            transfers: { requested: true },
+          },
+          business_type: "company",
+          metadata: {
+            agencyId: agency.id,
+            agencyName: agency.name,
+          },
+        });
+        accountId = account.id;
+        await prisma.agency.update({
+          where: { id: agency.id },
+          data: { stripeConnectAccountId: accountId },
+        });
+      } catch (error) {
+        throw new Error(formatStripeConnectError(error));
+      }
     }
 
     const link = await stripe.accountLinks.create({

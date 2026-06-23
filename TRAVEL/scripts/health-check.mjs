@@ -66,6 +66,7 @@ async function run() {
   const envOptional = [
     "GROQ_API_KEY",
     "OPENAI_API_KEY",
+    "GEMINI_API_KEY",
     "RESEND_API_KEY",
     "STRIPE_SECRET_KEY",
     "STRIPE_WEBHOOK_SECRET",
@@ -74,7 +75,11 @@ async function run() {
     "GOOGLE_CLIENT_ID",
     "GOOGLE_CLIENT_SECRET",
     "NEXT_PUBLIC_VAPI_PUBLIC_KEY",
+    "NEXT_PUBLIC_VAPI_ASSISTANT_ID",
     "VAPI_WEBHOOK_SECRET",
+    "CLOUDINARY_CLOUD_NAME",
+    "CLOUDINARY_API_KEY",
+    "CLOUDINARY_API_SECRET",
     "ADMIN_NOTIFY_EMAIL",
   ];
   checks.push({
@@ -125,11 +130,26 @@ async function run() {
   if (!process.env.GROQ_API_KEY?.trim()) {
     recommendations.push("GROQ_API_KEY — recommandé (Llama via Groq, voir PRODUCTION_CHECKLIST.md)");
   }
+  if (!process.env.GEMINI_API_KEY?.trim() && process.env.GEMINI_DISABLE !== "true") {
+    recommendations.push("GEMINI_API_KEY — guide client + intent (fallback OpenAI/offline)");
+  }
   if (
     !process.env.NEXT_PUBLIC_VAPI_PUBLIC_KEY?.trim() ||
+    !process.env.NEXT_PUBLIC_VAPI_ASSISTANT_ID?.trim() ||
     !process.env.VAPI_WEBHOOK_SECRET?.trim()
   ) {
-    recommendations.push("VAPI — optionnel (guide vocal)");
+    recommendations.push(
+      "VAPI — guide vocal : NEXT_PUBLIC_VAPI_PUBLIC_KEY + ASSISTANT_ID + webhook sur dashboard.vapi.ai"
+    );
+  }
+  const cloudinaryReady =
+    Boolean(process.env.CLOUDINARY_CLOUD_NAME?.trim()) &&
+    Boolean(process.env.CLOUDINARY_API_KEY?.trim()) &&
+    Boolean(process.env.CLOUDINARY_API_SECRET?.trim());
+  if (!cloudinaryReady) {
+    recommendations.push(
+      "CLOUDINARY_* — uploads agence en prod (sinon public/uploads en dev uniquement)"
+    );
   }
   if (recommendations.length) {
     checks.push({ name: "recommendations", ok: true, items: recommendations });

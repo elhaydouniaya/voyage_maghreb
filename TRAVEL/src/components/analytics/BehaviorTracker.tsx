@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { inferJourneyStepFromPath } from "@/lib/behavior-events";
+import { createClientSessionId } from "@/lib/client-id";
 
 const SESSION_KEY = "mv_analytics_session";
 
@@ -10,7 +11,7 @@ function getSessionId(): string {
   if (typeof window === "undefined") return "";
   let id = sessionStorage.getItem(SESSION_KEY);
   if (!id) {
-    id = crypto.randomUUID();
+    id = createClientSessionId();
     sessionStorage.setItem(SESSION_KEY, id);
   }
   return id;

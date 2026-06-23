@@ -25,6 +25,7 @@
 !/public/uploads/.gitkeep
 
 # misc
+/scratch/
 .DS_Store
 *.pem
 

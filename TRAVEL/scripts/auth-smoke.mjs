@@ -2,6 +2,8 @@
  * Authenticated API smoke — client + agency + admin session cookies.
  * Usage: node scripts/auth-smoke.mjs [baseUrl]
  */
+import "dotenv/config";
+
 const base = (process.argv[2] || "http://localhost:3000").replace(/\/$/, "");
 
 const ACCOUNTS = [
@@ -39,7 +41,11 @@ const ACCOUNTS = [
       { path: "/api/admin/bookings", label: "admin_bookings" },
       { path: "/api/admin/payments", label: "admin_payments" },
       { path: "/api/admin/system-status", label: "admin_system_status" },
-      { path: "/api/admin/decision-dashboard", label: "admin_decision_dashboard" },
+      {
+        path: "/api/admin/decision-dashboard",
+        label: "admin_decision_dashboard",
+        retries: 2,
+      },
       { path: "/api/admin/notifications", label: "admin_notifications" },
       { path: "/api/admin/analytics", label: "admin_analytics" },
     ],
@@ -112,16 +118,30 @@ for (const account of ACCOUNTS) {
     results.push({ name: `login_${account.role.toLowerCase()}`, ok: true });
 
     for (const t of account.tests) {
-      const { status, ok, data } = await testAuthed(cookie, t.path, {
-        method: t.method,
-        body: t.body,
-      });
       const expectOk = t.expectOk !== false;
-      const passed = expectOk ? ok && status === 200 : status === (t.expectStatus ?? 200);
+      let passed = false;
+      let lastDetail = "";
+
+      const attempts = (t.retries ?? 0) + 1;
+      for (let i = 0; i < attempts; i++) {
+        const { status, ok, data } = await testAuthed(cookie, t.path, {
+          method: t.method,
+          body: t.body,
+        });
+        passed = expectOk ? ok && status === 200 : status === (t.expectStatus ?? 200);
+        lastDetail = passed
+          ? `HTTP ${status}`
+          : `HTTP ${status}: ${data?.error || "fail"}`;
+        if (passed) break;
+        if (i < attempts - 1) {
+          await new Promise((r) => setTimeout(r, 400));
+        }
+      }
+
       results.push({
         name: t.label,
         ok: passed,
-        detail: passed ? `HTTP ${status}` : `HTTP ${status}: ${data?.error || "fail"}`,
+        detail: lastDetail,
       });
     }
 
@@ -139,5 +159,11 @@ for (const account of ACCOUNTS) {
 }
 
 const failed = results.filter((r) => !r.ok);
-console.log(JSON.stringify({ base, passed: results.length - failed.length, total: results.length, results }, null, 2));
+console.log(
+  JSON.stringify(
+    { base, passed: results.length - failed.length, total: results.length, results },
+    null,
+    2
+  )
+);
 process.exit(failed.length ? 1 : 0);

@@ -1,6 +1,7 @@
 import type { Agency, GroupTrip } from "@prisma/client";
 import { sanitizeImageUrl } from "@/lib/images";
 import { getSeasonFromDate } from "@/lib/seasons";
+import { getSpotsLeft } from "@/lib/trip-availability";
 
 export type TripWithAgency = GroupTrip & { agency?: Agency | null };
 
@@ -27,6 +28,8 @@ export function formatTrip(trip: TripWithAgency) {
     currency: trip.currency,
     totalSpots: trip.totalSpots,
     bookedSpots: trip.bookedSpots,
+    reservedSpots: trip.reservedSpots ?? 0,
+    spotsLeft: getSpotsLeft(trip),
     tripType: trip.tripType,
     season: trip.season ?? getSeasonFromDate(trip.startDate),
     inclusions: trip.inclusions,

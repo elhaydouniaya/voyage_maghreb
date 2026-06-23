@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth-options";
 import { BehaviorAnalyticsService } from "@/services/behavior-analytics.service";
 import { hashIp, inferJourneyStepFromPath } from "@/lib/behavior-events";
 import { getClientIp, rateLimit } from "@/lib/rate-limit";
+import { resolveSessionUserId } from "@/lib/session-user";
 import type { JourneyStep, Prisma } from "@prisma/client";
 
 const ALLOWED_STEPS: JourneyStep[] = [
@@ -38,6 +39,7 @@ export async function POST(request: Request) {
     };
 
     const session = await getServerSession(authOptions);
+    const userId = await resolveSessionUserId(session);
     let step = body.step;
     if (!step && body.path) {
       step = inferJourneyStepFromPath(body.path) ?? undefined;
@@ -51,8 +53,8 @@ export async function POST(request: Request) {
       step,
       path: body.path?.slice(0, 500),
       sessionId: body.sessionId?.slice(0, 64),
-      userId: session?.user?.id,
-      role: session?.user?.role,
+      userId,
+      role: userId ? session?.user?.role : undefined,
       metadata: body.metadata as Prisma.InputJsonValue | undefined,
       ipHash: hashIp(ip),
       durationMs: body.durationMs,

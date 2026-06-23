@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { MapPin, Calendar, Check, Sparkles, Heart, ChevronRight } from "lucide-react";
 import { getFallbackImage } from "@/lib/images";
 import { formatPriceShort } from "@/lib/currency";
+import { getSpotsLeft } from "@/lib/trip-availability";
 
 interface TripCardProps {
   trip: {
@@ -17,6 +18,8 @@ interface TripCardProps {
     startDate: string;
     totalPrice: number;
     bookedSpots: number;
+    reservedSpots?: number;
+    spotsLeft?: number;
     totalSpots: number;
     tripType: string;
     status?: string;
@@ -29,7 +32,8 @@ export default function TripCard({ trip }: TripCardProps) {
   const { data: session } = useSession();
   const router = useRouter();
   const [isFavorited, setIsFavorited] = useState(false);
-  const spotsLeft = trip.totalSpots - trip.bookedSpots;
+  const spotsLeft =
+    trip.spotsLeft ?? getSpotsLeft(trip);
   const fillingPercentage = (trip.bookedSpots / trip.totalSpots) * 100;
   const isSoldOut = spotsLeft <= 0 || trip.status === "FULL";
   const isAlmostFull =

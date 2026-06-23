@@ -14,9 +14,60 @@ type Integrations = {
     provider: string;
     model: string;
   };
-  vapi: { configured: boolean; webhookSecretSet: boolean };
+  gemini?: { configured: boolean; disabled: boolean; model: string };
+  vapi: { configured: boolean; webhookSecretSet: boolean; webhookUrl?: string };
+  cloudinary?: { configured: boolean; cloudName: string | null };
+  stripeConnect?: {
+    platformKeysSet: boolean;
+    agenciesActive: number;
+    agenciesPending: number;
+    agenciesVerified: number;
+    setupUrl: string;
+  };
   openai?: { configured: boolean; disabled: boolean };
 };
+
+type SetupSteps = {
+  gemini: string[];
+  vapi: string[];
+  stripeConnect: string[];
+};
+
+function SetupGuide({
+  title,
+  ok,
+  steps,
+  link,
+}: {
+  title: string;
+  ok: boolean;
+  steps: string[];
+  link?: { href: string; label: string };
+}) {
+  if (ok) return null;
+  return (
+    <div className="p-5 rounded-2xl border border-amber-100 bg-amber-50/80 space-y-3">
+      <p className="text-xs font-black uppercase tracking-widest text-amber-900">
+        Configuration — {title}
+      </p>
+      <ol className="list-decimal list-inside space-y-1.5 text-[11px] font-medium text-amber-900/90">
+        {steps.map((step) => (
+          <li key={step}>{step}</li>
+        ))}
+      </ol>
+      {link && (
+        <a
+          href={link.href}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-block text-[10px] font-black uppercase tracking-widest text-orange-700 hover:underline"
+        >
+          {link.label} →
+        </a>
+      )}
+    </div>
+  );
+}
 
 function PartnerNewsletterPanel() {
   const [digest, setDigest] = useState<{
@@ -97,6 +148,7 @@ function PartnerNewsletterPanel() {
 function IntegrationsStatusPanel() {
   const [data, setData] = useState<{
     integrations: Integrations;
+    setupSteps?: SetupSteps;
     adminNotifyEmail: string | null;
   } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -118,9 +170,14 @@ function IntegrationsStatusPanel() {
   }
 
   const i = data?.integrations;
+  const steps = data?.setupSteps;
   if (!i) {
     return <p className="text-sm text-red-600 font-bold">Impossible de charger le statut.</p>;
   }
+
+  const geminiOk = Boolean(i.gemini?.configured && !i.gemini?.disabled);
+  const vapiOk = Boolean(i.vapi?.configured && i.vapi?.webhookSecretSet);
+  const connectOk = (i.stripeConnect?.agenciesActive ?? 0) > 0;
 
   const rows = [
     {
@@ -133,7 +190,18 @@ function IntegrationsStatusPanel() {
     {
       label: "Paiements (Stripe)",
       ok: i.stripe.configured,
-      detail: i.stripe.configured ? "Clés configurées" : "Mode démo (sans Stripe)",
+      detail: i.stripe.configured ? "Clés configurées (checkout client)" : "Mode démo (sans Stripe)",
+    },
+    {
+      label: "Stripe Connect (agences)",
+      ok: connectOk,
+      detail: connectOk
+        ? `${i.stripeConnect?.agenciesActive} agence(s) avec encaissements actifs`
+        : i.stripeConnect?.agenciesPending
+          ? `${i.stripeConnect.agenciesPending} onboarding en cours — terminez sur Stripe`
+          : i.stripe.configured
+            ? "Connect non finalisé — activez Connect sur Stripe puis onboarding agence"
+            : "Clés Stripe manquantes",
     },
     {
       label: "Cron J-7",
@@ -143,7 +211,7 @@ function IntegrationsStatusPanel() {
         : "CRON_SECRET manquant (obligatoire en production)",
     },
     {
-      label: `IA guide (${i.llm?.provider || "LLM"})`,
+      label: `IA matching (${i.llm?.provider || "LLM"})`,
       ok: i.llm?.configured && !i.llm?.disabled,
       detail: i.llm?.disabled
         ? "Désactivé (OPENAI_DISABLE=true)"
@@ -152,13 +220,29 @@ function IntegrationsStatusPanel() {
           : "Mode local (heuristique)",
     },
     {
+      label: "Gemini (guide client)",
+      ok: geminiOk,
+      detail: geminiOk
+        ? `Actif · ${i.gemini?.model}`
+        : i.gemini?.disabled
+          ? "GEMINI_DISABLE=true"
+          : "GEMINI_API_KEY manquant — fallback OpenAI/offline",
+    },
+    {
       label: "VAPI (guide vocal)",
-      ok: i.vapi?.configured && i.vapi?.webhookSecretSet,
-      detail: i.vapi?.configured
-        ? i.vapi.webhookSecretSet
-          ? "Widget + webhook configurés"
-          : "Widget OK — ajoutez VAPI_WEBHOOK_SECRET"
-        : "NEXT_PUBLIC_VAPI_* non définis",
+      ok: vapiOk,
+      detail: vapiOk
+        ? `Widget + webhook · ${i.vapi.webhookUrl || "/api/vapi/webhook"}`
+        : !i.vapi?.configured
+          ? "NEXT_PUBLIC_VAPI_PUBLIC_KEY + ASSISTANT_ID manquants"
+          : "Webhook secret OK — ajoutez clés VAPI côté client",
+    },
+    {
+      label: "Cloudinary (images agence)",
+      ok: Boolean(i.cloudinary?.configured),
+      detail: i.cloudinary?.configured
+        ? `Actif · ${i.cloudinary.cloudName}`
+        : "CLOUDINARY_* manquants — uploads locaux en dev uniquement",
     },
   ];
 
@@ -193,6 +277,31 @@ function IntegrationsStatusPanel() {
           </li>
         ))}
       </ul>
+      {steps && (
+        <div className="space-y-4 pt-2">
+          <SetupGuide
+            title="Gemini"
+            ok={geminiOk}
+            steps={steps.gemini}
+            link={{ href: "https://aistudio.google.com/apikey", label: "Google AI Studio" }}
+          />
+          <SetupGuide
+            title="VAPI vocal"
+            ok={vapiOk}
+            steps={steps.vapi}
+            link={{ href: "https://dashboard.vapi.ai", label: "Dashboard VAPI" }}
+          />
+          <SetupGuide
+            title="Stripe Connect"
+            ok={connectOk}
+            steps={steps.stripeConnect}
+            link={{
+              href: i.stripeConnect?.setupUrl || "https://dashboard.stripe.com/test/connect/overview",
+              label: "Activer Connect (test)",
+            }}
+          />
+        </div>
+      )}
       <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
         Obtenez une clé sur{" "}
         <a href="https://resend.com" className="text-orange-600 hover:underline" target="_blank" rel="noreferrer">
@@ -285,6 +394,8 @@ export default function AdminSettingsPage() {
                       Nom affiché
                     </label>
                     <input
+                      id="admin-display-name"
+                      name="name"
                       type="text"
                       value={form.name}
                       onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
@@ -296,6 +407,8 @@ export default function AdminSettingsPage() {
                       Email (lecture seule)
                     </label>
                     <input
+                      id="admin-email"
+                      name="email"
                       type="email"
                       value={form.email}
                       disabled

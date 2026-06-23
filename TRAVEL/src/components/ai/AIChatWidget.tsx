@@ -7,6 +7,12 @@ import Link from "next/link";
 
 type ChatMessage = { role: "bot" | "user"; content: string };
 
+type IntentContext = {
+  last_destination?: string | null;
+  last_budget?: number | null;
+  last_intent?: string | null;
+};
+
 const BASIC_WELCOME =
   "Bonjour ! Je suis votre guide MaghrebVoyage 🌍\n\nJe peux vous donner des infos générales sur nos destinations au Maghreb. Pour un guide personnalisé qui mémorise vos préférences, connectez-vous à votre compte voyageur !";
 
@@ -30,6 +36,7 @@ const AIChatWidget = ({ variant = "floating" }: AIChatWidgetProps) => {
   const [profileHint, setProfileHint] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const loadedRef = useRef(false);
+  const intentContextRef = useRef<IntentContext>({});
 
   const loadFromServer = useCallback(async () => {
     if (!isClient) return;
@@ -52,7 +59,20 @@ const AIChatWidget = ({ variant = "floating" }: AIChatWidgetProps) => {
       setSuggestions(data.suggestions || []);
       const dests = data.profile?.preferredDestinations || [];
       if (dests.length > 0) setProfileHint(dests.join(" · "));
-      setGuideMode("offline");
+
+      try {
+        const statusRes = await fetch("/api/user/ai-status");
+        if (statusRes.ok) {
+          const st = await statusRes.json();
+          if (st.geminiConfigured) setGuideMode("gemini");
+          else if (st.configured) setGuideMode("openai");
+          else setGuideMode("offline");
+        } else {
+          setGuideMode(data.mode === "llm" ? "openai" : "offline");
+        }
+      } catch {
+        setGuideMode(data.mode === "llm" ? "openai" : "offline");
+      }
     } catch {
       setError("Connexion au guide impossible.");
       setGuideMode("offline");
@@ -95,6 +115,28 @@ const AIChatWidget = ({ variant = "floating" }: AIChatWidgetProps) => {
     }));
 
     try {
+      try {
+        const intentRes = await fetch("/api/ai/intent", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            user_message: messageText,
+            session_context: intentContextRef.current,
+          }),
+        });
+        if (intentRes.ok) {
+          const intent = await intentRes.json();
+          intentContextRef.current = {
+            last_destination:
+              intent.destination ?? intentContextRef.current.last_destination,
+            last_budget: intent.budget ?? intentContextRef.current.last_budget,
+            last_intent: intent.intent,
+          };
+        }
+      } catch {
+        /* intent is best-effort */
+      }
+
       const endpoint = isClient ? "/api/ai/guide-chat" : "/api/ai/basic-chat";
       const res = await fetch(endpoint, {
         method: "POST",
@@ -230,12 +272,15 @@ const AIChatWidget = ({ variant = "floating" }: AIChatWidgetProps) => {
           <div className="p-6 bg-white border-t border-gray-100">
             <div className="relative">
               <input
+                id="ai-chat-message"
+                name="message"
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSend()}
                 placeholder={isClient ? "Parlez-moi de votre voyage idéal..." : "Posez votre question sur le Maghreb..."}
                 title="Votre message au guide"
+                autoComplete="off"
                 className="w-full bg-[#F8FAFC] border border-gray-100 rounded-xl pl-4 pr-12 py-4 text-xs font-bold outline-none focus:ring-2 focus:ring-orange-500/10 transition-all"
               />
               <button

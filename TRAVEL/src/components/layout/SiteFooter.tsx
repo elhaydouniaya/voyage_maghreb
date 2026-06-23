@@ -1,5 +1,5 @@
 import Link from "next/link";
-import AnimatedLogo from "@/components/brand/AnimatedLogo";
+import StaticLogo from "@/components/brand/StaticLogo";
 
 const LEGAL_LINKS = [
   { href: "/legal/mentions", label: "Mentions légales" },
@@ -20,11 +20,7 @@ export default function SiteFooter({ variant = "light" }: { variant?: "light" | 
       }
     >
       <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-10">
-        <AnimatedLogo
-          variant="full"
-          theme={isDark ? "dark" : "light"}
-          size="md"
-        />
+        <StaticLogo theme={isDark ? "dark" : "light"} size="md" />
 
         <div className="flex flex-wrap justify-center gap-6 md:gap-8">
           {LEGAL_LINKS.map((link) => (

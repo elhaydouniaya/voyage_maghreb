@@ -37,6 +37,10 @@ export default function CheckoutPage() {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [consents, setConsents] = useState({
+    acceptCgu: false,
+    acceptRgpd: false,
+  });
 
   useEffect(() => {
     const data = localStorage.getItem("pending_booking");
@@ -76,6 +80,10 @@ export default function CheckoutPage() {
 
   const handlePayment = async () => {
     if (!booking) return;
+    if (!consents.acceptCgu || !consents.acceptRgpd) {
+      setError("Veuillez accepter les CGU et la politique de confidentialité.");
+      return;
+    }
     setIsLoading(true);
     setError("");
 
@@ -87,8 +95,8 @@ export default function CheckoutPage() {
           groupTripId: booking.tripId,
           ...traveler,
           numberOfSeats: booking.numberOfSeats || 1,
-          acceptCgu: Boolean(booking.acceptCgu ?? true),
-          acceptRgpd: Boolean(booking.acceptRgpd ?? true),
+          acceptCgu: true,
+          acceptRgpd: true,
           travelRequestId: loadTravelRequestId() || undefined,
         }),
       });
@@ -308,6 +316,41 @@ export default function CheckoutPage() {
                 </div>
 
                 {error && <p className="text-red-600 text-sm font-bold text-center">{error}</p>}
+
+                <div className="space-y-3 text-left">
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={consents.acceptCgu}
+                      onChange={(e) =>
+                        setConsents((c) => ({ ...c, acceptCgu: e.target.checked }))
+                      }
+                      className="mt-1 accent-orange-600"
+                    />
+                    <span className="text-xs text-gray-600 font-medium">
+                      J&apos;accepte les{" "}
+                      <Link href="/legal/cgu" className="text-orange-600 underline">
+                        conditions générales
+                      </Link>
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={consents.acceptRgpd}
+                      onChange={(e) =>
+                        setConsents((c) => ({ ...c, acceptRgpd: e.target.checked }))
+                      }
+                      className="mt-1 accent-orange-600"
+                    />
+                    <span className="text-xs text-gray-600 font-medium">
+                      J&apos;accepte la{" "}
+                      <Link href="/legal/confidentialite" className="text-orange-600 underline">
+                        politique de confidentialité (RGPD)
+                      </Link>
+                    </span>
+                  </label>
+                </div>
 
                 <div className="pt-6">
                   <button

@@ -9,6 +9,34 @@ import { sendTravelRequestReceivedEmail } from "@/lib/booking-emails";
 
 export const dynamic = "force-dynamic";
 
+/** VAPI / browser health probe (tool calls use POST). */
+export async function GET() {
+  return NextResponse.json({
+    ok: true,
+    service: "maghrebvoyage-vapi-webhook",
+    methods: ["POST"],
+  });
+}
+
+const IGNORED_MESSAGE_TYPES = new Set([
+  "ping",
+  "status-update",
+  "conversation-update",
+  "speech-update",
+  "transcript",
+  "hang",
+  "end-of-call-report",
+]);
+
+function normalizeSignature(signature: string): string {
+  const trimmed = signature.trim();
+  if (trimmed.includes("=")) {
+    const [, value] = trimmed.split("=", 2);
+    return (value || trimmed).trim();
+  }
+  return trimmed;
+}
+
 function verifyVapiSignature(raw: string, signature: string | null): boolean {
   const secret = process.env.VAPI_WEBHOOK_SECRET?.trim();
   if (!secret) return process.env.NODE_ENV !== "production";
@@ -19,13 +47,15 @@ function verifyVapiSignature(raw: string, signature: string | null): boolean {
     .update(raw)
     .digest("hex");
 
+  const received = normalizeSignature(signature);
+
   try {
-    return crypto.timingSafeEqual(
-      Buffer.from(signature),
-      Buffer.from(expected)
-    );
+    const a = Buffer.from(received, "utf8");
+    const b = Buffer.from(expected, "utf8");
+    if (a.length !== b.length) return false;
+    return crypto.timingSafeEqual(a, b);
   } catch {
-    return signature === expected;
+    return received === expected;
   }
 }
 
@@ -109,6 +139,12 @@ export async function POST(req: Request) {
     body = JSON.parse(raw);
   } catch {
     return NextResponse.json({ error: "JSON invalide." }, { status: 400 });
+  }
+
+  const message = body.message as Record<string, unknown> | undefined;
+  const messageType = String(message?.type || body.type || "").toLowerCase();
+  if (messageType && IGNORED_MESSAGE_TYPES.has(messageType)) {
+    return NextResponse.json({ ok: true });
   }
 
   const toolCalls = extractToolCalls(body);

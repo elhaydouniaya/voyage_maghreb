@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 import { getClientIp, rateLimit } from "@/lib/rate-limit";
+import { resolveSessionUserId } from "@/lib/session-user";
 import { AIService } from "@/services/ai.service";
 import { GuideProfileService } from "@/services/guide-profile.service";
 import { getLlmRuntimeStatus } from "@/lib/llm";
@@ -11,12 +12,16 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
+  const userId = await resolveSessionUserId(session);
 
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Connexion requise." }, { status: 401 });
+  if (!userId) {
+    return NextResponse.json(
+      { error: session?.user?.id ? "Session expirée. Reconnectez-vous." : "Connexion requise." },
+      { status: 401 }
+    );
   }
 
-  if (session.user.role !== "CLIENT") {
+  if (session!.user.role !== "CLIENT") {
     return NextResponse.json(
       { error: "Ce guide est réservé aux comptes voyageurs." },
       { status: 403 }
@@ -25,10 +30,10 @@ export async function GET() {
 
   try {
     const ctx = await GuideProfileService.buildContext(
-      session.user.id,
-      session.user.name || undefined
+      userId,
+      session!.user.name || undefined
     );
-    const dbMessages = await GuideProfileService.getRecentMessages(session.user.id);
+    const dbMessages = await GuideProfileService.getRecentMessages(userId);
 
     const messages =
       dbMessages.length > 0
@@ -68,12 +73,16 @@ export async function POST(request: Request) {
   }
 
   const session = await getServerSession(authOptions);
+  const userId = await resolveSessionUserId(session);
 
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Connexion requise." }, { status: 401 });
+  if (!userId) {
+    return NextResponse.json(
+      { error: session?.user?.id ? "Session expirée. Reconnectez-vous." : "Connexion requise." },
+      { status: 401 }
+    );
   }
 
-  if (session.user.role !== "CLIENT") {
+  if (session!.user.role !== "CLIENT") {
     return NextResponse.json(
       { error: "Ce guide est réservé aux comptes voyageurs." },
       { status: 403 }
@@ -96,12 +105,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Message vide." }, { status: 400 });
     }
 
-    const userId = session.user.id;
     await GuideProfileService.appendMessage(userId, "user", last.content.trim());
 
     const ctx = await GuideProfileService.buildContext(
       userId,
-      session.user.name || undefined
+      session!.user.name || undefined
     );
 
     const { reply, mode } = await AIService.guideChat(messages.slice(-14), ctx);
@@ -114,7 +122,7 @@ export async function POST(request: Request) {
 
     const updatedCtx = await GuideProfileService.buildContext(
       userId,
-      session.user.name || undefined
+      session!.user.name || undefined
     );
 
     const engine = getLlmRuntimeStatus();

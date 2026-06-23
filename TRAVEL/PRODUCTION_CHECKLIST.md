@@ -5,6 +5,7 @@
 ```bash
 cd TRAVEL
 npx prisma migrate deploy
+npm run db:cdc      # vérifie schéma CDC (entités + colonnes critiques)
 npm run health
 ```
 

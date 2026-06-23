@@ -21,6 +21,7 @@ import BookingForm from "@/components/booking/BookingForm";
 import Breadcrumbs from "@/components/ui/Breadcrumbs";
 import SafeImage from "@/components/ui/SafeImage";
 import { formatPriceShort } from "@/lib/currency";
+import { getSpotsLeft } from "@/lib/trip-availability";
 import {
   parseProgramDays,
   splitProgramAndCancelPolicy,
@@ -52,6 +53,8 @@ type TripDetail = {
   exclusions: string[];
   totalSpots: number;
   bookedSpots: number;
+  reservedSpots?: number;
+  spotsLeft?: number;
   status?: string;
   totalPrice: number;
   depositAmount: number;
@@ -75,8 +78,17 @@ export default function TripDetailPage({ params }: { params: Promise<{ slug: str
   const [linkCopied, setLinkCopied] = useState(false);
 
   useEffect(() => {
-    const enrich = (found: TripDetail): TripDetail => ({
+    const enrich = (found: TripDetail): TripDetail => {
+      const spotsLeft =
+        found.spotsLeft ??
+        getSpotsLeft({
+          totalSpots: found.totalSpots,
+          bookedSpots: found.bookedSpots,
+          reservedSpots: found.reservedSpots,
+        });
+      return {
       ...found,
+      spotsLeft,
       duration: found.durationDays
         ? `${found.durationDays} Jours`
         : found.duration || "7 Jours",
@@ -85,10 +97,10 @@ export default function TripDetailPage({ params }: { params: Promise<{ slug: str
             id: found.agency.id,
             slug: found.agency.slug,
             name: found.agency.name,
-            rating: 4.9,
-            reviews: 120,
+            rating: found.agency.rating ?? 0,
+            reviews: found.agency.reviews ?? 0,
           }
-        : { name: "MaghrebVoyage Partner", rating: 5.0, reviews: 1 },
+        : { name: "MaghrebVoyage Partner", rating: 0, reviews: 0 },
       images:
         Array.isArray(found.images) && found.images.length > 0
           ? found.images
@@ -98,7 +110,8 @@ export default function TripDetailPage({ params }: { params: Promise<{ slug: str
             ],
       inclusions: found.inclusions || [],
       exclusions: found.exclusions || [],
-    });
+    };
+    };
 
     async function load() {
       try {
@@ -294,7 +307,7 @@ export default function TripDetailPage({ params }: { params: Promise<{ slug: str
                   <div className="space-y-2">
                      <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Disponibilité</span>
                      <div className="flex items-center gap-2 text-[#0F172A] font-black">
-                        <Users size={18} className="text-orange-500" /> {trip.totalSpots - trip.bookedSpots} places
+                        <Users size={18} className="text-orange-500" /> {trip.spotsLeft ?? 0} places
                      </div>
                   </div>
                </div>
@@ -437,10 +450,10 @@ export default function TripDetailPage({ params }: { params: Promise<{ slug: str
                      tripTitle={trip.title}
                      totalPrice={trip.totalPrice}
                      depositAmount={trip.depositAmount}
-                     spotsLeft={trip.totalSpots - trip.bookedSpots}
+                     spotsLeft={trip.spotsLeft ?? 0}
                      isSoldOut={
                        trip.status === "FULL" ||
-                       trip.bookedSpots >= trip.totalSpots
+                       (trip.spotsLeft ?? 0) <= 0
                      }
                    />
                 </div>

@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 const travelRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const steps = [
   ["db:migrate", "Applying migrations"],
+  ["db:cdc", "CDC schema conformance check"],
   ["seed", "Seeding users, trips, reviews, audit logs"],
   ["analytics:seed", "Seeding behavior analytics (30 days)"],
   ["data:export", "Exporting maghreb-catalog.json"],

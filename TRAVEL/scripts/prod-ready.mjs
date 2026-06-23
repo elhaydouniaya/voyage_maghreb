@@ -229,7 +229,9 @@ async function main() {
   console.log("\nFull local verification (dev server required): npm run audit:all");
   console.log("One-shot DB + demo data: npm run setup:full\n");
 
-  process.exit(report.critical.length ? 1 : 0);
+  const code = report.critical.length ? 1 : 0;
+  // Avoid Windows libuv assert on abrupt exit after Prisma disconnect
+  setTimeout(() => process.exit(code), 100);
 }
 
 main().catch((e) => {

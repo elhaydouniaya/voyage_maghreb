@@ -1,12 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import MaghrebCarousel from "@/components/public/MaghrebCarousel";
 import {
   ArrowRight,
   ShieldCheck,
-  Star,
   CheckCircle2,
   ChevronDown,
   Sparkles,
@@ -14,6 +12,9 @@ import {
 
 import DestinationsSection from "@/components/public/DestinationsSection";
 import CinematicShowcase from "@/components/trips/CinematicShowcase";
+import NewsletterSignup from "@/components/public/NewsletterSignup";
+import HomeAiLauncher from "@/components/public/HomeAiLauncher";
+import TrustRating from "@/components/public/TrustRating";
 
 export default function Home() {
   return (
@@ -44,14 +45,7 @@ export default function Home() {
                  Voir les voyages <ArrowRight size={18} />
                </Link>
             </div>
-            <div className="flex flex-col sm:flex-row gap-6 mt-12 justify-center lg:justify-start">
-               <div className="flex items-center gap-6 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">
-                  <span>Explorez :</span>
-                  <Link href="/voyages?destination=Maroc" className="hover:text-orange-500 transition-colors">Maroc</Link>
-                  <Link href="/voyages?destination=Algérie" className="hover:text-orange-500 transition-colors">Algérie</Link>
-                  <Link href="/voyages?destination=Tunisie" className="hover:text-orange-500 transition-colors">Tunisie</Link>
-               </div>
-            </div>
+            <HomeAiLauncher />
           </div>
 
           <div className="lg:col-span-2 relative h-[500px] md:h-[600px]">
@@ -125,17 +119,7 @@ export default function Home() {
                    </div>
                 </div>
 
-                <div className="bg-white/5 backdrop-blur-3xl rounded-[3rem] border border-white/10 p-12 text-center space-y-8">
-                   <div className="text-5xl font-black text-white tracking-tighter">4.9/5</div>
-                   <div className="flex justify-center gap-1">
-                      {[1,2,3,4,5].map(i => <Star key={i} size={20} className="fill-orange-500 text-orange-500" />)}
-                   </div>
-                   <p className="text-gray-400 font-bold uppercase tracking-widest text-[10px]">Note moyenne de nos voyageurs</p>
-                   <div className="pt-8 border-t border-white/5 flex justify-center gap-6 opacity-30 grayscale brightness-200">
-                      <Image src="https://upload.wikimedia.org/wikipedia/commons/b/ba/Stripe_Logo%2C_revised_2016.svg" width={80} height={24} className="h-6 w-auto" alt="Stripe" unoptimized />
-                      <Image src="https://upload.wikimedia.org/wikipedia/commons/2/2a/Mastercard-logo.svg" width={40} height={24} className="h-6 w-auto" alt="Mastercard" unoptimized />
-                   </div>
-                </div>
+                <TrustRating />
              </div>
           </div>
         </div>
@@ -175,16 +159,7 @@ export default function Home() {
             <p className="text-gray-400 text-lg font-medium mb-12 max-w-2xl mx-auto">
                Inscrivez-vous pour recevoir nos meilleurs itinéraires et des offres exclusives directement dans votre boîte mail.
             </p>
-            <div className="flex flex-col sm:flex-row gap-4 max-w-lg mx-auto">
-               <input 
-                  type="email" 
-                  placeholder="Votre email" 
-                  className="flex-1 bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-white placeholder:text-gray-500 focus:outline-none focus:border-orange-500 transition-all font-medium"
-               />
-               <button className="bg-orange-600 text-white font-black px-8 py-4 rounded-2xl hover:bg-orange-700 transition-all shadow-xl shadow-orange-600/20 whitespace-nowrap">
-                  S'inscrire
-               </button>
-            </div>
+            <NewsletterSignup />
             <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-8">Pas de spam, c'est promis. Désinscrivez-vous quand vous voulez.</p>
          </div>
       </section>

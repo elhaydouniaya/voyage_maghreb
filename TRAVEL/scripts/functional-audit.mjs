@@ -86,6 +86,15 @@ function envChecks() {
   if (llm && process.env.OPENAI_DISABLE !== "true") pass("llm_configured");
   else fail("llm_configured", "No GROQ/OPENAI/LLM key — guide & matching use offline fallback");
 
+  const gemini =
+    Boolean(process.env.GEMINI_API_KEY?.trim()) && process.env.GEMINI_DISABLE !== "true";
+  if (gemini) pass("gemini_configured");
+  else
+    pass(
+      "gemini_configured",
+      "optional — guide uses OpenAI/offline fallback without GEMINI_API_KEY"
+    );
+
   if (process.env.RESEND_API_KEY?.trim()) pass("email_resend");
   else fail("email_resend", "RESEND_API_KEY missing — emails log to console only");
 
@@ -147,13 +156,26 @@ async function httpChecks() {
   const pages = [
     ["/voyages", "page_voyages"],
     ["/recherche", "page_recherche"],
+    ["/destinations", "page_destinations"],
+    ["/about", "page_about"],
+    ["/reviews", "page_reviews"],
+    ["/register", "page_register"],
+    ["/forgot-password", "page_forgot_password"],
+    ["/agency/register", "page_agency_register"],
     ["/profile", "page_profile_redirect"],
     ["/login", "page_login"],
     ["/agency/login", "page_agency_login"],
     ["/agency/leads", "page_agency_leads"],
     ["/admin/login", "page_admin_login"],
     ["/admin/decision-dashboard", "page_decision_dashboard"],
+    ["/booking/success", "page_booking_success_redirect"],
+    ["/booking/cancel", "page_booking_cancel_redirect"],
+    ["/confidentialite", "page_legacy_confidentialite_redirect"],
+    ["/mentions-legales", "page_legacy_mentions_redirect"],
     ["/legal/cgu", "page_legal_cgu"],
+    ["/legal/mentions", "page_legal_mentions"],
+    ["/legal/confidentialite", "page_legal_confidentialite"],
+    ["/legal/remboursements", "page_legal_remboursements"],
     ["/sitemap.xml", "sitemap"],
     ["/robots.txt", "robots"],
   ];
@@ -167,6 +189,12 @@ async function httpChecks() {
     const count = Array.isArray(data.trips) ? data.trips.length : 0;
     if (count > 0) pass("api_trips_data", `${count} trip(s)`);
     else fail("api_trips_data", "Empty trips array");
+
+    const slug = data.trips[0]?.slug;
+    if (slug) {
+      await httpGet(`/trip/${slug}`, "page_trip_detail");
+      await httpGet(`/api/trips/${slug}`, "api_trip_detail");
+    }
   }
 
   await httpGet("/api/auth/session", "api_session");
@@ -211,6 +239,12 @@ async function httpChecks() {
     });
     if (cronNl.ok) pass("cron_partner_newsletter", `HTTP ${cronNl.status}`);
     else fail("cron_partner_newsletter", `HTTP ${cronNl.status}`);
+
+    const expireRes = await fetch(`${base}/api/cron/expire-bookings`, {
+      headers: { Authorization: `Bearer ${cronSecret}` },
+    });
+    if (expireRes.ok) pass("cron_expire_bookings", `HTTP ${expireRes.status}`);
+    else fail("cron_expire_bookings", `HTTP ${expireRes.status}`);
   } else if (cronNoAuth.status === 503 || cronNoAuth.status === 401) {
     pass("cron_pre_trip", "Protected (no secret in dev OK)");
   }
@@ -238,6 +272,38 @@ async function httpChecks() {
     "api_analytics_track",
     { step: "PAGE_VIEW", path: "/", sessionId: "audit-smoke-session" }
   );
+
+  const auditEmail = `audit-newsletter-${Date.now()}@test.local`;
+  const newsletter = await httpPost(
+    "/api/newsletter/subscribe",
+    "api_newsletter_subscribe",
+    { email: auditEmail, source: "audit" }
+  );
+  if (newsletter?.data?.ok) pass("api_newsletter_subscribe_ok");
+
+  const unsub = await httpPost(
+    "/api/newsletter/unsubscribe",
+    "api_newsletter_unsubscribe",
+    { email: auditEmail }
+  );
+  if (unsub?.data?.ok) pass("api_newsletter_unsubscribe_ok");
+
+  const unsubGet = await fetch(
+    `${base}/api/newsletter/unsubscribe?email=${encodeURIComponent(auditEmail)}`
+  );
+  if (unsubGet.ok) pass("api_newsletter_unsubscribe_get", `HTTP ${unsubGet.status}`);
+  else fail("api_newsletter_unsubscribe_get", `HTTP ${unsubGet.status}`);
+
+  const intent = await httpPost(
+    "/api/ai/intent",
+    "api_ai_intent",
+    { user_message: "Je veux aller au Maroc en juillet pour 2 personnes budget 1500€" }
+  );
+  if (intent?.data?.intent) {
+    pass("api_ai_intent_result", `intent=${intent.data.intent} action=${intent.data.action}`);
+  } else if (intent?.data) {
+    fail("api_ai_intent_result", JSON.stringify(intent.data).slice(0, 120));
+  }
 }
 
 async function serviceChecks() {
