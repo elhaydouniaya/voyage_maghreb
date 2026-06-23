@@ -1,8 +1,18 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
-import { isEmailConfigured } from "@/lib/email-config";
+import { isEmailConfigured, resolveEmailDeliveryTarget } from "@/lib/email-config";
 import { BookingsService } from "@/services/bookings.service";
+
+function emailDeliveryPayload(accountEmail: string | undefined) {
+  if (!accountEmail) return {};
+  const delivery = resolveEmailDeliveryTarget(accountEmail);
+  return {
+    emailTo: delivery.intendedTo,
+    emailDeliveredTo: delivery.deliveredTo,
+    emailDevRedirected: delivery.devRedirected,
+  };
+}
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -13,13 +23,13 @@ export async function GET(request: Request) {
     if (sessionId) {
       const booking = await BookingsService.getPublicByStripeSession(sessionId);
       const email = await BookingsService.ensureConfirmationEmailsSent(booking.id!).catch(
-        () => ({ sent: false, alreadySent: true, to: "" })
+        () => ({ sent: false, alreadySent: false, to: "" })
       );
       return NextResponse.json({
         booking,
         emailSent: email.sent || email.alreadySent,
-        emailTo: email.to || undefined,
         emailMode: isEmailConfigured() ? "resend" : "console",
+        ...emailDeliveryPayload(email.to),
       });
     }
 
@@ -32,13 +42,13 @@ export async function GET(request: Request) {
         );
         if (booking) {
           const email = await BookingsService.ensureConfirmationEmailsSent(bookingId).catch(
-            () => ({ sent: false, alreadySent: true, to: "" })
+            () => ({ sent: false, alreadySent: false, to: "" })
           );
           return NextResponse.json({
             booking,
             emailSent: email.sent || email.alreadySent,
-            emailTo: email.to || undefined,
             emailMode: isEmailConfigured() ? "resend" : "console",
+            ...emailDeliveryPayload(email.to),
           });
         }
       }
@@ -46,13 +56,13 @@ export async function GET(request: Request) {
       const publicBooking = await BookingsService.getByIdPublic(bookingId);
       if (publicBooking) {
         const email = await BookingsService.ensureConfirmationEmailsSent(bookingId).catch(
-          () => ({ sent: false, alreadySent: true, to: "" })
+          () => ({ sent: false, alreadySent: false, to: "" })
         );
         return NextResponse.json({
           booking: publicBooking,
           emailSent: email.sent || email.alreadySent,
-          emailTo: email.to || undefined,
           emailMode: isEmailConfigured() ? "resend" : "console",
+          ...emailDeliveryPayload(email.to),
         });
       }
 

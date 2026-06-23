@@ -2,6 +2,7 @@ import prisma from "@/lib/prisma";
 import type { TripStatus } from "@prisma/client";
 import { stripe } from "@/lib/stripe";
 import { sendRefundProcessedEmail } from "@/lib/booking-emails";
+import { resolveAccountEmailForBooking } from "@/lib/account-email";
 
 const TRIP_STATUSES: TripStatus[] = [
   "DRAFT",
@@ -148,8 +149,9 @@ export class AdminService {
     });
 
     try {
+      const to = await resolveAccountEmailForBooking(booking);
       await sendRefundProcessedEmail({
-        to: booking.clientEmail,
+        to,
         clientName: booking.clientName,
         confirmationCode: booking.confirmationCode,
         tripTitle: booking.groupTrip.title,

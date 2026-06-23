@@ -9,10 +9,16 @@ import {
   bookingInitiateSchema,
   formatZodError,
 } from "@/lib/api-schemas";
+import { resolveAccountEmail } from "@/lib/account-email";
 
 export async function POST(request: Request) {
   const ip = getClientIp(request);
-  const limited = rateLimit(`booking-initiate:${ip}`, 5, 60 * 60 * 1000);
+  const isDev = process.env.NODE_ENV !== "production";
+  const limited = rateLimit(
+    `booking-initiate:${ip}`,
+    isDev ? 50 : 5,
+    60 * 60 * 1000
+  );
   if (!limited.ok) {
     return NextResponse.json(
       {
@@ -49,7 +55,18 @@ export async function POST(request: Request) {
     }
 
     const userId = session.user.id;
-    const clientEmail = body.clientEmail.toLowerCase();
+    let clientEmail: string;
+    try {
+      clientEmail = await resolveAccountEmail({ userId });
+    } catch {
+      return NextResponse.json(
+        {
+          error:
+            "Votre compte n'a pas d'adresse email. Ajoutez-en une dans votre profil avant de réserver.",
+        },
+        { status: 400 }
+      );
+    }
     const clientName = body.clientName;
     const groupTripId = body.groupTripId || body.tripId;
 

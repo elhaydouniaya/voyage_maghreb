@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { CreditCard, ShieldCheck, User, Mail, Phone, ArrowRight, LogIn, Lock } from "lucide-react";
@@ -57,6 +57,19 @@ export default function BookingForm({
     acceptCgu: false,
     acceptRgpd: false,
   });
+
+  const accountEmail = session?.user?.email || "";
+
+  useEffect(() => {
+    if (!session?.user?.email) return;
+    const parts = (session.user.name || "").trim().split(/\s+/);
+    setFormData((prev) => ({
+      ...prev,
+      clientEmail: session.user.email!,
+      clientFirstName: prev.clientFirstName || parts[0] || "",
+      clientLastName: prev.clientLastName || parts.slice(1).join(" ") || "",
+    }));
+  }, [session?.user?.email, session?.user?.name]);
 
   const soldOut = isSoldOut || (spotsLeft !== undefined && spotsLeft <= 0);
 
@@ -261,12 +274,20 @@ export default function BookingForm({
                 <input
                   type="email"
                   required
+                  readOnly={Boolean(accountEmail)}
                   placeholder="Votre Email"
                   value={formData.clientEmail}
+                  title={
+                    accountEmail
+                      ? "Email de votre compte — la confirmation sera envoyée à cette adresse"
+                      : undefined
+                  }
                   onChange={(e) =>
                     setFormData((prev) => ({ ...prev, clientEmail: e.target.value }))
                   }
-                  className="w-full bg-[#F8FAFC] border border-gray-100 rounded-2xl pl-12 pr-6 py-4 focus:ring-4 focus:ring-orange-500/10 outline-none font-bold text-[#0F172A] transition-all"
+                  className={`w-full bg-[#F8FAFC] border border-gray-100 rounded-2xl pl-12 pr-6 py-4 focus:ring-4 focus:ring-orange-500/10 outline-none font-bold text-[#0F172A] transition-all ${
+                    accountEmail ? "opacity-80 cursor-default" : ""
+                  }`}
                 />
               </div>
               <div className="relative">
@@ -385,7 +406,7 @@ export default function BookingForm({
           <ShieldCheck size={14} className="text-[#10B981]" /> Paiement 100% Sécurisé Stripe
         </div>
         <p className="text-[9px] text-gray-300 text-center leading-relaxed px-4">
-          Aucun compte requis. Votre email sert uniquement à la confirmation de réservation.
+          La confirmation de réservation sera envoyée à l&apos;email de votre compte connecté.
         </p>
       </div>
     </div>

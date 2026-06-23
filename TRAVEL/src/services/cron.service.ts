@@ -1,5 +1,6 @@
 import prisma from "@/lib/prisma";
 import { sendPreTripReminderEmail } from "@/lib/booking-emails";
+import { resolveAccountEmailForBooking } from "@/lib/account-email";
 
 function formatFrDate(d: Date) {
   return d.toLocaleDateString("fr-FR", {
@@ -41,8 +42,9 @@ export class CronService {
 
     for (const b of bookings) {
       try {
+        const to = await resolveAccountEmailForBooking(b);
         await sendPreTripReminderEmail({
-          to: b.clientEmail,
+          to,
           clientName: b.clientName,
           tripTitle: b.groupTrip.title,
           destination: b.groupTrip.destination,

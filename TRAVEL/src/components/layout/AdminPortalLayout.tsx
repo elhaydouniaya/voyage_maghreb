@@ -18,7 +18,6 @@ import {
   Settings,
   ShieldCheck,
   BarChart3,
-  ScrollText,
 } from "lucide-react";
 import NotificationBell from "@/components/ui/NotificationBell";
 import AnimatedLogo from "@/components/brand/AnimatedLogo";
@@ -94,7 +93,6 @@ export default function AdminPortalLayout({
     { icon: Star, label: "Avis clients", href: "/admin/reviews", badge: null },
     { icon: ShieldCheck, label: "Journal d'audit", href: "/admin/audit-logs", badge: null },
     { icon: Sparkles, label: "Demandes IA", href: "/admin/ai-requests", badge: null },
-    { icon: ScrollText, label: "Audit logs", href: "/admin/audit-logs", badge: null },
     { icon: User, label: "Mon profil", href: "/admin/profile", badge: null },
     { icon: Settings, label: "Paramètres", href: "/admin/settings", badge: null },
   ];

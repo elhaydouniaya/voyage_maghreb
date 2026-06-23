@@ -1,6 +1,7 @@
 import prisma from "@/lib/prisma";
 import { findOrCreateGuestUser } from "@/lib/guest-user";
 import { sendTravelRequestReceivedEmail } from "@/lib/booking-emails";
+import { resolveAccountEmail } from "@/lib/account-email";
 import { buildMatchDisplay } from "@/lib/build-match-display";
 import { AIService, type StructuredDemand } from "@/services/ai.service";
 import { TripsService } from "@/services/trips.service";
@@ -13,16 +14,21 @@ export class TravelRequestsService {
     qualifiedMatchCount: number,
     userId?: string
   ) {
-    const clientEmail = String(body.clientEmail || "").trim().toLowerCase();
     const clientName = String(body.clientName || "Voyageur").trim();
+    const rawEmail = String(body.clientEmail || "").trim().toLowerCase();
 
     let resolvedUserId = userId;
-    if (!resolvedUserId && clientEmail) {
-      resolvedUserId = await findOrCreateGuestUser(clientEmail, clientName);
+    if (!resolvedUserId && rawEmail) {
+      resolvedUserId = await findOrCreateGuestUser(rawEmail, clientName);
     }
     if (!resolvedUserId) {
       throw new Error("Impossible d'enregistrer la demande sans email.");
     }
+
+    const clientEmail = await resolveAccountEmail({
+      userId: resolvedUserId,
+      email: rawEmail,
+    });
 
     const request = await prisma.travelRequest.create({
       data: {

@@ -12,8 +12,8 @@ export const bookingInitiateSchema = z
     clientEmail: z
       .string()
       .trim()
-      .min(3, "Email obligatoire.")
-      .email("Email invalide."),
+      .email("Email invalide.")
+      .optional(),
     clientName: z
       .string()
       .trim()

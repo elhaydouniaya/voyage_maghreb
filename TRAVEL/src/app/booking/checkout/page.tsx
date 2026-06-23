@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 import { loadTravelRequestId } from "@/lib/ai-match-storage";
 import Image from "next/image";
 import { ArrowLeft, ShieldCheck, CreditCard, Lock, ChevronRight } from "lucide-react";
@@ -23,6 +24,8 @@ type PendingBooking = {
 };
 
 export default function CheckoutPage() {
+  const { data: session } = useSession();
+  const accountEmail = session?.user?.email || "";
   const [step, setStep] = useState(1);
   const [booking, setBooking] = useState<PendingBooking | null>(null);
   const [bookingReady, setBookingReady] = useState(false);
@@ -54,12 +57,17 @@ export default function CheckoutPage() {
     trackBehaviorEvent("CHECKOUT_START");
   }, []);
 
+  useEffect(() => {
+    if (!accountEmail) return;
+    setTraveler((t) => ({ ...t, clientEmail: accountEmail }));
+  }, [accountEmail]);
+
   const handleNext = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     setTraveler({
       clientName: String(fd.get("clientName") || ""),
-      clientEmail: String(fd.get("clientEmail") || ""),
+      clientEmail: accountEmail || String(fd.get("clientEmail") || ""),
       clientPhone: String(fd.get("clientPhone") || ""),
       clientCountry: String(fd.get("clientCountry") || "France"),
     });
@@ -176,8 +184,17 @@ export default function CheckoutPage() {
                   required
                   name="clientEmail"
                   type="email"
+                  readOnly={Boolean(accountEmail)}
+                  value={accountEmail || traveler.clientEmail}
                   placeholder="jean.dupont@email.com"
-                  className="w-full bg-white border border-gray-100 rounded-2xl px-6 py-4 text-sm font-medium focus:outline-none focus:ring-4 focus:ring-orange-500/5 focus:border-orange-500/20 transition-all"
+                  title={
+                    accountEmail
+                      ? "Email de votre compte — la confirmation sera envoyée à cette adresse"
+                      : undefined
+                  }
+                  className={`w-full bg-white border border-gray-100 rounded-2xl px-6 py-4 text-sm font-medium focus:outline-none focus:ring-4 focus:ring-orange-500/5 focus:border-orange-500/20 transition-all ${
+                    accountEmail ? "opacity-80 cursor-default" : ""
+                  }`}
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">

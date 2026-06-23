@@ -45,6 +45,8 @@ function BookingSuccessContent() {
   const [emailInfo, setEmailInfo] = useState<{
     sent: boolean;
     to?: string;
+    deliveredTo?: string;
+    devRedirected?: boolean;
     mode?: string;
   } | null>(null);
   const [error, setError] = useState("");
@@ -70,6 +72,8 @@ function BookingSuccessContent() {
             setEmailInfo({
               sent: true,
               to: data.emailTo,
+              deliveredTo: data.emailDeliveredTo,
+              devRedirected: data.emailDevRedirected,
               mode: data.emailMode,
             });
           }
@@ -133,6 +137,13 @@ function BookingSuccessContent() {
                       <strong>console du serveur</strong> (mode dev sans Resend) ou
                       configurez <code className="text-orange-100">RESEND_DEV_TO</code> dans
                       .env.
+                    </>
+                  ) : emailInfo.devRedirected ? (
+                    <>
+                      Compte : <strong>{emailInfo.to}</strong> — en mode dev local,
+                      l&apos;email a été livré à{" "}
+                      <strong>{emailInfo.deliveredTo}</strong> (adresse Resend vérifiée).
+                      Vérifiez cette boîte mail et les spams.
                     </>
                   ) : (
                     <>

@@ -33,6 +33,9 @@ export async function sendEmail({
     finalHtml =
       `<p style="background:#fff7ed;padding:12px;border-radius:8px;font-size:13px"><strong>[Dev]</strong> Destinataire prévu : ${to}</p>` +
       finalHtml;
+    console.log(
+      `[email:dev-redirect] Intended: ${to} → delivered via Resend to: ${recipient}`
+    );
   }
 
   if (!apiKey) {
@@ -53,6 +56,32 @@ export async function sendEmail({
   if (!res.ok) {
     const err = await res.text();
     console.error("Resend error:", err);
+
+    if (
+      isDev &&
+      devRedirect &&
+      (err.includes("validation_error") || err.includes("403"))
+    ) {
+      const retryHtml =
+        `<p style="background:#fff7ed;padding:12px;border-radius:8px;font-size:13px"><strong>[Dev]</strong> Envoi refusé vers ${to} — redirection vers ${devRedirect}</p>` +
+        finalHtml;
+      const retry = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          from,
+          to: [devRedirect],
+          subject,
+          html: retryHtml,
+        }),
+      });
+      if (retry.ok) {
+        return { ok: true, dev: true };
+      }
+    }
 
     if (
       isDev &&

@@ -1,0 +1,81 @@
+flowchart TB
+  subgraph clients["Couche client — Navigateur web"]
+    V[Visiteur / Voyageur]
+    A[Agence partenaire]
+    AD[Administrateur]
+  end
+
+  subgraph nextjs["Couche application — Next.js 16 (App Router)"]
+    direction TB
+    subgraph ui["Interface React 19 + TypeScript"]
+      PUB["Pages publiques<br/>/, /voyages, /recherche, /trip"]
+      BK["Booking<br/>/booking/checkout"]
+      AG["Espace agence<br/>/agency/*"]
+      ADM["Espace admin<br/>/admin/*"]
+      DD["Tableau de bord décisionnel<br/>/admin/decision-dashboard"]
+    end
+    subgraph track["Analytics client"]
+      BT[BehaviorTracker]
+    end
+    subgraph api["API Routes /api/*"]
+      AUTH[NextAuth]
+      AI["/ai/match, /ai/guide-chat"]
+      BOOK["/bookings/*"]
+      PAY["/payments/*"]
+      AN["/analytics/track"]
+      ADAPI["/admin/decision-dashboard"]
+      WH["/webhooks/stripe"]
+      CRON["/cron/*"]
+    end
+    subgraph services["Services métier"]
+      AIS[AIService]
+      TRV[TravelRequestsService]
+      TRP[TripsService]
+      BKS[BookingsService]
+      PYS[PaymentsService]
+      BAS[BehaviorAnalyticsService]
+      ANO[AnomalyDetectionService]
+      ADS[AdminService]
+    end
+    PROXY["Contrôle d'accès<br/>proxy.ts — RBAC"]
+  end
+
+  subgraph data["Couche données"]
+    PRISMA[Prisma ORM 5.22]
+    PG[(PostgreSQL 15+)]
+  end
+
+  subgraph external["Services externes (HTTPS)"]
+    STRIPE[Stripe Checkout<br/>+ Connect + Webhooks]
+    RESEND[Resend — e-mails]
+    LLM[Groq / OpenAI — LLM]
+    CLD[Cloudinary — images]
+    GOOG[Google OAuth]
+    VAPI[Vapi — assistant vocal]
+  end
+
+  V --> PUB
+  V --> BK
+  A --> AG
+  AD --> ADM
+  AD --> DD
+  PUB --> BT
+  BK --> BT
+  BT --> AN
+  ui --> api
+  api --> PROXY
+  api --> services
+  services --> PRISMA
+  PRISMA --> PG
+  BKS --> STRIPE
+  PYS --> STRIPE
+  WH --> STRIPE
+  AIS --> LLM
+  services --> RESEND
+  AG --> CLD
+  AUTH --> GOOG
+  PUB --> VAPI
+  ADAPI --> BAS
+  ADAPI --> ANO
+  BAS --> PG
+  ANO --> PG

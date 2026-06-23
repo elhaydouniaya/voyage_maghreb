@@ -9,6 +9,27 @@ export function getEmailFromAddress() {
   return process.env.RESEND_FROM?.trim() || "MaghrebVoyage <onboarding@resend.dev>";
 }
 
+/** En dev, Resend n'envoie qu'à RESEND_DEV_TO si l'adresse compte n'est pas vérifiée. */
+export function resolveEmailDeliveryTarget(intendedTo: string): {
+  intendedTo: string;
+  deliveredTo: string;
+  devRedirected: boolean;
+} {
+  const intended = intendedTo.trim().toLowerCase();
+  const isDev = process.env.NODE_ENV !== "production";
+  const devRedirect = process.env.RESEND_DEV_TO?.trim().toLowerCase();
+
+  if (isDev && devRedirect && devRedirect !== intended) {
+    return {
+      intendedTo: intended,
+      deliveredTo: devRedirect,
+      devRedirected: true,
+    };
+  }
+
+  return { intendedTo: intended, deliveredTo: intended, devRedirected: false };
+}
+
 /** Adresse admin pour alertes (env ou premier compte ADMIN en base). */
 export async function resolveAdminNotifyEmail(): Promise<string | null> {
   const fromEnv = process.env.ADMIN_NOTIFY_EMAIL?.trim();

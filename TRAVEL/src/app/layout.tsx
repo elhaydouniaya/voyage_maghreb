@@ -16,6 +16,7 @@ export const metadata: Metadata = {
 };
 
 import { AuthProvider } from "@/components/providers/AuthProvider";
+import { AppNotifyProvider } from "@/components/providers/AppNotifyProvider";
 
 export default function RootLayout({
   children,
@@ -28,7 +29,9 @@ export default function RootLayout({
       className={`${inter.variable} ${outfit.variable} font-sans h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <AppNotifyProvider>{children}</AppNotifyProvider>
+        </AuthProvider>
       </body>
     </html>
   );

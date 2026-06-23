@@ -46,10 +46,13 @@ if (serverUp) {
   console.log(`\nDev server detected at ${baseUrl} — running HTTP audits…\n`);
   if (!run("audit", [baseUrl])) process.exit(1);
   if (!run("audit:auth", [baseUrl])) process.exit(1);
+  if (!run("verify:booking", [baseUrl])) process.exit(1);
+  if (!run("verify:booking-e2e", [baseUrl])) process.exit(1);
 } else {
   console.log(
     `\nDev server not running at ${baseUrl}.` +
       "\nStart it with: npm run dev" +
+      `\nOr run full auto: npm run auto:run` +
       `\nThen re-run: npm run local:verify -- ${baseUrl}\n`
   );
 }

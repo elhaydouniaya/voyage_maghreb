@@ -3,6 +3,7 @@ import { generateUniqueSlug } from "@/lib/slug";
 import { generateTripAiTags } from "@/lib/trip-tags";
 import { formatTrip } from "@/lib/trip-format";
 import { sendTripCancelledToClientEmail } from "@/lib/booking-emails";
+import { resolveAccountEmailForBooking } from "@/lib/account-email";
 import type { PhysicalLevel, TripStatus, TripType } from "@prisma/client";
 
 export interface CreateTripInput {
@@ -377,8 +378,9 @@ export class TripsService {
 
     for (const b of confirmedBookings) {
       try {
+        const to = await resolveAccountEmailForBooking(b);
         await sendTripCancelledToClientEmail({
-          to: b.clientEmail,
+          to,
           clientName: b.clientName,
           tripTitle: trip.title,
           cancelReason: reason,

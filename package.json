@@ -14,6 +14,8 @@
     "audit": "npm run audit --prefix TRAVEL",
     "audit:auth": "npm run audit:auth --prefix TRAVEL",
     "audit:all": "node scripts/audit-all.mjs",
+    "auto:run": "npm run auto:run --prefix TRAVEL",
+    "auto:run:quick": "npm run auto:run:quick --prefix TRAVEL",
     "local:verify": "node scripts/verify-local.mjs",
     "local:finish": "npm run setup:full --prefix TRAVEL && node scripts/verify-local.mjs",
     "prod:ready": "npm run prod:ready --prefix TRAVEL",

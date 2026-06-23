@@ -28,7 +28,7 @@ export function formatTrip(trip: TripWithAgency) {
     totalSpots: trip.totalSpots,
     bookedSpots: trip.bookedSpots,
     tripType: trip.tripType,
-    season: getSeasonFromDate(trip.startDate),
+    season: trip.season ?? getSeasonFromDate(trip.startDate),
     inclusions: trip.inclusions,
     exclusions: trip.exclusions,
     meetingPoint: trip.meetingPoint,

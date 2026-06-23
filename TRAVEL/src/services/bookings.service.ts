@@ -7,6 +7,7 @@ import {
   sendClientCancellationEmail,
 } from "@/lib/booking-emails";
 import { TravelRequestsService } from "@/services/travel-requests.service";
+import { resolveAccountEmailForBooking } from "@/lib/account-email";
 
 function formatFrDate(d: Date) {
   return d.toLocaleDateString("fr-FR", {
@@ -312,6 +313,14 @@ export class BookingsService {
           });
           if (!booking) throw new Error("Booking introuvable après update.");
 
+          const accountEmail = await resolveAccountEmailForBooking(booking);
+          if (booking.clientEmail !== accountEmail) {
+            await tx.booking.update({
+              where: { id: booking.id },
+              data: { clientEmail: accountEmail },
+            });
+          }
+
           await tx.$queryRaw`
             SELECT id FROM "GroupTrip"
             WHERE id = ${booking.groupTripId}
@@ -340,8 +349,7 @@ export class BookingsService {
               agencyId: booking.agencyId,
               stripeSessionId,
               stripePaymentIntentId: paymentIntentId,
-              stripeCustomerEmail:
-                enrichedMeta.clientEmail || booking.clientEmail,
+              stripeCustomerEmail: accountEmail,
               amount: booking.depositPaid,
               currency: booking.groupTrip.currency,
               payoutMode,
@@ -466,6 +474,14 @@ export class BookingsService {
         });
         if (!booking) throw new Error("Réservation introuvable.");
 
+        const accountEmail = await resolveAccountEmailForBooking(booking);
+        if (booking.clientEmail !== accountEmail) {
+          await tx.booking.update({
+            where: { id: booking.id },
+            data: { clientEmail: accountEmail },
+          });
+        }
+
         // Lock trip, update spots
         await tx.$queryRaw`
           SELECT id FROM "GroupTrip"
@@ -488,9 +504,6 @@ export class BookingsService {
           });
         }
 
-        const summary = this.formatBookingSummary(booking);
-        await this.sendConfirmationEmails(booking.id);
-
         const { AuditLogService } = await import("@/services/audit-log.service");
         await AuditLogService.record(
           "BOOKING_CONFIRMED",
@@ -498,10 +511,20 @@ export class BookingsService {
           _userId
         );
 
-        return summary;
+        return { bookingId: booking.id, summary: this.formatBookingSummary(booking) };
       },
       { timeout: 15_000, maxWait: 5_000 }
-    );
+    ).then(async (result) => {
+      if ("bookingId" in result) {
+        try {
+          await this.ensureConfirmationEmailsSent(result.bookingId);
+        } catch (e) {
+          console.error("Confirmation email after demo payment:", e);
+        }
+        await TravelRequestsService.markPaidForBooking(result.bookingId);
+      }
+      return "summary" in result ? result.summary : result;
+    });
   }
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -516,8 +539,9 @@ export class BookingsService {
       });
       if (!b || b.status !== "CANCELLED") return;
 
+      const cancellationTo = await resolveAccountEmailForBooking(b);
       await sendClientCancellationEmail({
-        to: b.clientEmail,
+        to: cancellationTo,
         clientName: b.clientName,
         tripTitle: b.groupTrip.title,
         confirmationCode: b.confirmationCode,
@@ -562,15 +586,17 @@ export class BookingsService {
     }
 
     if (b.confirmationEmailSentAt && !options?.force) {
-      return { sent: false, alreadySent: true, to: b.clientEmail };
+      const to = await resolveAccountEmailForBooking(b);
+      return { sent: false, alreadySent: true, to };
     }
 
     const deposit = Math.round(Number(b.depositPaid));
     const total   = Math.round(Number(b.totalAmount));
+    const confirmationTo = await resolveAccountEmailForBooking(b);
 
     try {
       await sendBookingConfirmationEmail({
-        to: b.clientEmail,
+        to: confirmationTo,
         clientName: b.clientName,
         confirmationCode: b.confirmationCode,
         tripTitle: b.groupTrip.title,
@@ -623,7 +649,7 @@ export class BookingsService {
         data: { confirmationEmailSentAt: new Date() },
       });
 
-      return { sent: true, alreadySent: false, to: b.clientEmail };
+      return { sent: true, alreadySent: false, to: confirmationTo };
     } catch (e) {
       console.error("Confirmation emails:", e);
       throw e instanceof Error ? e : new Error("Envoi d'email impossible.");
