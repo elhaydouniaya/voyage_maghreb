@@ -90,6 +90,7 @@ async function main() {
     console.log("  3. Paramètres → Paiements → Connecter Stripe");
     console.log("\nOr open this link once (expires quickly):");
     console.log(" ", link.url);
+    console.log("\nAuto-complete (test, Custom account) : npm run integrations:fix -- --connect");
   } else {
     console.log("\nDemo agency Connect is active.");
   }

@@ -88,6 +88,43 @@ async function main() {
   const webhook = process.env.STRIPE_WEBHOOK_SECRET?.trim();
   status("Stripe webhook secret", Boolean(webhook), webhook ? "set" : "whsec_... pour stripe listen");
 
+  const sk = stripeSecret || "";
+  const pk = stripePublic || "";
+  if (stripeOk) {
+    const skLive = sk.startsWith("sk_live");
+    const pkLive = pk.startsWith("pk_live");
+    if (skLive !== pkLive) {
+      status("Stripe key pairing", false, "sk_* et pk_* doivent être tous test ou tous live");
+    } else if (skLive) {
+      status("Stripe mode", true, "LIVE");
+    }
+  }
+
+  const googleId = process.env.GOOGLE_CLIENT_ID?.trim();
+  const googleSecret = process.env.GOOGLE_CLIENT_SECRET?.trim();
+  const googleOk =
+    Boolean(googleId && googleSecret) &&
+    !googleId.includes("mock") &&
+    googleId.endsWith(".apps.googleusercontent.com");
+  status("Google OAuth", googleOk, googleOk ? "credentials OK" : "GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET");
+  if (googleOk) {
+    const authUrl = (process.env.NEXTAUTH_URL || base).replace(/\/$/, "");
+    console.log(`  → Redirect URI : ${authUrl}/api/auth/callback/google`);
+  } else if (!googleId) {
+    console.log("  → https://console.cloud.google.com/apis/credentials");
+  }
+
+  const resendFrom = process.env.RESEND_FROM?.trim() || "";
+  const resendKey = process.env.RESEND_API_KEY?.trim();
+  if (resendKey) {
+    const sandbox = resendFrom.includes("onboarding@resend.dev");
+    status(
+      "Resend FROM",
+      !sandbox || process.env.NODE_ENV !== "production",
+      sandbox ? "onboarding@resend.dev (dev) — RESEND_DOMAIN pour prod" : resendFrom
+    );
+  }
+
   await testGemini();
 
   const groq = process.env.GROQ_API_KEY?.trim();
@@ -114,6 +151,7 @@ async function main() {
   status("Cloudinary", cloudinaryOk, cloudinaryOk ? cName : "CLOUDINARY_* not set");
 
   console.log("\n--- Commandes utiles ---");
+  console.log("  npm run integrations:fix    # corrige Connect (test), webhooks, Resend");
   console.log("  npm run env:fill          # complète .env (VAPI secret, Gemini placeholders)");
   console.log("  npm run stripe:connect-demo # compte Connect démo agency@test.com");
   console.log("  npm run auto:run:quick      # vérif complète app\n");
