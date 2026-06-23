@@ -26,7 +26,7 @@ const AIChatWidget = ({ variant = "floating" }: AIChatWidgetProps) => {
   const [isTyping, setIsTyping] = useState(false);
   const [error, setError] = useState("");
   const [suggestions, setSuggestions] = useState<string[]>([]);
-  const [guideMode, setGuideMode] = useState<"openai" | "offline" | "loading">("loading");
+  const [guideMode, setGuideMode] = useState<"gemini" | "openai" | "offline" | "loading">("loading");
   const [profileHint, setProfileHint] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const loadedRef = useRef(false);
@@ -112,7 +112,7 @@ const AIChatWidget = ({ variant = "floating" }: AIChatWidgetProps) => {
       setMessages((prev) => [...prev, { role: "bot", content: data.reply }]);
       if (isClient) {
         setSuggestions(data.suggestions || []);
-        setGuideMode(data.mode === "openai" ? "openai" : "offline");
+        setGuideMode(data.mode === "gemini" ? "gemini" : data.mode === "openai" ? "openai" : "offline");
         const dests = data.profile?.preferredDestinations || [];
         if (dests.length > 0) setProfileHint(dests.join(" · "));
       }
@@ -143,7 +143,7 @@ const AIChatWidget = ({ variant = "floating" }: AIChatWidgetProps) => {
                   <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
                   <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">
                     {isClient
-                      ? guideMode === "openai"
+                      ? guideMode === "gemini" || guideMode === "openai"
                         ? "IA · Profil mémorisé"
                         : "Conseil expert · Profil mémorisé"
                       : "Mode basique · Découverte"}

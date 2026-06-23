@@ -1,6 +1,8 @@
 /**
  * AI Service for MaghrebVoyage
  * Implements Module C of the CDC: Structuration and Matching.
+ *
+ * LLM priority: Gemini (primary, free tier) → OpenAI (fallback) → heuristic offline
  */
 
 import {
@@ -11,7 +13,84 @@ import {
 import { buildCatalogContext } from "@/lib/catalog-context";
 import { destinationsMatch, normalizeForMatch } from "@/lib/string-similarity";
 import { buildNextDeparturesScores } from "@/lib/match-fallback";
+import { getOpenAIClient, isOpenAIConfigured } from "@/lib/openai";
+import {
+  isOpenAIPaused,
+  isOpenAIQuotaOrRateLimitError,
+  pauseOpenAI,
+} from "@/lib/openai-errors";
+import { getGeminiClient, isGeminiConfigured } from "@/lib/gemini";
+import { isGeminiPaused, pauseGemini, isGeminiQuotaError } from "@/lib/gemini-errors";
 import type { ClientGuideContext } from "@/services/guide-profile.service";
+
+// ─── Intent Engine types ──────────────────────────────────────────────────────
+
+export type IntentType =
+  | "travel_plan"
+  | "recommendation"
+  | "booking_request"
+  | "modification_request"
+  | "history_query"
+  | "smalltalk"
+  | "unknown";
+
+export type IntentAction = "ask_user" | "call_backend" | "fetch_history";
+
+export interface SessionContext {
+  last_destination?: string | null;
+  last_budget?: number | null;
+  last_intent?: string | null;
+  [key: string]: unknown;
+}
+
+export interface IntentResult {
+  intent: IntentType;
+  destination: string | null;
+  budget: number | null;
+  dates: string | null;
+  people: number | null;
+  travel_type: string | null;
+  missing_information: string[];
+  action: IntentAction;
+}
+
+// ─── Intent engine system prompt (sent verbatim to the LLM) ──────────────────
+
+const INTENT_SYSTEM_PROMPT = `You are a senior AI system architect.
+Your role is ONLY to transform user messages into structured decisions for a travel platform (MaghrebVoyage).
+You are NOT a chatbot. You NEVER respond directly to the user.
+
+STRICT ARCHITECTURE: Next.js → Node.js + Prisma → FastAPI → OpenAI → PostgreSQL + Redis
+
+CORE RULE: Output ONLY valid JSON. No explanations. No natural language. No extra text.
+
+INPUT: user_message (string) + session_context (Redis summary: last_destination, last_budget, last_intent)
+
+YOUR TASK:
+1. Detect user intent
+2. Extract travel entities
+3. Decide system action
+4. Use session_context only for continuity
+5. Detect history requests
+
+SUPPORTED INTENTS: travel_plan | recommendation | booking_request | modification_request | history_query | smalltalk | unknown
+
+ACTION TYPES:
+- ask_user → missing information required
+- call_backend → enough data to process travel logic
+- fetch_history → user requests past data
+
+HISTORY RULE: If user asks "my history", "last trip", "what did I say", "previous trips" → intent=history_query, action=fetch_history
+
+DECISION RULES:
+- If required info is missing → action=ask_user
+- If all required info exists → action=call_backend
+- If history requested → action=fetch_history
+
+DATA TO EXTRACT: intent, destination, budget (number|null), dates (string|null), people (number|null), travel_type (string|null), missing_information (string[]), action
+
+OUTPUT FORMAT (STRICT JSON ONLY):
+{"intent":"","destination":null,"budget":null,"dates":null,"people":null,"travel_type":null,"missing_information":[],"action":""}`;
 
 const GUIDE_SYSTEM_PROMPT = `Tu es le Guide Touristique personnel MaghrebVoyage, réservé aux clients connectés.
 Tu accompagnes le voyageur dans la préparation de son voyage au Maghreb (Maroc, Algérie, Tunisie, Mauritanie, Libye).
@@ -397,55 +476,324 @@ Réponds UNIQUEMENT en JSON avec: summary, tags (string[]), complexity (1-5), de
     return found;
   }
 
+  // ── Intent extraction engine ────────────────────────────────────────────────
+
+  static extractIntentOffline(
+    userMessage: string,
+    ctx: SessionContext
+  ): IntentResult {
+    const msg  = userMessage.toLowerCase().trim();
+    const base = this.#blankIntent();
+
+    // History query
+    if (/(historique|history|dernier voyage|last trip|j'ai dit|qu'est.ce que j'ai|mes messages|mes conversations)/i.test(msg)) {
+      return { ...base, intent: "history_query", action: "fetch_history" };
+    }
+
+    // Smalltalk
+    if (/^(salam|bonjour|hello|bonsoir|hi|coucou|merci|ok|yes|non|oui|bonne journée|salut)[\s!.?]*$/.test(msg)) {
+      return { ...base, intent: "smalltalk", action: "ask_user", missing_information: ["destination"] };
+    }
+
+    // Extract destination
+    const destMap: Record<string, string> = {
+      maroc: "Maroc", marrakech: "Marrakech", fès: "Fès", fez: "Fès",
+      casablanca: "Casablanca", algérie: "Algérie", algerie: "Algérie",
+      tunisie: "Tunisie", sahara: "Sahara", djerba: "Djerba",
+      djanet: "Djanet", tassili: "Tassili", agadir: "Agadir",
+      oran: "Oran", alger: "Alger",
+    };
+    let destination: string | null = null;
+    for (const [key, val] of Object.entries(destMap)) {
+      if (msg.includes(key)) { destination = val; break; }
+    }
+    if (!destination && ctx.last_destination) destination = ctx.last_destination;
+
+    // Extract budget
+    const budgetMatch = msg.match(/(\d[\d\s]*)(€|eur|euros?|mad|dh|dirham)/i)
+      ?? msg.match(/budget[^\d]*(\d[\d\s]*)/i);
+    const rawBudget = budgetMatch ? parseInt(budgetMatch[1].replace(/\s/g, ""), 10) : null;
+    const budget = rawBudget ?? ctx.last_budget ?? null;
+
+    // Extract people
+    const peopleMatch = msg.match(/(\d+)\s*(personne|voyageur|adulte|enfant|pax)/i)
+      ?? msg.match(/(couple|seul|solo)/i);
+    let people: number | null = null;
+    if (peopleMatch) {
+      people = peopleMatch[1] ? parseInt(peopleMatch[1], 10) : peopleMatch[0].includes("couple") ? 2 : 1;
+    }
+
+    // Extract dates (loose)
+    const dateMatch = msg.match(/(janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre|jan|fev|mar|avr|jun|jul|aou|sep|oct|nov|dec|\d{1,2}\/\d{1,2}(\/\d{2,4})?)/i);
+    const dates: string | null = dateMatch ? dateMatch[0] : null;
+
+    // Extract travel type
+    const typeMap: Record<string, string> = {
+      aventure: "ADVENTURE", culture: "CULTURE", famille: "FAMILLE",
+      luxe: "LUXE", désert: "DESERT", desert: "DESERT",
+      détente: "RELAXATION", detente: "RELAXATION", nature: "NATURE",
+      religieux: "RELIGIEUX", historique: "HISTORIQUE",
+    };
+    let travel_type: string | null = null;
+    for (const [key, val] of Object.entries(typeMap)) {
+      if (msg.includes(key)) { travel_type = val; break; }
+    }
+
+    // Determine intent
+    let intent: IntentType = "unknown";
+    if (/(réserver|reserver|book|je veux partir|je voudrais partir)/i.test(msg)) {
+      intent = "booking_request";
+    } else if (/(modifier|changer|annuler|repousser|changer la date)/i.test(msg)) {
+      intent = "modification_request";
+    } else if (/(recommande|conseille|suggestion|idée|que faire|où aller)/i.test(msg)) {
+      intent = "recommendation";
+    } else if (destination || budget || dates) {
+      intent = "travel_plan";
+    } else if (ctx.last_intent) {
+      intent = (ctx.last_intent as IntentType) ?? "unknown";
+    }
+
+    // Determine missing info and action
+    const missing: string[] = [];
+    if (!destination) missing.push("destination");
+    if (!budget)      missing.push("budget");
+    if (!people)      missing.push("people");
+
+    const action: IntentAction =
+      intent === "history_query"   ? "fetch_history" :
+      intent === "booking_request" && destination && budget ? "call_backend" :
+      intent === "travel_plan"     && destination           ? "call_backend" :
+      "ask_user";
+
+    return { intent, destination, budget, dates, people, travel_type, missing_information: missing, action };
+  }
+
+  static #blankIntent(): IntentResult {
+    return {
+      intent: "unknown",
+      destination: null,
+      budget: null,
+      dates: null,
+      people: null,
+      travel_type: null,
+      missing_information: [],
+      action: "ask_user",
+    };
+  }
+
+  // ── Shared JSON validator for intent results ────────────────────────────────
+
+  static #validateIntentResult(parsed: Partial<IntentResult>): IntentResult {
+    const VALID_INTENTS: IntentType[] = [
+      "travel_plan", "recommendation", "booking_request",
+      "modification_request", "history_query", "smalltalk", "unknown",
+    ];
+    const VALID_ACTIONS: IntentAction[] = ["ask_user", "call_backend", "fetch_history"];
+    return {
+      intent:              VALID_INTENTS.includes(parsed.intent as IntentType) ? (parsed.intent as IntentType) : "unknown",
+      destination:         typeof parsed.destination === "string"  ? parsed.destination  : null,
+      budget:              typeof parsed.budget      === "number"  ? parsed.budget        : null,
+      dates:               typeof parsed.dates       === "string"  ? parsed.dates         : null,
+      people:              typeof parsed.people      === "number"  ? parsed.people        : null,
+      travel_type:         typeof parsed.travel_type === "string"  ? parsed.travel_type   : null,
+      missing_information: Array.isArray(parsed.missing_information) ? parsed.missing_information.map(String) : [],
+      action:              VALID_ACTIONS.includes(parsed.action as IntentAction) ? (parsed.action as IntentAction) : "ask_user",
+    };
+  }
+
+  // ── Intent extraction — Gemini primary ──────────────────────────────────────
+
+  private static async #intentViaGemini(
+    userMessage: string,
+    sessionContext: SessionContext
+  ): Promise<IntentResult | null> {
+    if (!isGeminiConfigured() || isGeminiPaused()) return null;
+    const genai = getGeminiClient();
+    if (!genai) return null;
+
+    try {
+      const model = genai.getGenerativeModel({
+        model: process.env.GEMINI_MODEL || "gemini-1.5-flash",
+        systemInstruction: INTENT_SYSTEM_PROMPT,
+        generationConfig: {
+          responseMimeType: "application/json",
+          maxOutputTokens: 200,
+          temperature: 0.1,
+        } as object,
+      });
+
+      const result = await model.generateContent(
+        JSON.stringify({ user_message: userMessage, session_context: sessionContext })
+      );
+      const raw = result.response.text().trim();
+      if (!raw) return null;
+
+      return this.#validateIntentResult(JSON.parse(raw) as Partial<IntentResult>);
+    } catch (error) {
+      if (isGeminiQuotaError(error)) {
+        pauseGemini(60);
+        console.warn("Gemini intent quota — fallback to OpenAI");
+      } else {
+        console.error("Gemini extractIntent error:", error);
+      }
+      return null;
+    }
+  }
+
+  // ── Intent extraction — OpenAI fallback ────────────────────────────────────
+
+  private static async #intentViaOpenAI(
+    userMessage: string,
+    sessionContext: SessionContext
+  ): Promise<IntentResult | null> {
+    if (!isOpenAIConfigured() || isOpenAIPaused()) return null;
+    const openai = getOpenAIClient();
+    if (!openai) return null;
+
+    try {
+      const completion = await openai.chat.completions.create({
+        model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+        messages: [
+          { role: "system", content: INTENT_SYSTEM_PROMPT },
+          {
+            role: "user",
+            content: JSON.stringify({ user_message: userMessage, session_context: sessionContext }),
+          },
+        ],
+        response_format: { type: "json_object" },
+        max_tokens: 180,
+        temperature: 0.1,
+      });
+
+      const raw = completion.choices[0]?.message?.content;
+      if (!raw) return null;
+
+      return this.#validateIntentResult(JSON.parse(raw) as Partial<IntentResult>);
+    } catch (error) {
+      if (isOpenAIQuotaOrRateLimitError(error)) {
+        pauseOpenAI(60);
+        console.warn("OpenAI intent quota — mode heuristic");
+      } else {
+        console.error("OpenAI extractIntent error:", error);
+      }
+      return null;
+    }
+  }
+
+  static async extractIntent(
+    userMessage: string,
+    sessionContext: SessionContext = {}
+  ): Promise<IntentResult> {
+    // 1. Gemini (free, primary)
+    const geminiResult = await this.#intentViaGemini(userMessage, sessionContext);
+    if (geminiResult) return geminiResult;
+
+    // 2. OpenAI (paid, fallback)
+    const openaiResult = await this.#intentViaOpenAI(userMessage, sessionContext);
+    if (openaiResult) return openaiResult;
+
+    // 3. Offline heuristic (always available)
+    return this.extractIntentOffline(userMessage, sessionContext);
+  }
+
+  // ── Guide chat — Gemini primary ─────────────────────────────────────────────
+
+  private static #buildGuideSystem(ctx: ClientGuideContext): string {
+    const profile = this.formatContextBlock(ctx);
+    const firstName = ctx.userName?.split(" ")[0] ?? "";
+    const onboarding = ctx.profile.onboardingComplete
+      ? "Profil complet : proposez des suggestions personnalisées et concrètes."
+      : "Profil incomplet : posez UNE seule question ciblée (destination, style, budget ou nombre de voyageurs) avant de donner des conseils.";
+    return [
+      GUIDE_SYSTEM_PROMPT,
+      "",
+      "Profil mémorisé du client :",
+      profile,
+      firstName ? `Prénom : ${firstName}.` : "",
+      onboarding,
+    ].filter(Boolean).join("\n");
+  }
+
+  private static async #guideChatViaGemini(
+    messages: { role: "user" | "assistant"; content: string }[],
+    ctx: ClientGuideContext
+  ): Promise<string | null> {
+    if (!isGeminiConfigured() || isGeminiPaused()) return null;
+    const genai = getGeminiClient();
+    if (!genai) return null;
+
+    try {
+      const model = genai.getGenerativeModel({
+        model: process.env.GEMINI_MODEL || "gemini-1.5-flash",
+        systemInstruction: this.#buildGuideSystem(ctx),
+        generationConfig: { maxOutputTokens: 700, temperature: 0.75 } as object,
+      });
+
+      // Gemini history uses role "user" | "model"
+      const history = messages.slice(0, -1).map(m => ({
+        role: m.role === "user" ? "user" : "model",
+        parts: [{ text: m.content }],
+      }));
+
+      const chat = model.startChat({ history });
+      const lastMsg = messages[messages.length - 1].content;
+      const result = await chat.sendMessage(lastMsg);
+      return result.response.text().trim() || null;
+    } catch (error) {
+      if (isGeminiQuotaError(error)) {
+        pauseGemini(60);
+        console.warn("Gemini guideChat quota — fallback to OpenAI");
+      } else {
+        console.error("Gemini guideChat error:", error);
+      }
+      return null;
+    }
+  }
+
+  private static async #guideChatViaOpenAI(
+    messages: { role: "user" | "assistant"; content: string }[],
+    ctx: ClientGuideContext
+  ): Promise<string | null> {
+    if (!isOpenAIConfigured() || isOpenAIPaused()) return null;
+    const openai = getOpenAIClient();
+    if (!openai) return null;
+
+    try {
+      const completion = await openai.chat.completions.create({
+        model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+        messages: [
+          { role: "system", content: this.#buildGuideSystem(ctx) },
+          ...messages.slice(-14).map(m => ({ role: m.role as "user" | "assistant", content: m.content })),
+        ],
+        max_tokens: 650,
+        temperature: 0.75,
+      });
+
+      return completion.choices[0]?.message?.content?.trim() || null;
+    } catch (error) {
+      if (isOpenAIQuotaOrRateLimitError(error)) {
+        pauseOpenAI(60);
+        console.warn("OpenAI guideChat quota — offline fallback");
+      } else {
+        console.error("OpenAI guideChat error:", error);
+      }
+      return null;
+    }
+  }
+
   static async guideChat(
     messages: { role: "user" | "assistant"; content: string }[],
     ctx: ClientGuideContext
-  ): Promise<{ reply: string; mode: "llm" | "offline" }> {
-    if (isLlmDisabled() || !isLlmConfigured()) {
-      return { reply: this.guideChatOffline(messages, ctx), mode: "offline" };
-    }
+  ): Promise<{ reply: string; mode: "gemini" | "openai" | "offline" }> {
+    // 1. Gemini — free, primary
+    const geminiReply = await this.#guideChatViaGemini(messages, ctx);
+    if (geminiReply) return { reply: geminiReply, mode: "gemini" };
 
-    const profileBlock = this.formatContextBlock(ctx);
-    const lastUser = [...messages].reverse().find((m) => m.role === "user")?.content || "";
+    // 2. OpenAI — paid, fallback
+    const openaiReply = await this.#guideChatViaOpenAI(messages, ctx);
+    if (openaiReply) return { reply: openaiReply, mode: "openai" };
 
-    let catalogBlock = "";
-    try {
-      catalogBlock = await buildCatalogContext({
-        query: lastUser,
-        destinations: ctx.profile.preferredDestinations,
-        tripTypes: ctx.profile.travelStyles,
-        budgetMax: ctx.profile.budgetMax ?? undefined,
-        limit: 5,
-      });
-    } catch {
-      catalogBlock = "";
-    }
-
-    const systemWithUser = `${GUIDE_SYSTEM_PROMPT}
-
-Profil mémorisé du client :
-${profileBlock}
-${ctx.userName ? `Prénom : ${ctx.userName.split(" ")[0]}.` : ""}
-${!ctx.profile.onboardingComplete ? "Le profil est incomplet : posez une question ciblée (destination, style, budget ou nombre de voyageurs) avant de donner des conseils détaillés." : "Profil complet : proposez des suggestions personnalisées."}
-
-${catalogBlock ? `${catalogBlock}\nCite uniquement ces voyages réels quand vous recommandez une offre précise.` : ""}`;
-
-    const llmReply = await llmChatCompletion({
-      messages: [
-        { role: "system", content: systemWithUser },
-        ...messages.slice(-14).map((m) => ({
-          role: m.role as "user" | "assistant",
-          content: m.content,
-        })),
-      ],
-      maxTokens: 650,
-      temperature: 0.75,
-    });
-
-    if (llmReply) {
-      return { reply: llmReply, mode: "llm" };
-    }
-
+    // 3. Offline heuristic — always available
     return { reply: this.guideChatOffline(messages, ctx), mode: "offline" };
   }
 }

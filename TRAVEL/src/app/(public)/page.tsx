@@ -1,226 +1,19 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import MaghrebCarousel from "@/components/public/MaghrebCarousel";
-import { 
-  ArrowRight, 
-  ShieldCheck, 
-  Star, 
+import {
+  ArrowRight,
+  ShieldCheck,
+  Star,
   CheckCircle2,
   ChevronDown,
   Sparkles,
 } from "lucide-react";
 
 import DestinationsSection from "@/components/public/DestinationsSection";
-import TripsGroupedBySeason from "@/components/trips/TripsGroupedBySeason";
-import { groupTripsBySeason, SEASON_ORDER } from "@/lib/seasons";
-import type { Season } from "@/lib/seasons";
-
-type CatalogTrip = {
-  id: string;
-  title: string;
-  slug: string;
-  destination: string;
-  tripType: string;
-  totalPrice: number;
-  coverImage: string;
-  totalSpots: number;
-  bookedSpots: number;
-  status?: string;
-  season?: Season;
-};
-
-function FeaturedTrips() {
-  const [groupedTrips, setGroupedTrips] = useState<{ season: Season; trips: CatalogTrip[] }[]>([]);
-  const [selectedSeason, setSelectedSeason] = useState<Season | null>(null);
-  const [currentSeason, setCurrentSeason] = useState<Season>("SUMMER");
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetch("/api/trips")
-      .then((res) => res.json())
-      .then((data) => {
-        const published = ((data.trips || []) as CatalogTrip[]).filter(
-          (t) => t.status === "PUBLISHED"
-        );
-        const grouped = groupTripsBySeason(published);
-        const seasonList = SEASON_ORDER;
-        const result = (Object.keys(seasonList) as Season[])
-          .sort((a, b) => seasonList[a] - seasonList[b])
-          .map((season) => ({
-            season,
-            trips: grouped[season] || [],
-          }))
-          .filter((g) => g.trips.length > 0);
-        setGroupedTrips(result);
-        
-        // Get current season
-        const today = new Date();
-        const month = today.getMonth() + 1;
-        if (month >= 3 && month <= 5) setCurrentSeason("SPRING");
-        else if (month >= 6 && month <= 8) setCurrentSeason("SUMMER");
-        else if (month >= 9 && month <= 11) setCurrentSeason("AUTUMN");
-        else setCurrentSeason("WINTER");
-        
-        // Set initial selected season
-        setSelectedSeason(result.length > 0 ? result[0].season : null);
-      })
-      .catch(() => setGroupedTrips([]))
-      .finally(() => setLoading(false));
-  }, []);
-
-  const seasonOptionsList = [
-    { key: 'SPRING' as Season, emoji: '🌸', name: 'Printemps', dates: 'Mars à Mai' },
-    { key: 'SUMMER' as Season, emoji: '☀️', name: 'Été', dates: 'Juin à Août' },
-    { key: 'AUTUMN' as Season, emoji: '🍂', name: 'Automne', dates: 'Septembre à Novembre' },
-    { key: 'WINTER' as Season, emoji: '❄️', name: 'Hiver', dates: 'Décembre à Février' },
-  ];
-
-  const filteredTrips = groupedTrips.filter((g) => {
-    if (selectedSeason) return g.season === selectedSeason;
-    return true;
-  });
-
-  if (loading) {
-    return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-        {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="bg-white rounded-[3rem] overflow-hidden border border-gray-100 animate-pulse">
-            <div className="aspect-[4/5] bg-gray-100" />
-            <div className="p-8 space-y-4">
-              <div className="h-6 bg-gray-100 rounded-lg w-3/4" />
-              <div className="h-4 bg-gray-50 rounded w-1/2" />
-            </div>
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  if (groupedTrips.length === 0) {
-    return (
-      <p className="text-center text-gray-400 font-bold uppercase tracking-widest text-xs py-12">
-        Aucun voyage publié pour le moment — revenez bientôt.
-      </p>
-    );
-  }
-
-  return (
-    <div className="space-y-10">
-
-      {/* ── Creative expanding season selector ──────────────────────────── */}
-      <div
-        className="flex rounded-[2rem] overflow-hidden border border-gray-100 shadow-sm"
-        style={{ height: "128px" }}
-      >
-        {seasonOptionsList.map((option) => {
-          const seasonTrips = groupedTrips.find((g) => g.season === option.key);
-          const tripCount   = seasonTrips?.trips.length ?? 0;
-          const isSelected  = selectedSeason === option.key;
-          const isCurrent   = option.key === currentSeason;
-          const isDisabled  = tripCount === 0;
-
-          return (
-            <button
-              key={option.key}
-              onClick={() => !isDisabled && setSelectedSeason(option.key)}
-              disabled={isDisabled}
-              aria-pressed={isSelected}
-              style={{
-                flex: isSelected ? "5 1 0%" : "1 1 0%",
-                transition: "flex 0.55s cubic-bezier(0.4, 0, 0.2, 1)",
-              }}
-              className={[
-                "relative flex items-center overflow-hidden outline-none",
-                "border-r border-gray-100 last:border-r-0",
-                isSelected
-                  ? "bg-orange-600 px-8 gap-6 cursor-default"
-                  : isDisabled
-                    ? "bg-gray-50 justify-center opacity-25 cursor-not-allowed"
-                    : "bg-white justify-center cursor-pointer group hover:bg-orange-50/60",
-              ].join(" ")}
-            >
-              {/* ── Collapsed state ── */}
-              {!isSelected && (
-                <div className="flex flex-col items-center gap-2">
-                  <span className="text-2xl leading-none">{option.emoji}</span>
-                  <span
-                    className={[
-                      "text-[8px] font-black uppercase tracking-[0.18em] whitespace-nowrap",
-                      isDisabled
-                        ? "text-gray-300"
-                        : "text-gray-400 group-hover:text-orange-500 transition-colors duration-200",
-                    ].join(" ")}
-                  >
-                    {option.name}
-                  </span>
-
-                  {/* Trip count badge (top-right) */}
-                  {tripCount > 0 && (
-                    <div className="absolute top-3 right-3 w-5 h-5 bg-orange-50 border border-orange-100 rounded-full flex items-center justify-center">
-                      <span className="text-[8px] font-black text-orange-500 leading-none">
-                        {tripCount}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* ── Expanded state ── */}
-              {isSelected && (
-                <div className="flex items-center gap-6 w-full animate-in fade-in duration-300">
-                  {/* Emoji box */}
-                  <div className="w-14 h-14 bg-white/15 border border-white/20 rounded-2xl flex items-center justify-center text-3xl shrink-0">
-                    {option.emoji}
-                  </div>
-
-                  {/* Season info */}
-                  <div className="flex flex-col gap-1 min-w-0">
-                    <div className="flex items-center gap-3 flex-wrap">
-                      <span className="text-white font-black text-xl uppercase tracking-tight leading-tight whitespace-nowrap">
-                        {option.name}
-                      </span>
-                      {isCurrent && (
-                        <div className="flex items-center gap-1.5 bg-white/15 border border-white/20 px-3 py-1 rounded-full">
-                          <span className="w-1.5 h-1.5 rounded-full bg-white/80 animate-pulse" />
-                          <span className="text-[9px] font-black text-white/90 uppercase tracking-widest whitespace-nowrap">
-                            En cours
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                    <span className="text-orange-100/80 text-[10px] font-bold uppercase tracking-widest whitespace-nowrap">
-                      {option.dates}
-                    </span>
-                    <span className="text-white/50 text-[10px] font-bold uppercase tracking-widest whitespace-nowrap">
-                      {tripCount} voyage{tripCount > 1 ? "s" : ""} disponible{tripCount > 1 ? "s" : ""}
-                    </span>
-                  </div>
-
-                  {/* Arrow */}
-                  <div className="ml-auto shrink-0 w-12 h-12 bg-white/10 border border-white/20 rounded-2xl flex items-center justify-center">
-                    <ArrowRight size={20} className="text-white" />
-                  </div>
-                </div>
-              )}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* ── Trips grid ──────────────────────────────────────────────────── */}
-      {filteredTrips.length > 0 ? (
-        <TripsGroupedBySeason groupedTrips={filteredTrips} />
-      ) : (
-        <p className="text-center text-gray-400 font-bold uppercase tracking-widest text-xs py-12">
-          Aucun voyage pour cette saison.
-        </p>
-      )}
-    </div>
-  );
-}
+import CinematicShowcase from "@/components/trips/CinematicShowcase";
 
 export default function Home() {
   return (
@@ -298,22 +91,8 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Featured Trips */}
-      <section className="py-32 px-6">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex justify-between items-end mb-20">
-            <div>
-              <h2 className="text-4xl md:text-5xl font-black text-[#0F172A] tracking-tight mb-4">Voyages à la une ✨</h2>
-              <p className="text-gray-400 font-bold uppercase tracking-widest text-[10px]">Sélectionnés pour leur authenticité</p>
-            </div>
-            <Link href="/voyages" className="text-xs font-black text-gray-400 uppercase tracking-widest hover:text-orange-600 transition-colors flex items-center gap-3 bg-white px-8 py-4 rounded-full border border-gray-100 shadow-sm">
-               Explorer tout <ArrowRight size={14} />
-            </Link>
-          </div>
-
-          <FeaturedTrips />
-        </div>
-      </section>
+      {/* Cinematic Voyages Showcase */}
+      <CinematicShowcase />
 
       {/* Destinations Section */}
       <DestinationsSection />
