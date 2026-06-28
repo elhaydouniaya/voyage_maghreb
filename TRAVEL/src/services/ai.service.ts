@@ -588,7 +588,7 @@ Réponds UNIQUEMENT en JSON avec: summary, tags (string[]), complexity (1-5), de
 
   // ── Intent extraction — Gemini primary ──────────────────────────────────────
 
-  private static async #intentViaGemini(
+  static async #intentViaGemini(
     userMessage: string,
     sessionContext: SessionContext
   ): Promise<IntentResult | null> {
@@ -627,7 +627,7 @@ Réponds UNIQUEMENT en JSON avec: summary, tags (string[]), complexity (1-5), de
 
   // ── Intent extraction — OpenAI fallback ────────────────────────────────────
 
-  private static async #intentViaOpenAI(
+  static async #intentViaOpenAI(
     userMessage: string,
     sessionContext: SessionContext
   ): Promise<IntentResult | null> {
@@ -683,7 +683,7 @@ Réponds UNIQUEMENT en JSON avec: summary, tags (string[]), complexity (1-5), de
 
   // ── Guide chat — Gemini primary ─────────────────────────────────────────────
 
-  private static #buildGuideSystem(ctx: ClientGuideContext): string {
+  static #buildGuideSystem(ctx: ClientGuideContext): string {
     const profile = this.formatContextBlock(ctx);
     const firstName = ctx.userName?.split(" ")[0] ?? "";
     const onboarding = ctx.profile.onboardingComplete
@@ -699,7 +699,7 @@ Réponds UNIQUEMENT en JSON avec: summary, tags (string[]), complexity (1-5), de
     ].filter(Boolean).join("\n");
   }
 
-  private static async #guideChatViaGemini(
+  static async #guideChatViaGemini(
     messages: { role: "user" | "assistant"; content: string }[],
     ctx: ClientGuideContext
   ): Promise<string | null> {
@@ -735,7 +735,7 @@ Réponds UNIQUEMENT en JSON avec: summary, tags (string[]), complexity (1-5), de
     }
   }
 
-  private static async #guideChatViaOpenAI(
+  static async #guideChatViaOpenAI(
     messages: { role: "user" | "assistant"; content: string }[],
     ctx: ClientGuideContext
   ): Promise<string | null> {
