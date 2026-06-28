@@ -51,6 +51,7 @@ authProviders.push(
                 id: user.id,
                 name: user.name,
                 email: user.email,
+                image: user.image,
                 role: user.role,
               } as any;
             }
@@ -63,6 +64,7 @@ authProviders.push(
                 id: user.id,
                 name: user.name,
                 email: user.email,
+                image: user.image,
                 role: user.role,
               } as any;
             }
@@ -183,6 +185,7 @@ export const authOptions: NextAuthOptions = {
         token.role = userRole || "CLIENT";
         token.email = user.email;
         if (user.name) token.name = user.name;
+        token.picture = (user as { image?: string | null }).image ?? null;
 
         // Charger le statut de vérification de l'agence dans le JWT
         if (token.role === "AGENCY" && user.id) {
@@ -200,6 +203,10 @@ export const authOptions: NextAuthOptions = {
 
       if (trigger === "update" && session?.name) {
         token.name = session.name as string;
+      }
+
+      if (trigger === "update" && session && "image" in session) {
+        token.picture = (session.image as string | null) ?? null;
       }
 
       if (account?.provider === "google" && user?.email) {
@@ -246,6 +253,7 @@ export const authOptions: NextAuthOptions = {
         session.user.role = tokenRole || "CLIENT";
         if (token.name) session.user.name = token.name as string;
         if (token.email) session.user.email = token.email as string;
+        session.user.image = (token.picture as string | null | undefined) ?? null;
         if (token.agencyVerificationStatus) {
           (session.user as { agencyVerificationStatus?: string }).agencyVerificationStatus =
             token.agencyVerificationStatus as string;

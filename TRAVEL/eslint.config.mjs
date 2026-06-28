@@ -19,6 +19,13 @@ const eslintConfig = defineConfig([
       ],
     },
   },
+  {
+    // Standalone CommonJS dev/ops scripts run directly with `node` — require() is correct here.
+    files: ["scripts/**/*.js"],
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
+    },
+  },
   globalIgnores([
     ".next/**",
     "out/**",
