@@ -59,6 +59,25 @@ model User {
   favorites     Favorite[]
   guideProfile  ClientGuideProfile?
   guideMessages GuideChatMessage[]
+  notificationPreferences NotificationPreferences?
+}
+
+model NotificationPreferences {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Confirmations, changements de statut et annulations de réservation
+  bookingUpdates Boolean  @default(true)
+  /// Offres promotionnelles et bons plans
+  promotions     Boolean  @default(false)
+  /// Newsletter mensuelle (idées de voyages, guides)
+  newsletter     Boolean  @default(false)
+  /// Rappels par SMS avant le départ
+  smsReminders   Boolean  @default(false)
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 }
 
 model ClientGuideProfile {

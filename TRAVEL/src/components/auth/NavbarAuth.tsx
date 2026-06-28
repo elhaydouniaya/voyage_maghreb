@@ -27,6 +27,7 @@ export function NavbarAuth() {
   if (session) {
     const name = session.user?.name || "Mon compte";
     const role = (session.user as any).role || "CLIENT";
+    const image = session.user?.image || null;
     const initials = name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2);
 
     return (
@@ -36,9 +37,13 @@ export function NavbarAuth() {
           title="Menu utilisateur"
           className="flex items-center gap-2.5 bg-white border border-gray-100 px-4 py-2 rounded-full hover:border-orange-500/30 hover:bg-orange-50/50 transition-all shadow-sm"
         >
-          <div className="w-7 h-7 rounded-xl bg-orange-600 flex items-center justify-center text-white font-black text-xs">
-            {initials}
-          </div>
+          {image ? (
+            <img src={image} alt={name} className="w-7 h-7 rounded-xl object-cover" />
+          ) : (
+            <div className="w-7 h-7 rounded-xl bg-orange-600 flex items-center justify-center text-white font-black text-xs">
+              {initials}
+            </div>
+          )}
           <span className="text-sm font-bold text-[#0F172A] hidden md:block max-w-[120px] truncate">
             {name}
           </span>

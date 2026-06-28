@@ -13,10 +13,14 @@ import {
   Heart,
   ShieldCheck,
   History,
-  Sparkles
+  Sparkles,
+  KeyRound,
+  Bell
 } from "lucide-react";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import Toast, { useToast } from "@/components/ui/Toast";
+import Switch from "@/components/ui/Switch";
+import AvatarUploader from "@/components/profile/AvatarUploader";
 import TripCard from "@/components/trips/TripCard";
 
 type ClientBooking = {
@@ -41,6 +45,36 @@ function formatFrDate(iso: string) {
     year: "numeric",
   });
 }
+
+type NotifPrefs = {
+  bookingUpdates: boolean;
+  promotions: boolean;
+  newsletter: boolean;
+  smsReminders: boolean;
+};
+
+const NOTIF_OPTIONS: { key: keyof NotifPrefs; label: string; description: string }[] = [
+  {
+    key: "bookingUpdates",
+    label: "Suivi des réservations",
+    description: "Confirmations, changements de statut et annulations.",
+  },
+  {
+    key: "promotions",
+    label: "Offres & bons plans",
+    description: "Promotions et réductions sur les voyages.",
+  },
+  {
+    key: "newsletter",
+    label: "Newsletter",
+    description: "Idées de voyages et guides, une fois par mois.",
+  },
+  {
+    key: "smsReminders",
+    label: "Rappels SMS",
+    description: "Rappels par SMS avant le départ.",
+  },
+];
 
 const STATUS_MAP: Record<string, { label: string; color: string; bg: string }> = {
   CONFIRMED:       { label: "Confirmée",        color: "text-green-700",  bg: "bg-green-50 border-green-100" },
@@ -68,12 +102,6 @@ export default function ClientProfilePage() {
 
   const displayName = formData.name || sessionName;
   const displayEmail = formData.email || sessionEmail;
-  const initials = displayName
-    .split(" ")
-    .map((n: string) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
   const [settingsMessage, setSettingsMessage] = useState("");
   const [gdprBusy, setGdprBusy] = useState(false);
   const [gdprMessage, setGdprMessage] = useState("");
@@ -84,6 +112,18 @@ export default function ClientProfilePage() {
   const [bookings, setBookings] = useState<ClientBooking[]>([]);
   const [bookingsLoading, setBookingsLoading] = useState(true);
   const [cancelTarget, setCancelTarget] = useState<{ id: string; title: string } | null>(null);
+  const [avatarImage, setAvatarImage] = useState<string | null>(null);
+  const [pwForm, setPwForm] = useState({ current: "", next: "", confirm: "" });
+  const [pwBusy, setPwBusy] = useState(false);
+  const [pwMessage, setPwMessage] = useState<{ text: string; ok: boolean } | null>(null);
+  const [notifPrefs, setNotifPrefs] = useState<NotifPrefs>({
+    bookingUpdates: true,
+    promotions: false,
+    newsletter: false,
+    smsReminders: false,
+  });
+  const [notifLoaded, setNotifLoaded] = useState(false);
+  const [notifSavingKey, setNotifSavingKey] = useState<keyof NotifPrefs | null>(null);
   const { toast, showToast, hideToast } = useToast();
 
   useEffect(() => {
@@ -98,6 +138,7 @@ export default function ClientProfilePage() {
             email: data.user.email || "",
             phone: data.user.phone || "",
           });
+          setAvatarImage(data.user.image || null);
         }
       } catch {
         /* ignore */
@@ -183,6 +224,29 @@ export default function ClientProfilePage() {
   }, [activeTab, status]);
 
   useEffect(() => {
+    if (activeTab !== "settings" || status !== "authenticated" || notifLoaded) return;
+
+    let cancelled = false;
+    async function loadNotifPrefs() {
+      try {
+        const res = await fetch("/api/user/notifications", { cache: "no-store" });
+        if (res.ok) {
+          const data = await res.json();
+          if (!cancelled && data.preferences) setNotifPrefs(data.preferences);
+        }
+      } catch {
+        /* keep defaults */
+      } finally {
+        if (!cancelled) setNotifLoaded(true);
+      }
+    }
+    loadNotifPrefs();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, status, notifLoaded]);
+
+  useEffect(() => {
     if (status === "unauthenticated") {
       router.push("/login");
     }
@@ -233,6 +297,67 @@ export default function ClientProfilePage() {
     }
   };
 
+  const handleChangePassword = async () => {
+    setPwMessage(null);
+    if (pwForm.next.length < 8) {
+      setPwMessage({ text: "Le nouveau mot de passe doit contenir au moins 8 caractères.", ok: false });
+      return;
+    }
+    if (pwForm.next !== pwForm.confirm) {
+      setPwMessage({ text: "Les deux mots de passe ne correspondent pas.", ok: false });
+      return;
+    }
+    setPwBusy(true);
+    try {
+      const res = await fetch("/api/user/password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          currentPassword: pwForm.current,
+          newPassword: pwForm.next,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setPwMessage({ text: data.error || "Mise à jour impossible.", ok: false });
+        return;
+      }
+      setPwForm({ current: "", next: "", confirm: "" });
+      setPwMessage({ text: "Mot de passe mis à jour.", ok: true });
+      showToast("Mot de passe mis à jour.", "success");
+    } catch {
+      setPwMessage({ text: "Erreur réseau.", ok: false });
+    } finally {
+      setPwBusy(false);
+    }
+  };
+
+  const toggleNotif = async (key: keyof NotifPrefs) => {
+    const previous = notifPrefs;
+    const next = { ...previous, [key]: !previous[key] };
+    setNotifPrefs(next); // optimistic
+    setNotifSavingKey(key);
+    try {
+      const res = await fetch("/api/user/notifications", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(next),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setNotifPrefs(previous); // rollback
+        showToast(data.error || "Mise à jour impossible.", "error");
+        return;
+      }
+      if (data.preferences) setNotifPrefs(data.preferences);
+    } catch {
+      setNotifPrefs(previous); // rollback
+      showToast("Erreur réseau.", "error");
+    } finally {
+      setNotifSavingKey(null);
+    }
+  };
+
   if (role === "AGENCY") {
     return (
       <div className="max-w-2xl mx-auto px-6 py-24 text-center space-y-8">
@@ -269,9 +394,15 @@ export default function ClientProfilePage() {
           <div className="bg-[#0F172A] px-10 py-10 relative overflow-hidden">
             <div className="absolute top-0 right-0 w-64 h-64 bg-orange-500/10 rounded-full blur-3xl pointer-events-none" />
             <div className="flex items-center gap-6 relative z-10">
-              <div className="w-20 h-20 bg-orange-600 rounded-[2rem] flex items-center justify-center text-white font-black text-3xl shadow-xl shadow-orange-600/30 shrink-0">
-                {initials}
-              </div>
+              <AvatarUploader
+                name={displayName}
+                image={avatarImage}
+                onChange={async (img) => {
+                  setAvatarImage(img);
+                  await updateSession({ image: img });
+                }}
+                onNotify={showToast}
+              />
               <div>
                 <h1 className="text-3xl font-black text-white tracking-tight">{displayName}</h1>
                 <p className="text-gray-400 font-bold text-sm mt-1">{displayEmail}</p>
@@ -605,6 +736,97 @@ export default function ClientProfilePage() {
                >
                  {settingsSaving ? "Enregistrement..." : "Enregistrer"}
                </button>
+
+               {/* Sécurité — Mot de passe */}
+               <div className="mt-16 pt-10 border-t border-gray-100">
+                 <h3 className="text-sm font-black text-[#0F172A] flex items-center gap-2 mb-2">
+                   <KeyRound size={18} className="text-orange-500" />
+                   Mot de passe
+                 </h3>
+                 <p className="text-xs text-gray-500 font-bold mb-6 max-w-xl">
+                   Choisissez un mot de passe d&apos;au moins 8 caractères. Vous serez déconnecté de
+                   vos autres appareils lors de votre prochaine connexion.
+                 </p>
+                 <div className="grid md:grid-cols-3 gap-6 max-w-3xl">
+                   <div className="space-y-2">
+                     <label htmlFor="current-password" className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Mot de passe actuel</label>
+                     <input
+                       id="current-password"
+                       type="password"
+                       autoComplete="current-password"
+                       value={pwForm.current}
+                       onChange={(e) => setPwForm((p) => ({ ...p, current: e.target.value }))}
+                       placeholder="••••••••"
+                       className="w-full bg-[#F8FAFC] border border-gray-100 rounded-2xl px-6 py-4 font-bold text-[#0F172A]"
+                     />
+                   </div>
+                   <div className="space-y-2">
+                     <label htmlFor="new-password" className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Nouveau mot de passe</label>
+                     <input
+                       id="new-password"
+                       type="password"
+                       autoComplete="new-password"
+                       value={pwForm.next}
+                       onChange={(e) => setPwForm((p) => ({ ...p, next: e.target.value }))}
+                       placeholder="Min. 8 caractères"
+                       className="w-full bg-[#F8FAFC] border border-gray-100 rounded-2xl px-6 py-4 font-bold text-[#0F172A]"
+                     />
+                   </div>
+                   <div className="space-y-2">
+                     <label htmlFor="confirm-password" className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Confirmer</label>
+                     <input
+                       id="confirm-password"
+                       type="password"
+                       autoComplete="new-password"
+                       value={pwForm.confirm}
+                       onChange={(e) => setPwForm((p) => ({ ...p, confirm: e.target.value }))}
+                       placeholder="Confirmer le mot de passe"
+                       className="w-full bg-[#F8FAFC] border border-gray-100 rounded-2xl px-6 py-4 font-bold text-[#0F172A]"
+                     />
+                   </div>
+                 </div>
+                 {pwMessage && (
+                   <p className={`mt-4 text-sm font-bold ${pwMessage.ok ? "text-green-600" : "text-red-600"}`}>
+                     {pwMessage.text}
+                   </p>
+                 )}
+                 <button
+                   type="button"
+                   disabled={pwBusy || !pwForm.next || !pwForm.confirm}
+                   onClick={handleChangePassword}
+                   className="mt-8 bg-[#0F172A] text-white px-10 py-4 rounded-full text-[10px] font-black uppercase tracking-widest shadow-xl shadow-black/10 hover:bg-black transition-all disabled:opacity-50"
+                 >
+                   {pwBusy ? "Mise à jour..." : "Changer le mot de passe"}
+                 </button>
+               </div>
+
+               {/* Préférences de notifications */}
+               <div className="mt-16 pt-10 border-t border-gray-100">
+                 <h3 className="text-sm font-black text-[#0F172A] flex items-center gap-2 mb-2">
+                   <Bell size={18} className="text-orange-500" />
+                   Préférences de notifications
+                 </h3>
+                 <p className="text-xs text-gray-500 font-bold mb-6 max-w-xl">
+                   Choisissez les messages que vous souhaitez recevoir. Les changements sont
+                   enregistrés automatiquement.
+                 </p>
+                 <div className="divide-y divide-gray-50 max-w-2xl">
+                   {NOTIF_OPTIONS.map((opt) => (
+                     <div key={opt.key} className="flex items-center justify-between gap-6 py-5">
+                       <div className="min-w-0">
+                         <p id={`notif-${opt.key}`} className="text-sm font-black text-[#0F172A]">{opt.label}</p>
+                         <p className="text-xs font-bold text-gray-400 mt-0.5">{opt.description}</p>
+                       </div>
+                       <Switch
+                         checked={notifPrefs[opt.key]}
+                         onChange={() => toggleNotif(opt.key)}
+                         disabled={!notifLoaded || notifSavingKey === opt.key}
+                         labelledBy={`notif-${opt.key}`}
+                       />
+                     </div>
+                   ))}
+                 </div>
+               </div>
 
                {role === "CLIENT" && (
                  <div className="mt-16 pt-10 border-t border-gray-100">
