@@ -10,6 +10,7 @@ export type ClientGuideContext = {
     preferredSeason: string | null;
     onboardingComplete: boolean;
     notes: string | null;
+    lastSummary?: string | null;
   };
   recentBookings: { title: string; destination: string }[];
   favoriteDestinations: string[];
@@ -135,6 +136,7 @@ export class GuideProfileService {
         preferredSeason: profile.preferredSeason,
         onboardingComplete: profile.onboardingComplete,
         notes: profile.notes,
+        lastSummary: (profile as any).lastSummary ?? null,
       },
       recentBookings: bookings.map((b) => ({
         title: b.groupTrip.title,
@@ -164,8 +166,13 @@ export class GuideProfileService {
     }
 
     let budgetMax: number | undefined;
-    const budgetMatch = lower.match(/(\d{3,5})\s*(€|eur|euros?)/);
-    if (budgetMatch) budgetMax = Number(budgetMatch[1]);
+    // Support formats: 1200€, €1200, 2000 MAD, MAD 2000, 3000 DH, DH 3000
+    const budgetRegex = /(?:(\d{3,7})\s*(€|eur|euros?|mad|dh|dirham))|(?:(€|eur|euros?|mad|dh|dirham)\s*(\d{3,7}))/i;
+    const budgetMatch = lower.match(budgetRegex);
+    if (budgetMatch) {
+      const num = budgetMatch[1] || budgetMatch[4];
+      if (num) budgetMax = Number(num.replace(/\s/g, ""));
+    }
 
     let travelersCount: number | undefined;
     const travelersMatch = lower.match(/(\d+)\s*(personnes?|voyageurs?|adultes?)/);
@@ -226,6 +233,99 @@ export class GuideProfileService {
         notes: userTexts.slice(-500) || profile.notes,
       },
     });
+  }
+
+  /**
+   * Merge structured entities (from LLM analysis) into the canonical profile.
+   * This is deterministic: the backend decides how to apply entity updates.
+   */
+  static async mergeEntitiesIntoProfile(userId: string, analysisOrEntities: Record<string, any>) {
+    // analysisOrEntities can be either the raw entities map or the full analysis object produced by the LLM
+    // Normalize input: accept either { analysis: {...} } or { entities: {...} } or a plain entities map
+    let analysis: any;
+    if (analysisOrEntities && typeof analysisOrEntities === 'object') {
+      if ('analysis' in analysisOrEntities) analysis = analysisOrEntities.analysis;
+      else if ('entities' in analysisOrEntities) {
+        analysis = { conversationAction: analysisOrEntities.conversationAction || analysisOrEntities.action, entities: analysisOrEntities.entities };
+      } else {
+        analysis = { entities: analysisOrEntities };
+      }
+    } else {
+      analysis = { entities: {} };
+    }
+    const entities = analysis.entities || {};
+    const action = (analysis.conversationAction || analysis.action || '').toString().toUpperCase() || 'UNKNOWN';
+
+    const profile = await this.getOrCreateProfile(userId);
+    const updates: any = {};
+
+    if (!entities || typeof entities !== 'object') return;
+
+    // Helper to decide replace vs additive
+    const replaceForAction = (fieldsAction: string[]) => fieldsAction.includes(action) || action === 'UPDATE_PROFILE' || action === 'UNKNOWN';
+
+    // DESTINATION
+    if (entities.destination) {
+      const dest = String(entities.destination);
+      if (replaceForAction(['CHANGE_DESTINATION','REMOVE_PREFERENCE','CHANGE_PREFERENCES','CHANGE_DATES','CHANGE_BUDGET','CHANGE_TRAVELERS'])) {
+        updates.preferredDestinations = [dest];
+      } else {
+        const dests = Array.from(new Set([...(profile.preferredDestinations || []), dest]));
+        updates.preferredDestinations = dests;
+      }
+    }
+
+    // BUDGET
+    if (entities.budget != null) {
+      // budget is a replacement by nature when provided
+      updates.budgetMax = Number(entities.budget);
+    }
+
+    // TRAVELERS
+    if (entities.travelers != null) {
+      if (typeof entities.travelers === 'number') updates.travelersCount = Number(entities.travelers);
+      else if (Array.isArray(entities.travelers)) {
+        const total = entities.travelers.reduce((sum: number, t: any) => sum + (Number(t.count || 1)), 0);
+        updates.travelersCount = total;
+      }
+    }
+
+    // PREFERRED SEASON
+    if (entities.preferredSeason) {
+      updates.preferredSeason = String(entities.preferredSeason);
+    }
+
+    // TRAVEL STYLES - treat as replace on explicit change actions, additive otherwise
+    if (entities.travelStyles) {
+      const styles = Array.isArray(entities.travelStyles)
+        ? entities.travelStyles.map((s: any) => String(s))
+        : [String(entities.travelStyles)];
+
+      if (replaceForAction(['CHANGE_PREFERENCES','REMOVE_PREFERENCE','UPDATE_PROFILE'])) {
+        updates.travelStyles = Array.from(new Set(styles));
+      } else {
+        updates.travelStyles = Array.from(new Set([...(profile.travelStyles || []), ...styles]));
+      }
+    }
+
+    // Handle explicit removals (e.g., user said "no more desert")
+    if (entities.removeStyles && Array.isArray(entities.removeStyles)) {
+      const toRemove = entities.removeStyles.map((s: any) => String(s));
+      const remaining = (profile.travelStyles || []).filter((s: string) => !toRemove.includes(s));
+      updates.travelStyles = remaining;
+    }
+
+    // Activities or other multi-valued fields should remain additive
+    if (entities.activities) {
+      const acts = Array.isArray(entities.activities) ? entities.activities.map((a: any) => String(a)) : [String(entities.activities)];
+      // just append unique
+      const existingActs = (profile as any).activities || [];
+      updates['activities'] = Array.from(new Set([...(existingActs || []), ...acts]));
+    }
+
+    if (Object.keys(updates).length > 0) {
+      await prisma.clientGuideProfile.update({ where: { userId }, data: updates });
+    }
   }
 
   static buildWelcome(ctx: ClientGuideContext): string {

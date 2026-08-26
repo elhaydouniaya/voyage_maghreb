@@ -4,6 +4,7 @@ import { generateTripAiTags } from "@/lib/trip-tags";
 import { formatTrip } from "@/lib/trip-format";
 import { sendTripCancelledToClientEmail } from "@/lib/booking-emails";
 import { sortTripsBySeason } from "@/lib/seasons";
+import { getAppUrl } from "@/lib/app-url";
 import type { PhysicalLevel, TripStatus, TripType } from "@prisma/client";
 
 export interface CreateTripInput {
@@ -209,7 +210,7 @@ export class TripsService {
     });
 
     if (status === "PUBLISHED") {
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+      const appUrl = getAppUrl();
       try {
         const { sendTripPublishedEmail } = await import("@/lib/agency-emails");
         await sendTripPublishedEmail({
@@ -256,7 +257,7 @@ export class TripsService {
       include: { agency: true },
     });
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+    const appUrl = getAppUrl();
     try {
       const { sendTripPublishedEmail } = await import("@/lib/agency-emails");
       await sendTripPublishedEmail({

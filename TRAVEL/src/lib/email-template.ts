@@ -1,4 +1,4 @@
-const baseUrl = () => process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+import { getAppUrl } from "@/lib/app-url";
 
 export function wrapEmailHtml(title: string, bodyHtml: string) {
   return `
@@ -26,9 +26,9 @@ export function wrapEmailHtml(title: string, bodyHtml: string) {
         </tr>
         <tr>
           <td style="padding:0 32px 28px;font-size:11px;color:#94a3b8;line-height:1.5">
-            <a href="${baseUrl()}/legal/cgu" style="color:#f97316">CGU</a> ·
-            <a href="${baseUrl()}/legal/confidentialite" style="color:#f97316">Confidentialité</a> ·
-            <a href="${baseUrl()}/legal/remboursements" style="color:#f97316">Remboursements</a>
+            <a href="${getAppUrl()}/legal/cgu" style="color:#f97316">CGU</a> ·
+            <a href="${getAppUrl()}/legal/confidentialite" style="color:#f97316">Confidentialité</a> ·
+            <a href="${getAppUrl()}/legal/remboursements" style="color:#f97316">Remboursements</a>
           </td>
         </tr>
       </table>

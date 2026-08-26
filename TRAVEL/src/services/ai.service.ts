@@ -128,6 +128,40 @@ export interface TripScore {
   reasons: string[];
 }
 
+// New analysis types for single-call LLM analysis + draft reply
+export interface ImplicitPreference {
+  type: "activity" | "travel_style" | "accommodation" | "transport" | string;
+  value: string;
+  confidence: number;
+}
+
+export interface EmotionalState {
+  tone: "excited" | "hesitant" | "frustrated" | "curious" | "undecided" | "neutral";
+  confidence: number;
+}
+
+export interface Reasoning {
+  signals: string[];
+}
+
+export interface Analysis {
+  conversationAction: string;
+  entities: Record<string, any>;
+  corrections: { field: string; oldValue: any; newValue: any }[];
+  implicitPreferences: ImplicitPreference[];
+  inferredValues: Record<string, number | string | boolean>;
+  emotionalState: EmotionalState;
+  ambiguities: string[];
+  confidence: number;
+  reasoning?: Reasoning;
+}
+
+export interface AnalyzeWithDraftResult {
+  meta: { promptVersion: string };
+  analysis: Analysis;
+  draftReply: string;
+}
+
 export class AIService {
   /**
    * C.1 - Structuration de la demande via LLM
@@ -226,6 +260,213 @@ Réponds UNIQUEMENT en JSON avec: summary, tags (string[]), complexity (1-5), de
         console.error("OpenAI structureDemand error:", error);
       }
       return fallback();
+    }
+  }
+
+  /**
+   * Single-call analyzer: returns structured analysis + a short French draft acknowledgement.
+   * Inputs: conversation_summary, current_profile, structured_demand, latest_user_message
+   */
+  static async analyzeWithDraft(input: { conversation_summary: string; current_profile: any; structured_demand: any; latest_user_message: string; promptVersion?: string; }): Promise<AnalyzeWithDraftResult> {
+    const promptVersion = input.promptVersion || "v1.0";
+
+    const systemPrompt = `Tu es un assistant-conseiller de voyage francophone expert pour MaghrebVoyage. OBJECTIF: 1) analyser uniquement les informations envoyées (conversation_summary, current_profile, structured_demand, latest_user_message) ; 2) produire une ANALYSE STRUCTURÉE et une courte confirmation en français (draftReply).
+
+CONTRAINTES STRICTES :
+- Ne prends aucune décision applicative (pas de matching, pas d'appel backend, pas de question à poser, pas de redirections).
+- Retourne uniquement du JSON strict, sans texte supplémentaire, sans explications, sans markdown.
+- Le JSON renvoyé doit respecter exactement le schéma convenu : { "meta": { "promptVersion": "v1.0" }, "analysis": {...}, "draftReply": "..." }.
+
+ANALYSE :
+- Détecte corrections explicites (ex. "en fait", "finalement", "j\'ai changé d'avis").
+- Résout les références dans le contexte (ex. "celle-là", "la deuxième", "le premier voyage", "l\'autre proposition").
+- Infère préférences implicites (activité, style, confort) avec un score de confiance.
+- Identifie l'intention de conversation selon l'énumération fournie (UPDATE_PROFILE, CHANGE_DESTINATION, CHANGE_BUDGET, CHANGE_DATES, CHANGE_TRAVELERS, CHANGE_PREFERENCES, REMOVE_PREFERENCE, REQUEST_RECOMMENDATIONS, COMPARE_DESTINATIONS, EXPLAIN_RECOMMENDATION, GENERAL_TRAVEL_QUESTION, BOOKING_QUESTION, SMALL_TALK, UNKNOWN_TRAVEL_REFERENCE, UNKNOWN).
+
+IMPORTANT - REQUIRED FIELDS:
+The returned JSON's \`analysis\` object MUST include the following fields exactly as typed:
+- conversationAction (string)
+- entities (object)
+- corrections (array)
+- implicitPreferences (array)
+- inferredValues (object)
+- emotionalState (object)
+- ambiguities (array)
+- confidence (number between 0.0 and 1.0)
+
+DRAFT REPLY :
+- Toujours en français
+- Maximum 250 caractères
+- NE PAS POSER DE QUESTION
+- NE PAS PRENDRE DE DÉCISION (le backend décidera des actions)
+
+RENVOYER STRICTEMENT : {"meta":{"promptVersion":"v1.0"},"analysis":{...},"draftReply":"..."}`;
+
+    const userPayload = {
+      conversation_summary: input.conversation_summary || "",
+      current_profile: input.current_profile || {},
+      structured_demand: input.structured_demand || {},
+      latest_user_message: input.latest_user_message || "",
+    };
+
+    // Prefer Gemini (primary) when available. Use stable v1 API and avoid passing systemInstruction to the SDK to prevent v1 payload errors.
+    try {
+      const genai = getGeminiClient();
+      if (genai && isGeminiConfigured() && !isGeminiPaused()) {
+        try {
+          const model = genai.getGenerativeModel({
+            model: process.env.GEMINI_MODEL || "models/gemini-3.1-flash-lite",
+            generationConfig: {
+              maxOutputTokens: 1200,
+              temperature: 0.0,
+            },
+          }, { apiVersion: 'v1' });
+
+          // For API v1 the SDK may reject `systemInstruction` as a top-level field; include the system prompt as a prefix to the input payload.
+          const promptInput = `${systemPrompt}\n\n${JSON.stringify(userPayload)}`;
+
+          const result = await model.generateContent(promptInput);
+          const raw = (await result.response.text()).trim();
+          if (!raw) throw new Error('Empty Gemini response');
+
+          const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+
+          if (!parsed || typeof parsed !== 'object') throw new Error('Parsed analysis invalid');
+          if (!parsed.analysis || typeof parsed.analysis !== 'object') throw new Error('Missing analysis object');
+          if (typeof parsed.draftReply !== 'string') throw new Error('Missing draftReply string');
+
+          const analysisObj = parsed.analysis as any;
+          const requiredAnalysisFields = [
+            'conversationAction','entities','corrections','implicitPreferences','inferredValues','emotionalState','ambiguities'
+          ];
+          for (const f of requiredAnalysisFields) {
+            if (!(f in analysisObj)) throw new Error(`Missing analysis field: ${f}`);
+          }
+
+          // Defensive handling for missing confidence: assign default 0.5 and log a warning
+          if (!('confidence' in analysisObj) || analysisObj.confidence === null || analysisObj.confidence === undefined) {
+            console.warn('analyzeWithDraft: missing confidence in LLM analysis — defaulting to 0.5');
+            analysisObj.confidence = 0.5;
+          }
+
+          const conf = Number(analysisObj.confidence ?? 0);
+          if (isNaN(conf) || conf < 0.35) throw new Error(`Low LLM confidence: ${conf}`);
+
+          if (parsed.draftReply.length > 250) throw new Error('draftReply too long');
+          if (parsed.draftReply.includes('?')) throw new Error('draftReply must not contain questions');
+
+          return {
+            meta: { promptVersion },
+            analysis: parsed.analysis as Analysis,
+            draftReply: parsed.draftReply,
+          } as AnalyzeWithDraftResult;
+        } catch (err) {
+          console.error('analyzeWithDraft gemini error:', err);
+          // fall through to try OpenAI
+        }
+      }
+    } catch (e) {
+      // ignore gemini availability errors and try OpenAI
+      console.error('analyzeWithDraft gemini check error:', e);
+    }
+
+    // If Gemini not used or failed, try OpenAI
+    const openai = getOpenAIClient();
+    if (!openai || !isOpenAIConfigured() || isOpenAIPaused()) {
+      // fallback: deterministic heuristic analysis
+      const fallbackAnalysis: AnalyzeWithDraftResult = {
+        meta: { promptVersion },
+        analysis: {
+          conversationAction: "UNKNOWN",
+          entities: {},
+          corrections: [],
+          implicitPreferences: [],
+          inferredValues: {},
+          emotionalState: { tone: "neutral", confidence: 0.3 },
+          ambiguities: [],
+          confidence: 0.3,
+          reasoning: { signals: ["fallback heuristic"] },
+        },
+        draftReply: "J'ai bien reçu votre message et je l'ai enregistré.",
+      };
+      return fallbackAnalysis;
+    }
+
+    try {
+      const completion = await openai.chat.completions.create({
+        model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: JSON.stringify(userPayload) },
+        ],
+        response_format: { type: "json_object" },
+        max_tokens: 800,
+        temperature: 0.0,
+      });
+
+      const raw = completion.choices[0]?.message?.content;
+      if (!raw) throw new Error("Empty LLM response");
+
+      // Expect raw to be a JSON object (string). Parse safely.
+      const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+
+      // BASIC VALIDATION OF STRUCTURE
+      if (!parsed || typeof parsed !== "object") throw new Error("Parsed analysis invalid");
+      if (!parsed.analysis || typeof parsed.analysis !== "object") throw new Error("Missing analysis object");
+      if (typeof parsed.draftReply !== "string") throw new Error("Missing draftReply string");
+
+      // Validate required analysis fields and confidence threshold (trusted LLM interpretation)
+      const analysisObj = parsed.analysis as any;
+      const requiredAnalysisFields = [
+        "conversationAction",
+        "entities",
+        "corrections",
+        "implicitPreferences",
+        "inferredValues",
+        "emotionalState",
+        "ambiguities",
+        "confidence",
+      ];
+      for (const f of requiredAnalysisFields) {
+        if (!(f in analysisObj)) throw new Error(`Missing analysis field: ${f}`);
+      }
+
+      const conf = Number(analysisObj.confidence ?? 0);
+      // Fallback threshold: require at least 0.35 confidence from LLM to accept its interpretation
+      if (isNaN(conf) || conf < 0.35) {
+        throw new Error(`Low LLM confidence: ${conf}`);
+      }
+
+      // Enforce draftReply constraints: French ack, <=250 chars, no questions
+      if (parsed.draftReply.length > 250) throw new Error("draftReply too long");
+      if (parsed.draftReply.includes("?")) throw new Error("draftReply must not contain questions");
+      // Passed validation — proceed with parsed result
+
+      const result: AnalyzeWithDraftResult = {
+        meta: { promptVersion },
+        analysis: parsed.analysis as Analysis,
+        draftReply: parsed.draftReply,
+      };
+
+      return result;
+    } catch (error) {
+      console.error("analyzeWithDraft error:", error);
+      // fallback
+      return {
+        meta: { promptVersion },
+        analysis: {
+          conversationAction: "UNKNOWN",
+          entities: {},
+          corrections: [],
+          implicitPreferences: [],
+          inferredValues: {},
+          emotionalState: { tone: "neutral", confidence: 0.3 },
+          ambiguities: [],
+          confidence: 0.3,
+          reasoning: { signals: ["parse_error"] },
+        },
+        draftReply: "J'ai bien reçu votre message et je l'ai enregistré.",
+      };
     }
   }
 
@@ -494,10 +735,16 @@ Réponds UNIQUEMENT en JSON avec: summary, tags (string[]), complexity (1-5), de
     }
     if (!destination && ctx.last_destination) destination = ctx.last_destination;
 
-    // Extract budget
-    const budgetMatch = msg.match(/(\d[\d\s]*)(€|eur|euros?|mad|dh|dirham)/i)
-      ?? msg.match(/budget[^\d]*(\d[\d\s]*)/i);
-    const rawBudget = budgetMatch ? parseInt(budgetMatch[1].replace(/\s/g, ""), 10) : null;
+    // Extract budget (support 1200€, €1200, 2000 MAD, MAD 2000, 3000 DH, DH 3000)
+    const budgetRegex = /(?:(\d[\d\s]*)\s*(€|eur|euros?|mad|dh|dirham))|(?:(€|eur|euros?|mad|dh|dirham)\s*(\d[\d\s]*))/i;
+    const budgetMatch = msg.match(budgetRegex) ?? msg.match(/budget[^\d]*(\d[\d\s]*)/i);
+    let rawBudget: number | null = null;
+    if (budgetMatch) {
+      const num = budgetMatch[1] || budgetMatch[4] || budgetMatch[3] || budgetMatch[2];
+      if (num) {
+        rawBudget = parseInt((num as string).replace(/\s/g, ""), 10);
+      }
+    }
     const budget = rawBudget ?? ctx.last_budget ?? null;
 
     // Extract people
@@ -683,13 +930,14 @@ Réponds UNIQUEMENT en JSON avec: summary, tags (string[]), complexity (1-5), de
 
   // ── Guide chat — Gemini primary ─────────────────────────────────────────────
 
-  static #buildGuideSystem(ctx: ClientGuideContext): string {
+  static #buildGuideSystem(ctx: ClientGuideContext, assistantState?: { structuredDemand?: StructuredDemand; missingInformation?: string[]; confidence?: { percent: number; label: string } }): string {
     const profile = this.formatContextBlock(ctx);
     const firstName = ctx.userName?.split(" ")[0] ?? "";
     const onboarding = ctx.profile.onboardingComplete
       ? "Profil complet : proposez des suggestions personnalisées et concrètes."
       : "Profil incomplet : posez UNE seule question ciblée (destination, style, budget ou nombre de voyageurs) avant de donner des conseils.";
-    return [
+
+    let system = [
       GUIDE_SYSTEM_PROMPT,
       "",
       "Profil mémorisé du client :",
@@ -697,11 +945,35 @@ Réponds UNIQUEMENT en JSON avec: summary, tags (string[]), complexity (1-5), de
       firstName ? `Prénom : ${firstName}.` : "",
       onboarding,
     ].filter(Boolean).join("\n");
+
+    if (assistantState) {
+      const sd = assistantState.structuredDemand;
+      const miss = assistantState.missingInformation || [];
+      const conf = assistantState.confidence;
+
+      system += "\n\n--- Current extracted travel request (structured) ---\n";
+      system += sd
+        ? `Destination: ${sd.destinationNormalized || '—'}\nBudget: ${sd.budgetMax ?? '—'}\nDates: ${sd.startDate ? sd.startDate.toISOString().split('T')[0] : '—'}\nTravelers: ${sd.numberOfSeats ?? '—'}\nTravel style: ${sd.dominantTripType || '—'}\nHotel preferences: ${sd.tags?.includes('hotel') ? 'mentioned' : '—'}\nActivities: ${sd.tags?.join(', ') || '—'}\n`
+        : `Destination: ${ctx.profile.preferredDestinations.join(', ') || '—'}\nBudget: ${ctx.profile.budgetMax ?? '—'}\nDates: —\nTravelers: ${ctx.profile.travelersCount ?? '—'}\nTravel style: ${ctx.profile.travelStyles.join(', ') || '—'}\nHotel preferences: ${ctx.profile.notes?.includes('hotel') ? 'mentioned' : '—'}\nActivities: —\n`;
+
+      system += "\nMissing information:\n" + (miss.length ? miss.map(m => `- ${m}`).join('\n') : '- None');
+      system += "\n\nAssistant confidence:\n" + (conf ? `${conf.percent}% (${conf.label})` : 'Unknown');
+
+      system += "\n\nAssistant instructions:\n" +
+        "- Never ask for information already present in the structured request.\n" +
+        "- Ask ONLY for the missing fields listed above.\n" +
+        "- If the user changed previously supplied information, explicitly acknowledge the change and explain what was updated.\n" +
+        "- Do not restart the questionnaire or force the user through a fixed onboarding flow.\n" +
+        "- Prefer natural conversation and offer suggestions when enough info is present.";
+    }
+
+    return system;
   }
 
   static async #guideChatViaGemini(
     messages: { role: "user" | "assistant"; content: string }[],
-    ctx: ClientGuideContext
+    ctx: ClientGuideContext,
+    assistantState?: { structuredDemand?: StructuredDemand; missingInformation?: string[]; confidence?: { percent: number; label: string } }
   ): Promise<string | null> {
     if (!isGeminiConfigured() || isGeminiPaused()) return null;
     const genai = getGeminiClient();
@@ -710,7 +982,7 @@ Réponds UNIQUEMENT en JSON avec: summary, tags (string[]), complexity (1-5), de
     try {
       const model = genai.getGenerativeModel({
         model: process.env.GEMINI_MODEL || "gemini-1.5-flash",
-        systemInstruction: this.#buildGuideSystem(ctx),
+        systemInstruction: this.#buildGuideSystem(ctx, assistantState),
         generationConfig: { maxOutputTokens: 700, temperature: 0.75 } as object,
       });
 
@@ -737,17 +1009,19 @@ Réponds UNIQUEMENT en JSON avec: summary, tags (string[]), complexity (1-5), de
 
   static async #guideChatViaOpenAI(
     messages: { role: "user" | "assistant"; content: string }[],
-    ctx: ClientGuideContext
+    ctx: ClientGuideContext,
+    assistantState?: { structuredDemand?: StructuredDemand; missingInformation?: string[]; confidence?: { percent: number; label: string } }
   ): Promise<string | null> {
     if (!isOpenAIConfigured() || isOpenAIPaused()) return null;
     const openai = getOpenAIClient();
     if (!openai) return null;
 
     try {
+      const systemContent = this.#buildGuideSystem(ctx, assistantState);
       const completion = await openai.chat.completions.create({
         model: process.env.OPENAI_MODEL || "gpt-4o-mini",
         messages: [
-          { role: "system", content: this.#buildGuideSystem(ctx) },
+          { role: "system", content: systemContent },
           ...messages.slice(-14).map(m => ({ role: m.role as "user" | "assistant", content: m.content })),
         ],
         max_tokens: 650,
@@ -768,18 +1042,19 @@ Réponds UNIQUEMENT en JSON avec: summary, tags (string[]), complexity (1-5), de
 
   static async guideChat(
     messages: { role: "user" | "assistant"; content: string }[],
-    ctx: ClientGuideContext
+    ctx: ClientGuideContext,
+    assistantState?: { structuredDemand?: StructuredDemand; missingInformation?: string[]; confidence?: { percent: number; label: string } }
   ): Promise<{ reply: string; mode: "gemini" | "openai" | "offline" }> {
     // 1. Gemini — free, primary
-    const geminiReply = await this.#guideChatViaGemini(messages, ctx);
+    const geminiReply = await this.#guideChatViaGemini(messages, ctx, assistantState);
     if (geminiReply) return { reply: geminiReply, mode: "gemini" };
 
     // 2. OpenAI — paid, fallback
-    const openaiReply = await this.#guideChatViaOpenAI(messages, ctx);
+    const openaiReply = await this.#guideChatViaOpenAI(messages, ctx, assistantState);
     if (openaiReply) return { reply: openaiReply, mode: "openai" };
 
     // 3. Offline heuristic — always available
+    // The offline heuristic can still benefit from assistantState via ctx/profile, so keep as-is.
     return { reply: this.guideChatOffline(messages, ctx), mode: "offline" };
   }
 }
-

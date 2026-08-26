@@ -155,6 +155,7 @@ model Agency {
   bookings        Booking[]
   payments        Payment[]
   externalReviews ExternalReview[]
+  requestAssignments TravelRequestAgencyAssignment[]
 }
 
 enum AgencyStatus {
@@ -211,17 +212,105 @@ model TravelRequest {
   updatedAt       DateTime @updatedAt
 
   bookings        Booking[]
+  agencyAssignments TravelRequestAgencyAssignment[]
+  statusHistory   TravelRequestStatusHistory[]
+  adminNotes      AdminNote[]
 }
 
 enum RequestStatus {
   SUBMITTED
   AI_PROCESSED
   MATCH_SUGGESTED
+  UNDER_REVIEW
+  ASSIGNED
+  AGENCY_ACCEPTED
+  OFFER_RECEIVED
+  CLIENT_VIEWED
   CLIENT_CONFIRMED
   PAYMENT_PENDING
   PAID
+  IN_PROGRESS
   CLOSED
   CANCELLED
+}
+
+// ==========================================
+// 3a. Admin Workflow - Agency Assignments
+// ==========================================
+
+model TravelRequestAgencyAssignment {
+  id              String   @id @default(cuid())
+  requestId       String
+  request         TravelRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  
+  agencyId        String
+  agency          Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  
+  /// 'suggested' = system suggested | 'manual' = admin manually selected
+  assignmentType  String   @default("suggested") // suggested | manual
+  matchScore      Int?     // Score from matching algorithm (0-18)
+  matchReasons    String[] @default([]) // Reasons for the match
+  
+  /// Admin who made the assignment (for manual assignments)
+  assignedByUserId String?
+  
+  status          AssignmentStatus @default(PENDING)
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@unique([requestId, agencyId])
+  @@index([requestId])
+  @@index([agencyId])
+}
+
+enum AssignmentStatus {
+  PENDING          /// Assigned but awaiting agency response
+  ACCEPTED         /// Agency confirmed they can fulfill
+  DECLINED         /// Agency declined
+  EXPIRED          /// No response within timeframe
+}
+
+// ==========================================
+// 3b. Admin Workflow - Status History
+// ==========================================
+
+model TravelRequestStatusHistory {
+  id              String   @id @default(cuid())
+  requestId       String
+  request         TravelRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  
+  previousStatus  String?  // null for first entry
+  newStatus       String
+  
+  changedByUserId String?  // Admin or system user
+  reason          String?  @db.Text // Why was status changed?
+  
+  createdAt       DateTime @default(now())
+  
+  @@index([requestId])
+  @@index([createdAt])
+}
+
+// ==========================================
+// 3c. Admin Workflow - Notes
+// ==========================================
+
+model AdminNote {
+  id              String   @id @default(cuid())
+  requestId       String
+  request         TravelRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  
+  createdByUserId String
+  content         String   @db.Text
+  
+  isInternal      Boolean  @default(true) // Internal only or visible to agency/client
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@index([requestId])
+  @@index([createdByUserId])
 }
 
 // ==========================================

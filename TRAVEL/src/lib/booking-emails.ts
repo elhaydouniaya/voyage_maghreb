@@ -1,7 +1,6 @@
 import { sendEmail } from "@/lib/email";
 import { emailButton } from "@/lib/email-template";
-
-const baseUrl = () => process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+import { getAppUrl } from "@/lib/app-url";
 
 export async function sendWelcomeClientEmail(input: {
   to: string;
@@ -19,8 +18,8 @@ export async function sendWelcomeClientEmail(input: {
         <li>Recherche IA personnalisée</li>
         <li>Réservation en ligne</li>
       </ul>
-      ${emailButton(`${baseUrl()}/voyages`, "Explorer les voyages")}
-      ${emailButton(`${baseUrl()}/recherche`, "Lancer la recherche IA")}
+      ${emailButton(`${getAppUrl()}/voyages`, "Explorer les voyages")}
+      ${emailButton(`${getAppUrl()}/recherche`, "Lancer la recherche IA")}
     `,
   });
 }
@@ -40,7 +39,7 @@ export async function sendTravelRequestReceivedEmail(input: {
       <p>Nous avons bien reçu votre demande de voyage${input.destination ? ` vers <strong>${input.destination}</strong>` : ""}.</p>
       ${input.summary ? `<p><em>${input.summary}</em></p>` : ""}
       <p>Notre moteur IA a analysé vos critères.</p>
-      ${emailButton(`${baseUrl()}/voyages?matched=true`, "Voir les voyages recommandés")}
+      ${emailButton(`${getAppUrl()}/voyages?matched=true`, "Voir les voyages recommandés")}
     `,
   });
 }
@@ -62,7 +61,7 @@ export async function sendBookingConfirmationEmail(input: {
   meetingPoint?: string | null;
   cancellationToken: string;
 }) {
-  const cancelUrl = `${baseUrl()}/booking/cancel?token=${encodeURIComponent(input.cancellationToken)}`;
+  const cancelUrl = `${getAppUrl()}/booking/cancel?token=${encodeURIComponent(input.cancellationToken)}`;
 
   await sendEmail({
     to: input.to,
@@ -113,7 +112,7 @@ export async function sendAgencyNewBookingEmail(input: {
         <li><strong>Acompte :</strong> ${input.depositPaid}€</li>
         <li><strong>Code :</strong> ${input.confirmationCode}</li>
       </ul>
-      <p><a href="${baseUrl()}/agency/bookings">Voir mes réservations</a></p>
+      <p><a href="${getAppUrl()}/agency/bookings">Voir mes réservations</a></p>
     `,
   });
 }
@@ -152,7 +151,7 @@ export async function sendAgencyClientCancelledEmail(input: {
         <li><strong>Client :</strong> ${input.clientName}</li>
         <li><strong>Code :</strong> ${input.confirmationCode}</li>
       </ul>
-      <p><a href="${baseUrl()}/agency/bookings">Mes réservations</a></p>
+      <p><a href="${getAppUrl()}/agency/bookings">Mes réservations</a></p>
     `,
   });
 }
