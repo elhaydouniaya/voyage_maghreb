@@ -65,8 +65,16 @@ export class AdminMatchingService {
 
     if (!request) return null;
 
-    // Get all published trips for matching
-    const trips = await TripsService.listPublished();
+    // Get all published trips for matching (raw GroupTrip objects with Date fields)
+    const trips = await prisma.groupTrip.findMany({
+      where: {
+        status: { in: ["PUBLISHED", "FULL"] },
+        isPublic: true,
+        startDate: { gt: new Date() },
+      },
+      include: { agency: true },
+      orderBy: { startDate: "asc" },
+    });
 
     // Reconstruct structured demand from request
     const demand = {
@@ -423,8 +431,16 @@ export class AdminMatchingService {
       budgetMax: request.budgetMax,
     };
 
-    // Get trips and match
-    const trips = await TripsService.listPublished();
+    // Get trips and match (use raw GroupTrip objects so MatchingService sees Date fields)
+    const trips = await prisma.groupTrip.findMany({
+      where: {
+        status: { in: ["PUBLISHED", "FULL"] },
+        isPublic: true,
+        startDate: { gt: new Date() },
+      },
+      include: { agency: true },
+      orderBy: { startDate: "asc" },
+    });
     const matches = MatchingService.findMatches(demand, trips);
 
     // Build suggestions with best match per agency

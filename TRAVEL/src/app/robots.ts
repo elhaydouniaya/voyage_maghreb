@@ -1,11 +1,5 @@
 import type { MetadataRoute } from "next";
-
-function baseUrl() {
-  return (
-    process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ||
-    "http://localhost:3000"
-  );
-}
+import { getAppUrl } from "@/lib/app-url";
 
 export default function robots(): MetadataRoute.Robots {
   return {
@@ -14,6 +8,6 @@ export default function robots(): MetadataRoute.Robots {
       allow: "/",
       disallow: ["/admin/", "/agency/", "/api/"],
     },
-    sitemap: `${baseUrl()}/sitemap.xml`,
+    sitemap: `${getAppUrl()}/sitemap.xml`,
   };
 }

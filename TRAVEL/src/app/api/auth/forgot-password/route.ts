@@ -3,6 +3,7 @@ import crypto from "crypto";
 import prisma from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
 import { emailButton } from "@/lib/email-template";
+import { getAppUrl } from "@/lib/app-url";
 
 export async function POST(request: Request) {
   try {
@@ -31,8 +32,7 @@ export async function POST(request: Request) {
         },
       });
 
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-      const link = `${baseUrl}/reset-password?token=${token}&email=${encodeURIComponent(normalized)}`;
+      const link = `${getAppUrl()}/reset-password?token=${token}&email=${encodeURIComponent(normalized)}`;
 
       await sendEmail({
         to: normalized,

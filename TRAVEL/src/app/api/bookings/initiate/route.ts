@@ -5,6 +5,7 @@ import { getClientIp, rateLimit } from "@/lib/rate-limit";
 import { BookingsService } from "@/services/bookings.service";
 import { isDemoPaymentsAllowed } from "@/lib/payments-config";
 import { PaymentsService } from "@/services/payments.service";
+import { getAppUrl } from "@/lib/app-url";
 
 export async function POST(request: Request) {
   const ip = getClientIp(request);
@@ -61,7 +62,7 @@ export async function POST(request: Request) {
       acceptRgpd: Boolean(body.acceptRgpd),
     });
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+    const appUrl = getAppUrl();
 
     if (PaymentsService.isConfigured()) {
       const { url } = await PaymentsService.createCheckoutSession(

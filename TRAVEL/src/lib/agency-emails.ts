@@ -1,8 +1,7 @@
 import { sendEmail } from "@/lib/email";
 import { emailButton } from "@/lib/email-template";
 import { resolveAdminNotifyEmail } from "@/lib/email-config";
-
-const baseUrl = () => process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+import { getAppUrl } from "@/lib/app-url";
 
 export async function sendAgencyRegistrationEmails(input: {
   agencyEmail: string;
@@ -17,7 +16,7 @@ export async function sendAgencyRegistrationEmails(input: {
       <p>Bonjour ${input.managerName},</p>
       <p>Nous avons bien reçu le dossier de l'agence <strong>${input.agencyName}</strong>.</p>
       <p>Notre équipe va l'examiner sous 48 h. Vous recevrez un email dès que votre compte sera activé.</p>
-      ${emailButton(`${baseUrl()}/agency/login`, "Accéder à l'espace agence")}
+      ${emailButton(`${getAppUrl()}/agency/login`, "Accéder à l'espace agence")}
     `,
   });
 
@@ -30,7 +29,7 @@ export async function sendAgencyRegistrationEmails(input: {
       html: `
         <p>Une nouvelle agence s'est inscrite : <strong>${input.agencyName}</strong></p>
         <p>Contact : ${input.managerName} — ${input.agencyEmail}</p>
-        ${emailButton(`${baseUrl()}/admin/agencies`, "Valider dans l'admin")}
+        ${emailButton(`${getAppUrl()}/admin/agencies`, "Valider dans l'admin")}
       `,
     });
   }
@@ -48,7 +47,7 @@ export async function sendAgencyAccountReadyEmail(input: {
     html: `
       <p>Bonjour ${input.managerName},</p>
       <p>Votre compte agence <strong>${input.agencyName}</strong> est créé. Connectez-vous pour gérer vos voyages.</p>
-      ${emailButton(`${baseUrl()}/agency/dashboard`, "Ouvrir mon tableau de bord")}
+      ${emailButton(`${getAppUrl()}/agency/dashboard`, "Ouvrir mon tableau de bord")}
     `,
   });
 }
@@ -68,7 +67,7 @@ export async function sendTripPublishedEmail(input: {
       <p><strong>Lien magique :</strong><br/>
       <a href="${input.magicLink}">${input.magicLink}</a></p>
       <p>Partagez ce lien sur WhatsApp, Instagram ou par email pour recevoir des réservations.</p>
-      <p><a href="${baseUrl()}/agency/trips">Gérer mes voyages</a></p>
+      <p><a href="${getAppUrl()}/agency/trips">Gérer mes voyages</a></p>
     `,
   });
 }
@@ -87,7 +86,7 @@ export async function sendAgencyStatusEmail(input: {
       html: `
         <p>Bonne nouvelle ! L'agence <strong>${input.agencyName}</strong> est maintenant vérifiée.</p>
         <p>Vous pouvez publier vos voyages depuis votre tableau de bord.</p>
-        ${emailButton(`${baseUrl()}/agency/trips/new`, "Créer un voyage")}
+        ${emailButton(`${getAppUrl()}/agency/trips/new`, "Créer un voyage")}
       `,
     });
     return;
